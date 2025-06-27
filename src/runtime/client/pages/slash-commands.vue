@@ -83,9 +83,6 @@ function getRemoteId(command: any): string | undefined {
   return undefined
 }
 
-declare const useToast: typeof import('@nuxt/ui/runtime/composables/useToast.js').useToast
-const toast = useToast()
-
 const commands = ref(slashCommands)
 
 const {
@@ -163,12 +160,8 @@ async function syncCommands() {
     await refreshDiff()
   }
   catch (error) {
-    toast.add({
-      title: 'Error registering commands',
-      description: (error as { statusMessage: string }).statusMessage || 'An unknown error occurred',
-      color: 'error',
-      icon: 'i-lucide-triangle-alert',
-    })
+    // TODO: display error toast
+    console.error('Error registering commands:', error)
   }
   finally {
     pendingSync.value = false
