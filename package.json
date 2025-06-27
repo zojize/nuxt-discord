@@ -1,0 +1,80 @@
+{
+  "name": "nuxt-discord",
+  "type": "module",
+  "version": "0.0.1",
+  "packageManager": "pnpm@10.12.3",
+  "description": "A Nuxt module for building Discord bots",
+  "author": "Jize Zou <jeffzou2001@gmail.com> (https://github.com/zojize)",
+  "license": "MIT",
+  "repository": "git+https://github.com/zojize/nuxt-discord.git",
+  "keywords": [
+    "nuxt",
+    "nuxt-module",
+    "discord",
+    "discord-bot"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/module.d.mts",
+      "import": "./dist/module.mjs"
+    }
+  },
+  "main": "./dist/module.mjs",
+  "types": "./dist/module.d.mts",
+  "typesVersions": {
+    "*": {
+      ".": [
+        "./dist/types.d.mts"
+      ]
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "prepack": "nuxt-module-build build",
+    "dev": "pnpm run dev:prepare && nuxi dev playground",
+    "dev:build": "nuxi build playground",
+    "dev:prepare": "nuxt-module-build build --stub && nuxt-module-build prepare && nuxi prepare playground",
+    "release": "pnpm run lint && pnpm run test && pnpm run prepack && changelogen --release && pnpm publish && git push --follow-tags",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest watch",
+    "test:types": "vue-tsc --noEmit && cd playground && vue-tsc --noEmit"
+  },
+  "peerDependencies": {
+    "discord.js": "catalog:"
+  },
+  "dependencies": {
+    "@nuxt/kit": "catalog:",
+    "@nuxt/ui": "catalog:",
+    "ansis": "catalog:",
+    "defu": "catalog:",
+    "knitwork": "catalog:",
+    "listhen": "catalog:",
+    "simple-icons": "catalog:",
+    "unocss": "catalog:",
+    "ws": "catalog:"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "catalog:",
+    "@nuxt/devtools": "catalog:",
+    "@nuxt/eslint-config": "catalog:",
+    "@nuxt/module-builder": "catalog:",
+    "@nuxt/schema": "catalog:",
+    "@nuxt/test-utils": "catalog:",
+    "@types/node": "catalog:",
+    "@unocss/eslint-plugin": "catalog:",
+    "@vueuse/core": "catalog:",
+    "changelogen": "catalog:",
+    "eslint": "catalog:",
+    "nuxt": "catalog:",
+    "typescript": "catalog:",
+    "unbuild": "catalog:",
+    "vitest": "catalog:",
+    "vue-tsc": "catalog:"
+  },
+  "resolutions": {
+    "nuxt-discord": "workspace:*"
+  }
+}
