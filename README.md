@@ -276,7 +276,7 @@ Here's what's planned for future releases:
   - [@nuxt/content](https://github.com/nuxt/content)
   - [@nuxtjs/i18n](https://github.com/nuxt-modules/i18n)
   - [@nuxt/devtools](https://github.com/nuxt/devtools)
-- UI components are based on [Nuxt UI](https://nuxtui.com) and [UnoCSS](https://unocss.dev/)
+- UI components are based on [Nuxt UI](https://ui.nuxt.com/) and [UnoCSS](https://unocss.dev/)
 
 ## License
 
