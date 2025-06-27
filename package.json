@@ -1,7 +1,7 @@
 {
   "name": "nuxt-discord",
   "type": "module",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "packageManager": "pnpm@10.12.3",
   "description": "A Nuxt module for building Discord bots",
   "author": "Jize Zou <jeffzou2001@gmail.com> (https://github.com/zojize)",
@@ -40,7 +40,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest watch",
-    "test:types": "vue-tsc --noEmit && cd playground && vue-tsc --noEmit"
+    "test:types": "vue-tsc --noEmit && cd playground && vue-tsc --noEmit",
+    "postinstall": "npx simple-git-hooks"
   },
   "peerDependencies": {
     "discord.js": "catalog:"
@@ -68,7 +69,9 @@
     "@vueuse/core": "catalog:",
     "changelogen": "catalog:",
     "eslint": "catalog:",
+    "lint-staged": "catalog:",
     "nuxt": "catalog:",
+    "simple-git-hooks": "catalog:",
     "typescript": "catalog:",
     "unbuild": "catalog:",
     "vitest": "catalog:",
@@ -76,5 +79,11 @@
   },
   "resolutions": {
     "nuxt-discord": "workspace:*"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm i --frozen-lockfile --ignore-scripts --offline && npx lint-staged"
+  },
+  "lint-staged": {
+    "*": "eslint --fix"
   }
 }

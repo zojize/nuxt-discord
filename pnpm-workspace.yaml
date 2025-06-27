@@ -20,8 +20,10 @@ catalog:
   discord.js: ^14.21.0
   eslint: ^9.29.0
   knitwork: ^1.2.0
+  lint-staged: ^16.1.2
   listhen: ^1.9.0
   nuxt: ^3.17.5
+  simple-git-hooks: ^2.13.0
   simple-icons: ^15.3.0
   typescript: ~5.8.3
   unbuild: ^3.5.0
@@ -29,3 +31,6 @@ catalog:
   vitest: ^3.2.4
   vue-tsc: ^2.2.10
   ws: ^8.18.2
+
+onlyBuiltDependencies:
+  - simple-git-hooks
