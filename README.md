@@ -285,7 +285,7 @@ Here's what's planned for future releases:
 [npm-version-src]: https://img.shields.io/npm/v/nuxt-discord/latest.svg?style=flat&colorA=18181B&colorB=28CF8D
 [npm-version-href]: https://npmjs.com/package/nuxt-discord
 
-[license-src]: https://img.shields.io/github/license/zojize/nuxt-discord.svg?style=flat&colorA=18181B&colorB=28CF8D
+[license-src]: https://img.shields.io/github/license/zojize/nuxt-discord?style=flat&colorA=18181B&colorB=28CF8D
 [license-href]: https://github.com/zojize/nuxt-discord/blob/main/LICENSE
 
 [nuxt-src]: https://img.shields.io/badge/Nuxt-18181B?logo=nuxt.js
