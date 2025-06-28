@@ -1,7 +1,8 @@
 import type { ClientOptions } from 'discord.js'
 import type { WatchEvent } from 'nuxt/schema'
 import type { SlashCommand, SlashCommandRuntime } from '~/src/types'
-import slashCommands from 'discord/slashCommands'
+// disregard the serverTemplate entirely for now until I figure out how to make it work reliably
+// import slashCommands from 'discord/slashCommands'
 import { defineNitroPlugin, useRuntimeConfig } from 'nitropack/runtime'
 import { DiscordClient } from '../utils/client'
 
@@ -20,9 +21,9 @@ export default defineNitroPlugin(async (nitro) => {
     })
 
     socket.addEventListener('message', async (event) => {
-      // this isn't relevant anymore since we rely on the full nitro server
-      // to be rebuilt each time and hmr is not really needed, I can't seem
-      // to figure out how actually make it hot reload without a full rebuild
+      // this only used for performing a full-update I can't seem to figure
+      // out how actually make it hot reload otherwise, and the serverTemplate
+      // doesn't seem to be updating reliably after a nitro rebuild...
       // TODO: come back if I figure out how to make it work
 
       const data = JSON.parse(event.data) as
@@ -56,7 +57,7 @@ export default defineNitroPlugin(async (nitro) => {
     nitro.hooks.hook('close', () => socket.close())
   }
 
-  client.addSlashCommands(slashCommands as SlashCommandRuntime[])
+  // client.addSlashCommands(slashCommands as SlashCommandRuntime[])
 
   if (runtimeConfig.discord.sync) {
     await client.registerSlashCommands()
