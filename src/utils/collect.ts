@@ -1,5 +1,6 @@
 import type { NuxtDiscordContext, SlashCommand, SlashCommandOptionTypeIdentifier } from '../types'
 import { globSync, readFileSync } from 'node:fs'
+import path from 'node:path'
 import ts from 'typescript'
 import { typeIdentifierToEnum } from '../types'
 import { macros } from './macros'
@@ -42,9 +43,11 @@ export function processCommandFile(ctx: NuxtDiscordContext, file: string): Slash
     return
   }
 
+  const { name } = path.parse(file)
   const command: Partial<SlashCommand> = {
     path: file,
     options: [],
+    name,
   }
 
   if (
