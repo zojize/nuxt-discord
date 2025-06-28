@@ -1,7 +1,7 @@
 {
   "name": "nuxt-discord",
   "type": "module",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "packageManager": "pnpm@10.12.3",
   "description": "A Nuxt module for building Discord bots",
   "author": "Jize Zou <jeffzou2001@gmail.com> (https://github.com/zojize)",
