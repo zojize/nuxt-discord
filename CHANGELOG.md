@@ -1,6 +1,31 @@
 # Changelog
 
 
+## v0.0.5
+
+[compare changes](https://github.com/zojize/nuxt-discord/compare/v0.0.4...v0.0.5)
+
+### 🚀 Enhancements
+
+- Infer command name from filename ([b44abbc](https://github.com/zojize/nuxt-discord/commit/b44abbc))
+
+### 🩹 Fixes
+
+- Correct boolean comparison for required option in optionEqual ([bae20f4](https://github.com/zojize/nuxt-discord/commit/bae20f4))
+- Change postinstall script to prepare for simple-git-hooks ([5d6c23f](https://github.com/zojize/nuxt-discord/commit/5d6c23f))
+
+### 💅 Refactors
+
+- Remove 'discord/slashCommands' serverTemplate usage ([68e10f1](https://github.com/zojize/nuxt-discord/commit/68e10f1))
+
+### 📖 Documentation
+
+- Add more description about command name inference ([d6a60ab](https://github.com/zojize/nuxt-discord/commit/d6a60ab))
+
+### ❤️ Contributors
+
+- Zojize <jeffzo01@qq.com>
+
 ## v0.0.4
 
 [compare changes](https://github.com/zojize/nuxt-discord/compare/v0.0.3...v0.0.4)
