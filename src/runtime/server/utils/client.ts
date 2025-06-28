@@ -497,7 +497,7 @@ function propsEqual(a: Record<PropertyKey, unknown>, b: Record<PropertyKey, unkn
 }
 
 function optionEqual(a: SlashCommandOption, b: APIApplicationCommandOption): boolean {
-  if (a.name !== b.name || a.description !== b.description || a.required !== b.required || a.type !== b.type) {
+  if (a.name !== b.name || a.description !== b.description || a.required !== !!b.required || a.type !== b.type) {
     return false
   }
 
