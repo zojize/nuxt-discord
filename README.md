@@ -20,7 +20,7 @@ A Nuxt module for building Discord bots with slash commands, featuring hot modul
 Install the module to your Nuxt application:
 
 ```bash
-npm install nuxt-discord discord.js
+pnpm install nuxt-discord discord.js
 ```
 
 Add the module to your `nuxt.config.ts`:
