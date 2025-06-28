@@ -1,6 +1,30 @@
 # Changelog
 
 
+## v0.0.4
+
+[compare changes](https://github.com/zojize/nuxt-discord/compare/v0.0.3...v0.0.4)
+
+### 🩹 Fixes
+
+- Server HMR full update immediately to ensure correct slash commands content ([16bed73](https://github.com/zojize/nuxt-discord/commit/16bed73))
+
+### 📖 Documentation
+
+- Updated Nuxt-UI ref link in README ([ec8df4a](https://github.com/zojize/nuxt-discord/commit/ec8df4a))
+- Change npm to pnpm ([b60c88c](https://github.com/zojize/nuxt-discord/commit/b60c88c))
+
+### 🏡 Chore
+
+- Don't force publish on release ([a883797](https://github.com/zojize/nuxt-discord/commit/a883797))
+- Remove unnecessary logging ([7624c8a](https://github.com/zojize/nuxt-discord/commit/7624c8a))
+
+### ❤️ Contributors
+
+- Zojize <jeffzo01@qq.com>
+- Jeff Zou <jeffzo01@qq.com>
+- OAHaegt ([@OAHaegt](https://github.com/OAHaegt))
+
 ## v0.0.3
 
 
