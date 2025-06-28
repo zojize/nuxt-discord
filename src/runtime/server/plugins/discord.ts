@@ -47,6 +47,12 @@ export default defineNitroPlugin(async (nitro) => {
       }
     })
 
+    socket.addEventListener('open', () => {
+      // request a full update immediately, since serverTemplate
+      // updates don't seem to be reliable
+      socket.send(JSON.stringify({ event: 'full-update' }))
+    })
+
     nitro.hooks.hook('close', () => socket.close())
   }
 
