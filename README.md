@@ -10,7 +10,6 @@ A Nuxt module for building Discord bots with slash commands, featuring hot modul
 
 - 🤖 **Discord Bot Integration** - Seamlessly integrate Discord.js with your Nuxt application
 - ⚡ **Slash Commands** - Type-safe slash command definitions with automatic registration
-- 🔥 **Hot Module Replacement** - Real-time command updates during development
 - 🎯 **Auto-sync** - Automatically sync commands with Discord's servers
 - 🖥️ **Web Interface** - Beautiful UI for managing and viewing slash commands
 - 🔄 **Real-time Updates** - WebSocket-based live updates in development
@@ -65,6 +64,8 @@ export default function ping() {
   return 'pong!'
 }
 ```
+
+Defining a command this way this module automatically deduces the name and description from the JSDoc comments. The command name is inferred following this set of priorities: `describeCommand` macro > `@name` JSDoc tag > function name > file name.
 
 ### Commands with Parameters
 
