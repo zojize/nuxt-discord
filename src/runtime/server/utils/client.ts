@@ -466,7 +466,6 @@ export class DiscordClient {
       )
 
       results.forEach((result, i) => {
-        logger.log(result)
         if (result.status === 'rejected') {
           this.#nitro.hooks.callHook('discord:client:error', {
             type: 'SlashCommandRegistrationError',
