@@ -1,6 +1,18 @@
 # Changelog
 
 
+## v0.0.8
+
+[compare changes](https://github.com/zojize/nuxt-discord/compare/v0.0.7...v0.0.8)
+
+### 🩹 Fixes
+
+- Consistent dynamic command loading and websocket broadcasting ([f893c6e](https://github.com/zojize/nuxt-discord/commit/f893c6e))
+
+### ❤️ Contributors
+
+- Zojize <jeffzo01@qq.com>
+
 ## v0.0.7
 
 [compare changes](https://github.com/zojize/nuxt-discord/compare/v0.0.6...v0.0.7)
