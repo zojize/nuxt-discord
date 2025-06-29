@@ -45,6 +45,9 @@ catalogs:
     changelogen:
       specifier: ^0.6.1
       version: 0.6.1
+    chokidar:
+      specifier: ^4.0.3
+      version: 4.0.3
     defu:
       specifier: ^6.1.4
       version: 6.1.4
@@ -66,6 +69,9 @@ catalogs:
     nuxt:
       specifier: ^3.17.5
       version: 3.17.5
+    rollup:
+      specifier: ^4.44.1
+      version: 4.44.1
     simple-git-hooks:
       specifier: ^2.13.0
       version: 2.13.0
@@ -107,6 +113,9 @@ importers:
       ansis:
         specifier: 'catalog:'
         version: 4.1.0
+      chokidar:
+        specifier: 'catalog:'
+        version: 4.0.3
       defu:
         specifier: 'catalog:'
         version: 6.1.4
@@ -119,6 +128,9 @@ importers:
       listhen:
         specifier: 'catalog:'
         version: 1.9.0
+      rollup:
+        specifier: 'catalog:'
+        version: 4.44.1
       simple-icons:
         specifier: 'catalog:'
         version: 15.3.0
