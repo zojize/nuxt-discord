@@ -1,9 +1,9 @@
 import type { APIApplicationCommand, APIApplicationCommandOption, ChatInputCommandInteraction, ClientOptions, RESTGetAPIApplicationCommandsResult, RESTPatchAPIApplicationCommandResult, RESTPutAPIApplicationCommandsResult } from 'discord.js'
 import type { SlashCommandOption, SlashCommandOptionType, SlashCommandReturnType, SlashCommandRuntime } from '~/src/types'
 import process from 'node:process'
-import ansis from 'ansis'
 import { ApplicationCommandOptionType, Events, Client as InternalClient, REST, Routes, SlashCommandBuilder } from 'discord.js'
 import { useNitroApp } from 'nitropack/runtime'
+import { logger } from '../internal/logger'
 
 export interface DiscordClientErrorBase {
   type: string
@@ -44,13 +44,6 @@ export type DiscordClientError
 let currentInteraction: ChatInputCommandInteraction | null = null
 export function useInteraction(): ChatInputCommandInteraction | null {
   return currentInteraction
-}
-
-const logger = {
-  // eslint-disable-next-line no-console
-  log: (...args: unknown[]) => console.log(ansis.hex('#5865F2').bold('[Discord]'), ...args),
-  warn: (...args: unknown[]) => console.warn(ansis.yellow.bold('[Discord]'), ...args),
-  error: (...args: unknown[]) => console.error(ansis.red.bold('[Discord]'), ...args),
 }
 
 export class DiscordClient {
