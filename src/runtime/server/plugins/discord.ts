@@ -34,7 +34,8 @@ export default defineNitroPlugin(async (nitro) => {
           const existingCommand = slashCommands.find(c => c.path === cmd.path)
           if (existsSync(buildPath)) {
             logger.log(`Dynamically loading slash command at ${buildPath}`)
-            runtimeCommand.load = () => import(buildPath).then(m => m.default)
+            // workaround to force dynamic import to reload the module
+            runtimeCommand.load = () => import(`${buildPath}?${Date.now()}`).then(m => m.default)
           }
           else if (existingCommand) {
             runtimeCommand.execute = existingCommand.execute

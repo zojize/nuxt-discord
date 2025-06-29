@@ -106,10 +106,10 @@ export function prepareHMR(ctx: NuxtDiscordContext) {
         if (fullPath.startsWith(commandsDir)) {
           path = ctx.resolve.root(path)
           const command = processCommandFile(ctx, path) ?? null
-          websocket?.broadcast({ event, path, command })
           if (event === 'add' || event === 'change') {
             await generateDynamicCommandBuild(path, rollupConfig, ctx)
           }
+          websocket?.broadcast({ event, path, command })
 
           // I don't think this is doing anything at all...
           await updateTemplates({
@@ -232,7 +232,7 @@ async function generateDynamicCommandBuild(file: string, config: RollupConfig, c
     mkdirSync(path.join(ctx.nuxt.options.buildDir, 'discord', 'commands'), { recursive: true })
     writeFileSync(file
       .replace(ctx.resolve.root(ctx.nuxt.options.rootDir), ctx.nuxt.options.buildDir)
-      .replace('.ts', '.mjs'), output[0].code, 'utf-8')
+      .replace('.ts', '.mjs'), output[0].code, { encoding: 'utf-8', flush: true })
   }
   catch (error) {
     ctx.logger.error(`Error processing command file ${file}:`, error)
