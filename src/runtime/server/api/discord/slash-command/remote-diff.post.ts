@@ -22,8 +22,6 @@ export default defineEventHandler<{
 }>>(async (event) => {
   const client = useDiscordClient()
   const body = await readBody(event)
-
   const diff = await client.diffRemoteSlashCommands(body?.commands)
-
   return diff
 })
