@@ -182,11 +182,10 @@ if (import.meta.dev && runtimeConfig.public.discord?.wsUrl) {
       onConnected: () => {
         // eslint-disable-next-line no-console
         console.log('WebSocket connection established for slash command hot reload')
+        // always rely on hmr full-update result as the source of truth on dev
+        ws?.send(JSON.stringify({ event: 'full-update' }))
       },
     })
-
-    // always rely on hmr full-update result as the source of truth on dev
-    ws?.send(JSON.stringify({ event: 'full-update' }))
   }
 }
 
