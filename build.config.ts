@@ -15,6 +15,8 @@ export default defineBuildConfig({
     '@nuxt/kit',
     '@nuxt/schema',
     '@unocss/core',
+    'chokidar',
+    'rollup',
   ],
   rollup: {
     inlineDependencies: true,

@@ -50,9 +50,11 @@
     "@nuxt/kit": "catalog:",
     "@nuxt/ui": "catalog:",
     "ansis": "catalog:",
+    "chokidar": "catalog:",
     "defu": "catalog:",
     "knitwork": "catalog:",
     "listhen": "catalog:",
+    "rollup": "catalog:",
     "simple-icons": "catalog:",
     "unocss": "catalog:",
     "ws": "catalog:"
