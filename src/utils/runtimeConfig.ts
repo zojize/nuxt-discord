@@ -9,5 +9,6 @@ export function prepareRuntimeConfig(ctx: NuxtDiscordContext) {
     config.runtimeConfig.discord.sync = ctx.options.watch.sync ?? false
     config.runtimeConfig.discord.dir = ctx.resolve.root(ctx.options.dir)
     config.runtimeConfig.discord.buildDir = ctx.nuxt.options.buildDir
+    config.runtimeConfig.discord.rootDir = ctx.nuxt.options.rootDir
   })
 }
