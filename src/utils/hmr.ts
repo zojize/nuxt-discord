@@ -1,13 +1,21 @@
 import type { Listener } from 'listhen'
 import type { Buffer } from 'node:buffer'
 import type { IncomingMessage } from 'node:http'
+import type { InputOptions, OutputOptions, RollupBuild } from 'rollup'
 import type { WebSocket } from 'ws'
 import type { NuxtDiscordContext, SlashCommand } from '../types'
-import { existsSync, globSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, globSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import path from 'node:path'
 import { addVitePlugin, isIgnored, updateTemplates } from '@nuxt/kit'
+import chokidar from 'chokidar'
 import { listen } from 'listhen'
+import { rollup } from 'rollup'
 import { WebSocketServer } from 'ws'
 import collectSlashCommands, { processCommandFile } from './collect'
+
+type RollupConfig = InputOptions & {
+  output: OutputOptions
+}
 
 export function prepareHMR(ctx: NuxtDiscordContext) {
   const { nuxt, options } = ctx
@@ -23,6 +31,8 @@ export function prepareHMR(ctx: NuxtDiscordContext) {
     }
 
     // nitro dev server ignore discord commands directory
+    let rollupConfig: RollupConfig
+
     nuxt.hook('nitro:config', (nitroConfig) => {
       nitroConfig.watchOptions ??= {}
       const existingNitroIgnored = nitroConfig.watchOptions.ignored
@@ -34,7 +44,13 @@ export function prepareHMR(ctx: NuxtDiscordContext) {
           nitroIgnored.push(existingNitroIgnored)
       }
       // TODO: stop ignoring the commands directory, come back if I figure out how to make HMR work on server
-      // nitroConfig.watchOptions.ignored = nitroIgnored
+      nitroConfig.watchOptions.ignored = nitroIgnored
+
+      nitroConfig.hooks ??= {
+        'rollup:before': (_, config) => {
+          rollupConfig = config
+        },
+      }
     })
 
     // vite dev server ignore discord commands directory
@@ -84,19 +100,23 @@ export function prepareHMR(ctx: NuxtDiscordContext) {
       })
     }
 
-    nuxt.hook('builder:watch', async (event, path) => {
-      const fullPath = ctx.resolve.root(path)
-      if (fullPath.startsWith(commandsDir)) {
-        path = ctx.resolve.root(path)
-        const command = processCommandFile(ctx, path) ?? null
-        websocket?.broadcast({ event, path, command })
+    chokidar.watch(ctx.resolve.root(ctx.options.dir, 'commands'), { ignoreInitial: true })
+      .on('all', async (event, path) => {
+        const fullPath = ctx.resolve.root(path)
+        if (fullPath.startsWith(commandsDir)) {
+          path = ctx.resolve.root(path)
+          const command = processCommandFile(ctx, path) ?? null
+          websocket?.broadcast({ event, path, command })
+          if (event === 'add' || event === 'change') {
+            await generateDynamicCommandBuild(path, rollupConfig, ctx)
+          }
 
-        // I don't think this is doing anything at all...
-        await updateTemplates({
-          filter: template => template.filename === 'discord/slashCommands',
-        })
-      }
-    })
+          // I don't think this is doing anything at all...
+          await updateTemplates({
+            filter: template => template.filename === 'discord/slashCommands',
+          })
+        }
+      })
 
     nuxt.hook('close', () => {
       listener?.server.close()
@@ -202,4 +222,22 @@ export function createWebSocket() {
       return new Promise(resolve => wss.close(resolve))
     },
   }
+}
+
+async function generateDynamicCommandBuild(file: string, config: RollupConfig, ctx: NuxtDiscordContext) {
+  let bundle: RollupBuild
+  try {
+    bundle = await rollup({ ...config, input: file })
+    const { output } = await bundle.generate({ ...config.output, sourcemap: false })
+    mkdirSync(path.join(ctx.nuxt.options.buildDir, 'discord', 'commands'), { recursive: true })
+    writeFileSync(file
+      .replace(ctx.resolve.root(ctx.nuxt.options.rootDir), ctx.nuxt.options.buildDir)
+      .replace('.ts', '.mjs'), output[0].code, 'utf-8')
+  }
+  catch (error) {
+    ctx.logger.error(`Error processing command file ${file}:`, error)
+    return
+  }
+
+  await bundle.close()
 }

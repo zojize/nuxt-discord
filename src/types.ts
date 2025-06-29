@@ -65,6 +65,7 @@ export interface DiscordRuntimeConfig {
   sync: NuxtDiscordOptions['watch']['sync']
   dir: string
   buildDir: string
+  rootDir: string
 }
 
 export const slashCommandOptionTypeIdentifiers = [
