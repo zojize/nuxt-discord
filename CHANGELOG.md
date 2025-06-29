@@ -1,6 +1,27 @@
 # Changelog
 
 
+## v0.0.7
+
+[compare changes](https://github.com/zojize/nuxt-discord/compare/v0.0.6...v0.0.7)
+
+### 🚀 Enhancements
+
+- Server HMR dynamic command loading ([c2843dc](https://github.com/zojize/nuxt-discord/commit/c2843dc))
+
+### 🩹 Fixes
+
+- Send websocket message after connected ([5e1db83](https://github.com/zojize/nuxt-discord/commit/5e1db83))
+
+### 🏡 Chore
+
+- Shared internal logger for module server runtime ([c5d0f79](https://github.com/zojize/nuxt-discord/commit/c5d0f79))
+- Add chokidar and rollup to dependencies ([53e63ba](https://github.com/zojize/nuxt-discord/commit/53e63ba))
+
+### ❤️ Contributors
+
+- Zojize <jeffzo01@qq.com>
+
 ## v0.0.6
 
 [compare changes](https://github.com/zojize/nuxt-discord/compare/v0.0.4...v0.0.6)
