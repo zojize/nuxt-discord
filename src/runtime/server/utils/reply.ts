@@ -1,25 +1,47 @@
-import type { InteractionReplyOptions } from 'discord.js'
+import type { InteractionEditReplyOptions, InteractionReplyOptions } from 'discord.js'
 import type { SlashCommandCustomReturnHandler } from '~/src/types'
 import { MessageFlags } from 'discord.js'
 
+type OmitPreservingCallSignature<T, K extends keyof T = keyof T>
+  = Omit<T, K> & (T extends (...args: infer R) => infer S ? (...args: R) => S : unknown)
 interface ReplyFunction {
   (text: string, options?: InteractionReplyOptions): SlashCommandCustomReturnHandler
-  ephemeral: this
-  flags: (flags: InteractionReplyOptions['flags']) => this
+  edit: EditReplyFunction
+  ephemeral: OmitPreservingCallSignature<ReplyFunction, 'edit' | 'ephemeral'>
+  flags: (flags: InteractionReplyOptions['flags']) => OmitPreservingCallSignature<ReplyFunction, 'edit'>
 }
 
-function createReplyFunction(defaultOptions: Partial<InteractionReplyOptions> = {}): ReplyFunction {
-  const reply = (text: string, options?: InteractionReplyOptions): SlashCommandCustomReturnHandler => (interaction) => {
-    interaction.reply({
-      content: text,
-      ...defaultOptions,
-      ...options,
-    })
+interface EditReplyFunction {
+  (text: string, options?: InteractionEditReplyOptions): SlashCommandCustomReturnHandler
+  flags: (flags: InteractionEditReplyOptions['flags']) => EditReplyFunction
+}
+
+function createReplyFunction(
+  { editReply, ...defaultOptions }: (
+    | InteractionReplyOptions
+    | InteractionEditReplyOptions
+  ) & { editReply?: boolean } = {},
+): ReplyFunction {
+  const reply = (text: string, options?: InteractionReplyOptions | InteractionEditReplyOptions): SlashCommandCustomReturnHandler => async (interaction) => {
+    if (editReply) {
+      await interaction.editReply({
+        content: text,
+        ...(defaultOptions as InteractionEditReplyOptions),
+        ...(options as InteractionEditReplyOptions),
+      })
+    }
+    else {
+      await interaction.reply({
+        content: text,
+        ...(defaultOptions as InteractionReplyOptions),
+        ...(options as InteractionReplyOptions),
+      })
+    }
   }
 
-  return new Proxy(reply, {
-    get(target, prop, receiver) {
-      if (prop === 'ephemeral') {
+  Object.defineProperties(reply, {
+    ephemeral: {
+      get() {
         return createReplyFunction({
           ...defaultOptions,
           flags: defaultOptions.flags == null
@@ -33,16 +55,27 @@ function createReplyFunction(defaultOptions: Partial<InteractionReplyOptions> = 
                   // I give up refining this type...
                   : MessageFlags.Ephemeral,
         })
-      }
-      else if (prop === 'flags') {
-        return (flags: InteractionReplyOptions['flags']) => createReplyFunction({
+      },
+    },
+    flags: {
+      get() {
+        return (flags: InteractionReplyOptions['flags'] & InteractionEditReplyOptions['flags']) => createReplyFunction({
           ...defaultOptions,
           flags,
         })
-      }
-      return Reflect.get(target, prop, receiver)
+      },
     },
-  }) as ReplyFunction
+    edit: {
+      get() {
+        return createReplyFunction({
+          ...defaultOptions,
+          editReply: true,
+        })
+      },
+    },
+  })
+
+  return reply as ReplyFunction
 }
 
 export const reply: ReplyFunction = createReplyFunction()
