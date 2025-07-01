@@ -170,5 +170,5 @@ export interface NuxtDiscordContext {
     root: import('@nuxt/kit').Resolver['resolve']
     module: import('@nuxt/kit').Resolver['resolve']
   }
-  logger: typeof import('./logger').logger
+  logger: typeof import('./runtime/logger').logger
 }

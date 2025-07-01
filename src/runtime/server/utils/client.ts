@@ -3,7 +3,7 @@ import type { NuxtDiscordOptions, SlashCommandOption, SlashCommandOptionType, Sl
 import process from 'node:process'
 import { ApplicationCommandOptionType, Events, Client as InternalClient, REST, Routes, SlashCommandBuilder } from 'discord.js'
 import { useNitroApp } from 'nitropack/runtime'
-import { logger } from '../../../logger'
+import { logger } from '../../logger'
 
 export interface DiscordClientErrorBase {
   type: string
