@@ -243,7 +243,12 @@ export class DiscordClient {
 
     try {
       if (typeof result === 'string') {
-        return interaction.reply({ content: result })
+        if (interaction.deferred) {
+          return interaction.editReply({ content: result })
+        }
+        else {
+          return interaction.reply({ content: result })
+        }
       }
       else if (typeof result === 'function') {
         const newResult = result.call(this, interaction, this)
