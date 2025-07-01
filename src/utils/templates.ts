@@ -28,7 +28,7 @@ type integer = import('nuxt-discord').integer
 declare global {
   declare module 'nitropack/types' {
     interface NitroRuntimeHooks {
-      'discord:client:config': (options: import('discord.js').ClientOptions) => void
+      'discord:client:config': (options: import('nuxt-discord').NuxtDiscordOptions['client']) => void
       'discord:client:ready': (client: DiscordClient) => void
       'discord:client:error': (error: DiscordClientError) => void
     }

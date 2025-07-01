@@ -4,7 +4,7 @@ export function prepareRuntimeConfig(ctx: NuxtDiscordContext) {
   ctx.nuxt.hook('nitro:config', (config) => {
     config.runtimeConfig ??= {}
     config.runtimeConfig.discord ??= {}
-    config.runtimeConfig.discord.intents = ctx.options.intents
+    config.runtimeConfig.discord.client = ctx.options.client
     config.runtimeConfig.discord.autoStart = ctx.options.autoStart
     config.runtimeConfig.discord.sync = ctx.options.watch.sync ?? false
     config.runtimeConfig.discord.dir = ctx.resolve.root(ctx.options.dir)

@@ -29,11 +29,16 @@ export default defineNuxtConfig({
   modules: ['nuxt-discord'],
   discord: {
     // Discord bot configuration
-    intents: ['Guilds'], // Discord gateway intents
+    client: {
+      intents: ['Guilds'], // Discord gateway intents
+      deferOnPromise: true, // Auto-defer interactions when command returns a promise
+    },
     dir: 'discord', // Directory for Discord-related files
     autoStart: true, // Auto-start the bot on server startup
     watch: {
       enabled: true, // Enable HMR for commands
+      port: 5720, // HMR server port
+      showURL: false, // Show HMR server URL in console
       sync: {
         debounce: 1000 // Sync delay in milliseconds
       }
@@ -209,15 +214,19 @@ export default (message: string) => {
 // nuxt.config.ts
 export default defineNuxtConfig({
   discord: {
-    intents: [
-      'Guilds',
-      'GuildMessages'
-    ],
+    client: {
+      intents: [
+        'Guilds',
+        'GuildMessages'
+      ],
+      deferOnPromise: true, // Auto-defer interactions when command returns a promise
+    },
     dir: 'discord',
     autoStart: true,
     watch: {
       enabled: true,
-      port: 4222,
+      port: 5720, // HMR server port
+      showURL: false, // Show HMR server URL in console
       sync: {
         debounce: 1000
       }

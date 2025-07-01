@@ -1,5 +1,5 @@
-import type { APIApplicationCommand, APIApplicationCommandOption, ChatInputCommandInteraction, ClientOptions, RESTGetAPIApplicationCommandsResult, RESTPatchAPIApplicationCommandResult, RESTPutAPIApplicationCommandsResult } from 'discord.js'
-import type { SlashCommandOption, SlashCommandOptionType, SlashCommandReturnType, SlashCommandRuntime } from '~/src/types'
+import type { APIApplicationCommand, APIApplicationCommandOption, ChatInputCommandInteraction, RESTGetAPIApplicationCommandsResult, RESTPatchAPIApplicationCommandResult, RESTPutAPIApplicationCommandsResult } from 'discord.js'
+import type { NuxtDiscordOptions, SlashCommandOption, SlashCommandOptionType, SlashCommandReturnType, SlashCommandRuntime } from '~/src/types'
 import process from 'node:process'
 import { ApplicationCommandOptionType, Events, Client as InternalClient, REST, Routes, SlashCommandBuilder } from 'discord.js'
 import { useNitroApp } from 'nitropack/runtime'
@@ -76,9 +76,11 @@ export class DiscordClient {
     })
   }
 
-  public async start(options: ClientOptions): Promise<undefined> {
-    await this.#nitro.hooks.callHook('discord:client:config', options)
-    this.#client = new InternalClient(options)
+  #clientOptions?: NuxtDiscordOptions['client']
+  public async start(options: NuxtDiscordOptions['client']): Promise<undefined> {
+    this.#clientOptions = { ...options }
+    await this.#nitro.hooks.callHook('discord:client:config', this.#clientOptions)
+    this.#client = new InternalClient(this.#clientOptions)
     this.#client.on(Events.InteractionCreate, (interaction) => {
       if (!interaction.isChatInputCommand())
         return
@@ -205,9 +207,14 @@ export class DiscordClient {
 
     try {
       currentInteraction = interaction
-      const result = await command.execute!(...args)
+      const result = command.execute!(...args)
       currentInteraction = null
-      this.#handleSlashCommandReturn(result, interaction, command)
+
+      if (this.#clientOptions?.deferOnPromise && isPromise(result)) {
+        await interaction.deferReply()
+      }
+
+      await this.#handleSlashCommandReturn(result, interaction, command)
     }
     catch (error) {
       this.#nitro.hooks.callHook('discord:client:error', {
@@ -222,11 +229,14 @@ export class DiscordClient {
 
   async #handleSlashCommandReturn(
     // not sure why Awaited<SlashCommandReturnType> does't work here
-    result: Exclude<SlashCommandReturnType, Promise<SlashCommandReturnType>>,
+    result: SlashCommandReturnType,
     interaction: ChatInputCommandInteraction,
     command: SlashCommandRuntime,
     // TODO: type this
   ): Promise<unknown> {
+    // @ts-expect-error - i don't know why this error occurs
+    result = await result
+
     if (!result) {
       return
     }
@@ -237,7 +247,7 @@ export class DiscordClient {
       }
       else if (typeof result === 'function') {
         const newResult = result.call(this, interaction, this)
-        return this.#handleSlashCommandReturn(await newResult, interaction, command)
+        return this.#handleSlashCommandReturn(newResult, interaction, command)
       }
       else if (Symbol.iterator in result && typeof result[Symbol.iterator] === 'function') {
         const gen = result[Symbol.iterator]()
@@ -531,4 +541,9 @@ function optionEqual(a: SlashCommandOption, b: APIApplicationCommandOption): boo
   // TODO: more
 
   return true
+}
+
+// https://stackoverflow.com/a/53955664/14835397
+export function isPromise(value: any): value is Promise<unknown> {
+  return typeof value?.then === 'function'
 }

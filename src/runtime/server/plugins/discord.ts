@@ -1,4 +1,3 @@
-import type { ClientOptions } from 'discord.js'
 import type { WatchEvent } from 'nuxt/schema'
 import type { SlashCommand, SlashCommandRuntime } from '~/src/types'
 import { existsSync } from 'node:fs'
@@ -67,7 +66,6 @@ export default defineNitroPlugin(async (nitro) => {
   }
 
   if (runtimeConfig.discord.autoStart) {
-    const options: ClientOptions = { intents: runtimeConfig.discord.intents }
-    await client.start(options)
+    await client.start(runtimeConfig.discord.client)
   }
 })

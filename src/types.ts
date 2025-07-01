@@ -6,13 +6,21 @@ import { ApplicationCommandOptionType } from 'discord.js'
 
 export interface NuxtDiscordOptions {
   /**
-   * The intents to use for the Discord client. Use
-   * the 'nitro:client:config' hook to configure other
-   * options passed to the Discord client.
+   * Options passed to the internal Discord client.
+   * Use the 'nitro:client:config' hook to configure
+   * client options in runtime.
    *
-   * @default [GatewayIntentBits.Guilds]
+   * @default { intents: [GatewayIntentBits.Guilds] }
    */
-  intents: ClientOptions['intents']
+  client: ClientOptions & {
+    /**
+     * Whether to automatically defer the interaction reply
+     * on slash command execution if the command returns a promise.
+     *
+     * @default true
+     */
+    deferOnPromise?: boolean
+  }
 
   /**
    * The directory to scan for nuxt-discord related
@@ -32,35 +40,32 @@ export interface NuxtDiscordOptions {
   /**
    * HMR options
    */
-  watch:
-    & {
+  watch: Partial<ListenOptions> & {
+    /**
+     * Enable or disable HMR for slash commands.
+     *
+     * @default true
+     */
+    enabled?: boolean
+
+    /**
+     * Whether to automatically register and update
+     * slash commands on the Discord client.
+     */
+    sync?: false | {
       /**
-       * Enable or disable HMR for slash commands.
+       * Milliseconds to debounce before updating
+       * on HMR events.
        *
-       * @default true
+       * @default 1000
        */
-      enabled?: boolean
+      debounce?: number
     }
-    & {
-      /**
-       * Whether to automatically register and update
-       * slash commands on the Discord client.
-       */
-      sync?: false | {
-        /**
-         * Milliseconds to debounce before updating
-         * on HMR events.
-         *
-         * @default 1000
-         */
-        debounce?: number
-      }
-    }
-    & Partial<ListenOptions>
+  }
 }
 
 export interface DiscordRuntimeConfig {
-  intents: ClientOptions['intents']
+  client: NuxtDiscordOptions['client']
   autoStart: boolean
   sync: NuxtDiscordOptions['watch']['sync']
   dir: string

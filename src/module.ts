@@ -16,12 +16,15 @@ export default defineNuxtModule<NuxtDiscordOptions>({
     configKey: 'discord',
   },
   defaults: {
-    intents: [GatewayIntentBits.Guilds],
+    client: {
+      intents: [GatewayIntentBits.Guilds],
+      deferOnPromise: true,
+    },
     dir: 'discord',
     autoStart: true,
     watch: {
       enabled: true,
-      port: 4222,
+      port: 5720,
       showURL: false,
       sync: {
         debounce: 1000, // milliseconds
