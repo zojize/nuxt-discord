@@ -4,7 +4,7 @@ import type { SlashCommand, SlashCommandRuntime } from '~/src/types'
 import { existsSync } from 'node:fs'
 import slashCommands from 'discord/slashCommands'
 import { defineNitroPlugin, useRuntimeConfig } from 'nitropack/runtime'
-import { logger } from '../internal/logger'
+import { logger } from '../../../logger'
 import { DiscordClient } from '../utils/client'
 
 export default defineNitroPlugin(async (nitro) => {
