@@ -1,6 +1,18 @@
 # Changelog
 
 
+## v0.0.10
+
+[compare changes](https://github.com/zojize/nuxt-discord/compare/v0.0.9...v0.0.10)
+
+### 🩹 Fixes
+
+- Move logger to runtime directory ([84abe0b](https://github.com/zojize/nuxt-discord/commit/84abe0b))
+
+### ❤️ Contributors
+
+- Zojize <jeffzo01@qq.com>
+
 ## v0.0.9
 
 [compare changes](https://github.com/zojize/nuxt-discord/compare/v0.0.6...v0.0.9)
