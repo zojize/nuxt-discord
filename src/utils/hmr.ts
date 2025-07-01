@@ -235,8 +235,8 @@ async function generateDynamicCommandBuild(file: string, config: RollupConfig, c
     bundle = await rollup({
       ...config,
       input: file,
-      // externalize all modules except the command file itself
-      external: id => !id.includes(file),
+      // externalize all modules except the command file itself, excluding .ts files
+      external: id => !id.includes(file) && !id.endsWith('.ts'),
     })
     const { output } = await bundle.generate({ ...config.output, sourcemap: false })
     mkdirSync(path.join(ctx.nuxt.options.buildDir, 'discord', 'commands'), { recursive: true })
