@@ -1,6 +1,38 @@
 # Changelog
 
 
+## v0.0.9
+
+[compare changes](https://github.com/zojize/nuxt-discord/compare/v0.0.6...v0.0.9)
+
+### 🚀 Enhancements
+
+- Server HMR dynamic command loading ([f676a24](https://github.com/zojize/nuxt-discord/commit/f676a24))
+- Changed module options and added auto-defer option ([9d89eac](https://github.com/zojize/nuxt-discord/commit/9d89eac))
+- Enhance dynamic command loading ([20c43b6](https://github.com/zojize/nuxt-discord/commit/20c43b6))
+
+### 🩹 Fixes
+
+- Send websocket message after connected ([5e1db83](https://github.com/zojize/nuxt-discord/commit/5e1db83))
+- Consistent dynamic command loading and websocket broadcasting ([78679a7](https://github.com/zojize/nuxt-discord/commit/78679a7))
+
+### 🏡 Chore
+
+- Shared internal logger for module server runtime ([c35d948](https://github.com/zojize/nuxt-discord/commit/c35d948))
+- Add chokidar and rollup to dependencies ([ea1bf35](https://github.com/zojize/nuxt-discord/commit/ea1bf35))
+- **release:** V0.0.7 ([02c6589](https://github.com/zojize/nuxt-discord/commit/02c6589))
+- **release:** V0.0.8 ([6d72b58](https://github.com/zojize/nuxt-discord/commit/6d72b58))
+- Use same custom logger in module context and server runtime ([007c959](https://github.com/zojize/nuxt-discord/commit/007c959))
+- Request full-update after sync ([8478f15](https://github.com/zojize/nuxt-discord/commit/8478f15))
+
+### 🎨 Styles
+
+- Remove whitespaces ([248d360](https://github.com/zojize/nuxt-discord/commit/248d360))
+
+### ❤️ Contributors
+
+- Zojize <jeffzo01@qq.com>
+
 ## v0.0.8
 
 [compare changes](https://github.com/zojize/nuxt-discord/compare/v0.0.7...v0.0.8)
