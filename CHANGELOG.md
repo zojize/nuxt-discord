@@ -1,6 +1,27 @@
 # Changelog
 
 
+## v0.0.11
+
+[compare changes](https://github.com/zojize/nuxt-discord/compare/v0.0.10...v0.0.11)
+
+### 🩹 Fixes
+
+- Exclude .ts files from externals in dynamic command build ([5ea9bac](https://github.com/zojize/nuxt-discord/commit/5ea9bac))
+- Handle deferred interactions in slash command return values ([a025196](https://github.com/zojize/nuxt-discord/commit/a025196))
+
+### 💅 Refactors
+
+- Adds edit support to reply utility function, and refactors implementation to use Object.defineProperties ([2dc57d3](https://github.com/zojize/nuxt-discord/commit/2dc57d3))
+
+### ✅ Tests
+
+- Add unit tests for reply utility function ([98a51d6](https://github.com/zojize/nuxt-discord/commit/98a51d6))
+
+### ❤️ Contributors
+
+- Zojize <jeffzo01@qq.com>
+
 ## v0.0.10
 
 [compare changes](https://github.com/zojize/nuxt-discord/compare/v0.0.9...v0.0.10)
