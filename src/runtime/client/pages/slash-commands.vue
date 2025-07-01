@@ -152,22 +152,6 @@ const stats = computed(() => commandsWithStatus.value.reduce((acc, cmd) => {
   return acc
 }, { added: 0, removed: 0, changed: 0, synced: 0, conflict: 0 }))
 
-const pendingSync = ref(false)
-async function syncCommands() {
-  try {
-    pendingSync.value = true
-    await $fetch('/api/discord/slash-command/register', { method: 'POST' })
-    await refreshDiff()
-  }
-  catch (error) {
-    // TODO: display error toast
-    console.error('Error registering commands:', error)
-  }
-  finally {
-    pendingSync.value = false
-  }
-}
-
 const runtimeConfig = useRuntimeConfig()
 
 let ws: ReturnType<typeof useWebSocket> | undefined
@@ -179,13 +163,30 @@ if (import.meta.dev && runtimeConfig.public.discord?.wsUrl) {
   else {
     ws = useWebSocket(runtimeConfig.public.discord.wsUrl, {
       autoReconnect: true,
-      onConnected: () => {
+      onConnected: (ws) => {
         // eslint-disable-next-line no-console
         console.log('WebSocket connection established for slash command hot reload')
         // always rely on hmr full-update result as the source of truth on dev
-        ws?.send(JSON.stringify({ event: 'full-update' }))
+        ws.send(JSON.stringify({ event: 'full-update' }))
       },
     })
+  }
+}
+
+const pendingSync = ref(false)
+async function syncCommands() {
+  try {
+    pendingSync.value = true
+    await $fetch('/api/discord/slash-command/register', { method: 'POST' })
+    await refreshDiff()
+    ws?.send(JSON.stringify({ event: 'full-update' }))
+  }
+  catch (error) {
+    // TODO: display error toast
+    console.error('Error registering commands:', error)
+  }
+  finally {
+    pendingSync.value = false
   }
 }
 
