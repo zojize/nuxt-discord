@@ -1,6 +1,6 @@
 import type { WatchEvent } from 'nuxt/schema'
 import type { SlashCommand, SlashCommandRuntime } from '~/src/types'
-import { existsSync } from 'node:fs'
+import fs from 'node:fs'
 import slashCommands from 'discord/slashCommands'
 import { defineNitroPlugin, useRuntimeConfig } from 'nitropack/runtime'
 import { logger } from '../../../logger'
@@ -31,10 +31,12 @@ export default defineNitroPlugin(async (nitro) => {
             .replace(runtimeConfig.discord.rootDir, runtimeConfig.discord.buildDir)
             .replace(/\.ts$/, '.mjs')
           const existingCommand = slashCommands.find(c => c.path === cmd.path)
-          if (existsSync(buildPath)) {
-            logger.log(`Dynamically loading slash command at ${buildPath}`)
+
+          if (fs.existsSync(buildPath)) {
+            // get the last modified time of the file
+            const lastModified = fs.statSync(buildPath).mtimeMs
             // workaround to force dynamic import to reload the module
-            runtimeCommand.load = () => import(`${buildPath}?${Date.now()}`).then(m => m.default)
+            runtimeCommand.load = () => import(`${buildPath}?${lastModified}`).then(m => m.default)
           }
           else if (existingCommand) {
             runtimeCommand.execute = existingCommand.execute

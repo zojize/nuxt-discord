@@ -102,11 +102,16 @@ export function prepareHMR(ctx: NuxtDiscordContext) {
 
     chokidar.watch(ctx.resolve.root(ctx.options.dir, 'commands'), { ignoreInitial: true })
       .on('all', async (event, path) => {
+        if (event === 'all' || event === 'error' || event === 'raw') {
+          return
+        }
+
         const fullPath = ctx.resolve.root(path)
         if (fullPath.startsWith(commandsDir)) {
           path = ctx.resolve.root(path)
           const command = processCommandFile(ctx, path) ?? null
           if (event === 'add' || event === 'change') {
+            ctx.logger.log(`Dynamically loading slash command at ${path}`)
             await generateDynamicCommandBuild(path, rollupConfig, ctx)
           }
           websocket?.broadcast({ event, path, command })
@@ -227,7 +232,12 @@ export function createWebSocket() {
 async function generateDynamicCommandBuild(file: string, config: RollupConfig, ctx: NuxtDiscordContext) {
   let bundle: RollupBuild
   try {
-    bundle = await rollup({ ...config, input: file })
+    bundle = await rollup({
+      ...config,
+      input: file,
+      // externalize all modules except the command file itself
+      external: id => !id.includes(file),
+    })
     const { output } = await bundle.generate({ ...config.output, sourcemap: false })
     mkdirSync(path.join(ctx.nuxt.options.buildDir, 'discord', 'commands'), { recursive: true })
     writeFileSync(file
