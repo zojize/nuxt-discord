@@ -243,7 +243,7 @@ export class DiscordClient {
 
     try {
       if (typeof result === 'string') {
-        if (interaction.deferred) {
+        if (interaction.deferred || interaction.replied) {
           return interaction.editReply({ content: result })
         }
         else {
