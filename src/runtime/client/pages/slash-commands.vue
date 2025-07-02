@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { WatchEvent } from 'nuxt/schema'
-import type { SlashCommand, SlashCommandOption } from '~/src/types'
+import type { SlashCommand, SlashCommandOption } from '../../../types'
 import { computed, ref, useFetch, useRuntimeConfig, watchEffect } from '#imports'
 import { useWebSocket } from '@vueuse/core'
 import slashCommands from 'discord/slashCommands'

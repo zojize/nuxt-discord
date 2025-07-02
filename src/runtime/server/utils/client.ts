@@ -1,5 +1,5 @@
 import type { APIApplicationCommand, APIApplicationCommandOption, ChatInputCommandInteraction, RESTGetAPIApplicationCommandsResult, RESTPatchAPIApplicationCommandResult, RESTPutAPIApplicationCommandsResult } from 'discord.js'
-import type { NuxtDiscordOptions, SlashCommandOption, SlashCommandOptionType, SlashCommandReturnType, SlashCommandRuntime } from '~/src/types'
+import type { NuxtDiscordOptions, SlashCommandOption, SlashCommandOptionType, SlashCommandReturnType, SlashCommandRuntime } from '../../../types'
 import process from 'node:process'
 import { ApplicationCommandOptionType, Events, Client as InternalClient, REST, Routes, SlashCommandBuilder } from 'discord.js'
 import { useNitroApp } from 'nitropack/runtime'
@@ -478,7 +478,6 @@ export class DiscordClient {
           this.#nitro.hooks.callHook('discord:client:error', {
             type: 'SlashCommandRegistrationError',
             client: this,
-            interaction: currentInteraction!,
             command: result.reason.command,
             error: result.reason.error,
           })

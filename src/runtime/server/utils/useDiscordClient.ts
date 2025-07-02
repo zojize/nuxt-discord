@@ -1,4 +1,4 @@
-import type { DiscordClient } from '#imports'
+import type { DiscordClient } from './client'
 import { createError } from 'h3'
 
 /**

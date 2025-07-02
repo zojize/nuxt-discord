@@ -1,5 +1,5 @@
 import type { WatchEvent } from 'nuxt/schema'
-import type { SlashCommand, SlashCommandRuntime } from '~/src/types'
+import type { SlashCommand, SlashCommandRuntime } from '../../../types'
 import fs from 'node:fs'
 import slashCommands from 'discord/slashCommands'
 import { defineNitroPlugin, useRuntimeConfig } from 'nitropack/runtime'

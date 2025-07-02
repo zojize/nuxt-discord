@@ -1,4 +1,4 @@
-import type { NuxtDiscordContext } from '~/src/types'
+import type { NuxtDiscordContext } from '../types'
 
 export function prepareRuntimeConfig(ctx: NuxtDiscordContext) {
   ctx.nuxt.hook('nitro:config', (config) => {

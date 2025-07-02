@@ -1,4 +1,4 @@
-import type { SlashCommandOptionType, SlashCommandReturnType } from '~/src/types'
+import type { SlashCommandOptionType, SlashCommandReturnType } from '../../../types'
 
 /**
  * Defines a slash command function that is automatically registered
@@ -6,12 +6,8 @@ import type { SlashCommandOptionType, SlashCommandReturnType } from '~/src/types
  *
  * @param command - The function that implements the slash command.
  */
-export function defineSlashCommand(
-  // weird workaround for typescript to not yell at me
-  command: {
-    // eslint-disable-next-line ts/method-signature-style
-    exec(...args: (SlashCommandOptionType | undefined)[]): SlashCommandReturnType
-  }['exec'],
+export function defineSlashCommand<Args extends (SlashCommandOptionType | undefined)[]>(
+  command: (...args: Args) => SlashCommandReturnType,
 ) {
   return command
 }

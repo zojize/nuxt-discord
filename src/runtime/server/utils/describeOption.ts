@@ -1,5 +1,5 @@
 import type { APIApplicationCommandOptionChoice } from 'discord.js'
-import type { SlashCommandOptionType } from '~/src/types'
+import type { SlashCommandOptionType } from '../../../types'
 
 export interface DescribeOptionOptionsBase {
   /** The name of the command. */

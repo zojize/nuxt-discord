@@ -4,7 +4,7 @@ import type { IncomingMessage } from 'node:http'
 import type { InputOptions, OutputOptions, RollupBuild } from 'rollup'
 import type { WebSocket } from 'ws'
 import type { NuxtDiscordContext, SlashCommand } from '../types'
-import { existsSync, globSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import fs from 'node:fs'
 import path from 'node:path'
 import { addVitePlugin, isIgnored, updateTemplates } from '@nuxt/kit'
 import chokidar from 'chokidar'
@@ -100,6 +100,11 @@ export function prepareHMR(ctx: NuxtDiscordContext) {
       })
     }
 
+    const commandsBuildDir = path.join(ctx.nuxt.options.buildDir, 'discord', 'commands')
+    // clears the commands build directory
+    fs.rmSync(commandsBuildDir, { recursive: true, force: true })
+    fs.mkdirSync(commandsBuildDir, { recursive: true })
+
     chokidar.watch(ctx.resolve.root(ctx.options.dir, 'commands'), { ignoreInitial: true })
       .on('all', async (event, path) => {
         if (event === 'all' || event === 'error' || event === 'raw') {
@@ -130,7 +135,7 @@ export function prepareHMR(ctx: NuxtDiscordContext) {
 
     // generate unocss for client vue components when developing the module
     const packageJson = ctx.resolve.module('../package.json')
-    if (existsSync(packageJson) && JSON.parse(readFileSync(packageJson, 'utf-8')).name === 'nuxt-discord') {
+    if (fs.existsSync(packageJson) && JSON.parse(fs.readFileSync(packageJson, 'utf-8')).name === 'nuxt-discord') {
       (async () => {
         const { createGenerator } = await import('unocss')
         // @ts-expect-error - suppress builder error
@@ -140,15 +145,15 @@ export function prepareHMR(ctx: NuxtDiscordContext) {
 
         const generateCSS = async (path: string) => {
           if (path.startsWith(clientDir) && path.endsWith('.vue')) {
-            const content = readFileSync(path, 'utf-8')
+            const content = fs.readFileSync(path, 'utf-8')
             const tokens = await generator.applyExtractors(content, path)
             const { css } = await generator.generate(tokens)
-            writeFileSync(path.replace('.vue', '.css'), css, 'utf-8')
+            fs.writeFileSync(path.replace('.vue', '.css'), css, 'utf-8')
           }
         }
 
         const globPattern = `${clientDir}/**/*.vue`
-        globSync(globPattern).forEach(generateCSS)
+        fs.globSync(globPattern).forEach(generateCSS)
 
         addVitePlugin({
           name: 'dev-nuxt-discord-generate-css',
@@ -239,8 +244,8 @@ async function generateDynamicCommandBuild(file: string, config: RollupConfig, c
       external: id => !id.includes(file) && !id.endsWith('.ts'),
     })
     const { output } = await bundle.generate({ ...config.output, sourcemap: false })
-    mkdirSync(path.join(ctx.nuxt.options.buildDir, 'discord', 'commands'), { recursive: true })
-    writeFileSync(file
+    fs.mkdirSync(path.join(ctx.nuxt.options.buildDir, 'discord', 'commands'), { recursive: true })
+    fs.writeFileSync(file
       .replace(ctx.resolve.root(ctx.nuxt.options.rootDir), ctx.nuxt.options.buildDir)
       .replace('.ts', '.mjs'), output[0].code, { encoding: 'utf-8', flush: true })
   }

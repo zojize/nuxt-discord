@@ -1,7 +1,7 @@
 import type { APIApplicationCommand } from 'discord.js'
-import type { SlashCommand, SlashCommandRuntime } from '~/src/types'
-import { useDiscordClient } from '#imports'
+import type { SlashCommand, SlashCommandRuntime } from '../../../../../types'
 import { defineEventHandler, readBody } from 'h3'
+import { useDiscordClient } from '../../../utils/useDiscordClient'
 
 export default defineEventHandler<{
   body?: {
