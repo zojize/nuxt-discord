@@ -1,6 +1,35 @@
 # Changelog
 
 
+## v0.0.12
+
+[compare changes](https://github.com/zojize/nuxt-discord/compare/v0.0.11...v0.0.12)
+
+### 🚀 Enhancements
+
+- Enhance reply function to support file handling ([a737849](https://github.com/zojize/nuxt-discord/commit/a737849))
+
+### 🩹 Fixes
+
+- Update interaction handling to include replied state ([317c20a](https://github.com/zojize/nuxt-discord/commit/317c20a))
+
+### 💅 Refactors
+
+- Update import paths to use relative paths ([b3a5a9c](https://github.com/zojize/nuxt-discord/commit/b3a5a9c))
+
+### ✅ Tests
+
+- Remove obsolete basic test file ([0740a25](https://github.com/zojize/nuxt-discord/commit/0740a25))
+- Enhance reply tests to cover file handling and multiple files ([7ac3fb0](https://github.com/zojize/nuxt-discord/commit/7ac3fb0))
+
+### 🤖 CI
+
+- Add type tests to CI workflow ([f9c34fa](https://github.com/zojize/nuxt-discord/commit/f9c34fa))
+
+### ❤️ Contributors
+
+- Zojize <jeffzo01@qq.com>
+
 ## v0.0.11
 
 [compare changes](https://github.com/zojize/nuxt-discord/compare/v0.0.10...v0.0.11)
