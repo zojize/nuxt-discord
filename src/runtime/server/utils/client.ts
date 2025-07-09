@@ -1,9 +1,12 @@
 import type { APIApplicationCommand, APIApplicationCommandOption, ChatInputCommandInteraction, RESTGetAPIApplicationCommandsResult, RESTPatchAPIApplicationCommandResult, RESTPutAPIApplicationCommandsResult } from 'discord.js'
+import type { EffectScope } from 'vue'
 import type { NuxtDiscordOptions, SlashCommandOption, SlashCommandOptionType, SlashCommandReturnType, SlashCommandRuntime } from '../../../types'
 import process from 'node:process'
 import { ApplicationCommandOptionType, Events, Client as InternalClient, REST, Routes, SlashCommandBuilder } from 'discord.js'
 import { useNitroApp } from 'nitropack/runtime'
+import { effectScope, isRef } from 'vue'
 import { logger } from '../../logger'
+import { reply } from './reply'
 
 export interface DiscordClientErrorBase {
   type: string
@@ -87,6 +90,8 @@ export class DiscordClient {
       this.#handleSlashCommand(interaction)
     })
 
+    this.startScope()
+
     const { resolve, promise } = Promise.withResolvers<undefined>()
 
     this.#client.once(Events.ClientReady, (readyClient) => {
@@ -105,6 +110,21 @@ export class DiscordClient {
       await this.#client.destroy()
       this.#client = null
     }
+    this.stopScope()
+  }
+
+  #scope?: EffectScope
+  public startScope() {
+    if (this.#scope)
+      return
+    this.#scope = effectScope(/* detached */ true)
+  }
+
+  public stopScope() {
+    if (!this.#scope)
+      return
+    this.#scope.stop()
+    this.#scope = undefined
   }
 
   public isReady(): boolean {
@@ -147,6 +167,8 @@ export class DiscordClient {
     return this.#slashCommands.find(cmd => cmd.name === name)
   }
 
+  #interactionScopes: WeakMap<ChatInputCommandInteraction, EffectScope> = new WeakMap()
+  #commandFinalizationRegistry = new FinalizationRegistry((scope: EffectScope) => scope.stop())
   async #handleSlashCommand(interaction: ChatInputCommandInteraction): Promise<void> {
     const name = interaction.commandName
     const command = this.#slashCommands.find(cmd => cmd.name === name)
@@ -205,10 +227,26 @@ export class DiscordClient {
       }
     }
 
+    let scope!: EffectScope
+    if (this.#scope) {
+      // this scope should be a child of the client scope
+      this.#scope.run(() => (scope = effectScope()))
+    }
+    else {
+      scope = effectScope()
+    }
+
+    this.#interactionScopes.set(interaction, scope)
+    if (import.meta.dev)
+      this.#commandFinalizationRegistry.register(command, scope)
+
     try {
-      currentInteraction = interaction
-      const result = command.execute!(...args)
-      currentInteraction = null
+      let result!: SlashCommandReturnType
+      scope.run (() => {
+        currentInteraction = interaction
+        result = command.execute!(...args)
+        currentInteraction = null
+      })
 
       if (this.#clientOptions?.deferOnPromise && isPromise(result)) {
         await interaction.deferReply()
@@ -242,17 +280,17 @@ export class DiscordClient {
     }
 
     try {
-      if (typeof result === 'string') {
-        if (interaction.deferred || interaction.replied) {
-          return interaction.editReply({ content: result })
-        }
-        else {
-          return interaction.reply({ content: result })
-        }
+      if (typeof result === 'string' || isRef(result)) {
+        return this.#handleSlashCommandReturn(reply(result), interaction, command)
       }
       else if (typeof result === 'function') {
-        const newResult = result.call(this, interaction, this)
-        return this.#handleSlashCommandReturn(newResult, interaction, command)
+        const scope = this.#interactionScopes.get(interaction)
+        if (!scope) {
+          return result.call(this, interaction, this)
+        }
+        else {
+          return scope.run(() => result.call(this, interaction, this))
+        }
       }
       else if (Symbol.iterator in result && typeof result[Symbol.iterator] === 'function') {
         const gen = result[Symbol.iterator]()
