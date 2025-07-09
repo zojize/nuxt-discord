@@ -1,6 +1,8 @@
-import type { BaseMessageOptions, InteractionEditReplyOptions, InteractionReplyOptions } from 'discord.js'
+import type { BaseMessageOptions, CommandInteraction, InteractionCallbackResponse, InteractionEditReplyOptions, InteractionReplyOptions, InteractionResponse, Message } from 'discord.js'
+import type { MaybeRef } from 'vue'
 import type { SlashCommandCustomReturnHandler } from '../../../types'
 import { MessageFlags } from 'discord.js'
+import { isRef, reactive, watch } from 'vue'
 
 type OmitPreservingCallSignature<T, K extends keyof T = keyof T>
   = Omit<T, K> & (T extends (...args: infer R) => infer S ? (...args: R) => S : unknown)
@@ -8,60 +10,110 @@ type OmitPreservingCallSignature<T, K extends keyof T = keyof T>
 type File = NonNullable<BaseMessageOptions['files']>[number]
 
 type ReplyFunction = SlashCommandCustomReturnHandler & {
-  (text?: string, options?: InteractionReplyOptions): SlashCommandCustomReturnHandler
-  edit: EditReplyFunction
-  ephemeral: OmitPreservingCallSignature<ReplyFunction, 'edit' | 'ephemeral'>
-  flags: (flags: InteractionReplyOptions['flags']) => OmitPreservingCallSignature<ReplyFunction, 'edit'>
-  file: (file: File) => OmitPreservingCallSignature<ReplyFunction, 'edit'>
-  files: (files: File[]) => OmitPreservingCallSignature<ReplyFunction, 'edit'>
+  (text?: MaybeRef<string>, options?: InteractionReplyOptions):
+    SlashCommandCustomReturnHandler & {
+      [Symbol.iterator]: () => {
+        next: (...args: ReadonlyArray<any>) => IteratorResult<
+          ReplyFunction,
+          Message | InteractionResponse | InteractionCallbackResponse
+        >
+      }
+    }
+
+  [Symbol.iterator]: () => {
+    next: (...args: ReadonlyArray<any>) => IteratorResult<
+      never,
+      Promise<Message | InteractionResponse | InteractionCallbackResponse>
+    >
+  }
+
+  ephemeral: OmitPreservingCallSignature<ReplyFunction, 'ephemeral'>
+  flags: (flags: MaybeRef<InteractionReplyOptions['flags']>) => ReplyFunction
+  file: (file: MaybeRef<File>) => ReplyFunction
+  files: (files: MaybeRef<File[]>) => ReplyFunction
   send: ReplyFunction
 }
 
-type EditReplyFunction = SlashCommandCustomReturnHandler & {
-  (text?: string, options?: InteractionEditReplyOptions): SlashCommandCustomReturnHandler
-  flags: (flags: InteractionEditReplyOptions['flags']) => EditReplyFunction
-  file: (file: File) => EditReplyFunction
-  files: (files: File[]) => EditReplyFunction
-  send: EditReplyFunction
-}
-
 function createReplyFunction(
-  { editReply, ...defaultOptions }: (
-    | InteractionReplyOptions
-    | InteractionEditReplyOptions
-  ) & { editReply?: boolean } = {},
+  { ...defaultOptions }: (InteractionReplyOptions) = {},
 ): ReplyFunction {
+  type Msg = Message | InteractionCallbackResponse | InteractionResponse
+
   const reply = ((...args) => {
-    if (typeof args[0] === 'string' || typeof args[0] === 'undefined') {
+    if (typeof args[0] === 'string' || typeof args[0] === 'undefined' || isRef(args[0]) || typeof args[0] === 'function') {
       const [text, options] = args
-      return async (interaction) => {
-        if (editReply || interaction.deferred || interaction.replied) {
-          await interaction.editReply({
-            content: text,
-            ...(defaultOptions as InteractionEditReplyOptions),
-            ...(options as InteractionEditReplyOptions),
-          })
-        }
-        else {
-          await interaction.reply({
-            content: text,
-            ...(defaultOptions as InteractionReplyOptions),
-            ...(options as InteractionReplyOptions),
-          })
-        }
+      let message: Promise<Msg>
+
+      const replyOptions = reactive({
+        content: text,
+        ...defaultOptions,
+        ...options,
+      }) as InteractionReplyOptions
+
+      const handler = (interaction: CommandInteraction) => {
+        const method = interaction.replied
+          ? 'followUp'
+          : interaction.deferred ? 'editReply' : 'reply'
+        message = interaction[method](
+          replyOptions as InteractionReplyOptions & InteractionEditReplyOptions,
+        ).catch(err => err)
+        return message
       }
+
+      Object.defineProperty(handler, Symbol.iterator, {
+        value: () => ({
+          next: () => (
+            message !== undefined
+              ? {
+                  done: true,
+                  value: message,
+                }
+              : {
+                  done: false,
+                  value: handler,
+                }
+          ),
+        }),
+      })
+
+      watch(replyOptions, async (options) => {
+        const msg = await message
+        if ('edit' in msg)
+          msg.edit(options as InteractionEditReplyOptions)
+        else
+          msg.resource?.message?.edit(options as InteractionEditReplyOptions)
+      }, { deep: true, flush: 'sync' })
+
+      return handler
     }
     else {
       const interaction = args[0]
-      if (editReply || interaction.deferred || interaction.replied) {
-        return interaction.editReply({
-          ...(defaultOptions as InteractionEditReplyOptions),
-        }).then(() => undefined)
-      }
-      else {
-        return interaction.reply({
-          ...(defaultOptions as InteractionReplyOptions),
-        }).then(() => undefined)
+      const method = interaction.replied
+        ? 'followUp'
+        : interaction.deferred ? 'editReply' : 'reply'
+      const options = reactive(defaultOptions) as InteractionReplyOptions
+      const messagePromise = interaction[method](options as InteractionReplyOptions & InteractionEditReplyOptions)
+        .catch(err => err)
+
+      watch(options, async (opts) => {
+        const message = await messagePromise
+        if (!message)
+          return
+        if ('edit' in message)
+          message.edit(opts as InteractionEditReplyOptions)
+        else
+          message.resource?.message?.edit(opts as InteractionEditReplyOptions)
+      }, { deep: true, flush: 'sync' })
+
+      return {
+        [Symbol.iterator]: () => ({
+          next: () => (
+            {
+              done: true,
+              value: messagePromise,
+            }
+          ),
+        }),
       }
     }
   }) as ReplyFunction
@@ -89,14 +141,6 @@ function createReplyFunction(
         return (flags: InteractionReplyOptions['flags'] & InteractionEditReplyOptions['flags']) => createReplyFunction({
           ...defaultOptions,
           flags,
-        })
-      },
-    },
-    edit: {
-      get() {
-        return createReplyFunction({
-          ...defaultOptions,
-          editReply: true,
         })
       },
     },

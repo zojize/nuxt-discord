@@ -1,6 +1,7 @@
 import type { DiscordClient } from '#build/types/nitro-imports'
 import type { ChatInputCommandInteraction, ClientOptions } from 'discord.js'
 import type { ListenOptions } from 'listhen'
+import type { MaybeRef } from 'vue'
 import type { IntegerOption, NumberOption, StringOption } from './runtime/server/utils/describeOption'
 import { ApplicationCommandOptionType } from 'discord.js'
 
@@ -136,14 +137,13 @@ export type SlashCommandOption
     // | SlashCommandOptionBase
 
 export type SlashCommandCustomReturnHandler
-  = (this: DiscordClient, interaction: ChatInputCommandInteraction, client: DiscordClient) => SlashCommandReturnType
+  = (this: DiscordClient, interaction: ChatInputCommandInteraction, client: DiscordClient) => unknown
 
 export type SlashCommandReturnType
   = | void
-    | string
+    | MaybeRef<string>
     | SlashCommandCustomReturnHandler
     | Promise<SlashCommandReturnType>
-    // TODO: type TNext
     | Generator<SlashCommandReturnType>
     | AsyncGenerator<SlashCommandReturnType>
 
