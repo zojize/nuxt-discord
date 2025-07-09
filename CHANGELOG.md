@@ -1,6 +1,24 @@
 # Changelog
 
 
+## v0.0.13
+
+[compare changes](https://github.com/zojize/nuxt-discord/compare/v0.0.12...v0.0.13)
+
+### 🚀 Enhancements
+
+- Support option choice inference from union of literals ([ab81d28](https://github.com/zojize/nuxt-discord/commit/ab81d28))
+- Enhance reply function to support reactive options ([86fed21](https://github.com/zojize/nuxt-discord/commit/86fed21))
+- Implement effect scope management for slash command interactions ([9895ea8](https://github.com/zojize/nuxt-discord/commit/9895ea8))
+
+### ✅ Tests
+
+- Mocks for discord.js, nitropack/runtime; more reply test cases and added client test cases ([e920f48](https://github.com/zojize/nuxt-discord/commit/e920f48))
+
+### ❤️ Contributors
+
+- Zojize <jeffzo01@qq.com>
+
 ## v0.0.12
 
 [compare changes](https://github.com/zojize/nuxt-discord/compare/v0.0.11...v0.0.12)
