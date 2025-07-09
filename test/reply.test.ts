@@ -1,18 +1,41 @@
 import type { ChatInputCommandInteraction } from 'discord.js'
 import type { DiscordClient } from '~/src/runtime/server/utils/client'
 import { MessageFlags } from 'discord.js'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { effectScope, nextTick, ref } from 'vue'
 import { reply } from '../src/runtime/server/utils/reply'
+
+declare module 'vue' {
+  interface EffectScope {
+    on: () => void
+    off: () => void
+    _active: boolean
+  }
+}
 
 describe('reply', () => {
   const MockClient = vi.fn() as { new (): DiscordClient }
+  const mockEditFunction = vi.fn()
   const mockInteraction = () => {
     const mock = {
-      reply: vi.fn(() => Promise.resolve()),
+      reply: vi.fn(() => Promise.resolve({ edit: mockEditFunction })),
       editReply: vi.fn(() => Promise.resolve()),
+      followUp: vi.fn(() => Promise.resolve({ edit: mockEditFunction })),
     }
     return [mock as unknown as ChatInputCommandInteraction, mock] as const
   }
+
+  const scope = effectScope()
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    scope.on()
+    scope._active = true
+  })
+
+  afterEach(() => {
+    scope.stop()
+  })
 
   it('should return a reply function', () => {
     const replyFunction = reply('Hello, world!')
@@ -24,15 +47,6 @@ describe('reply', () => {
     const client = new MockClient()
     reply('Hello, world!').call(client, interaction, client)
     expect(mock.reply).toHaveBeenCalledExactlyOnceWith({
-      content: 'Hello, world!',
-    })
-  })
-
-  it('should edit reply with the correct content', async () => {
-    const [interaction, mock] = mockInteraction()
-    const client = new MockClient()
-    reply.edit('Hello, world!').call(client, interaction, client)
-    expect(mock.editReply).toHaveBeenCalledExactlyOnceWith({
       content: 'Hello, world!',
     })
   })
@@ -77,6 +91,23 @@ describe('reply', () => {
     expect(mock.reply).toHaveBeenCalledExactlyOnceWith({
       content: 'Lots of files',
       files,
+    })
+  })
+
+  it('should edit a reactive reply', async () => {
+    const [interaction, mock] = mockInteraction()
+    const client = new MockClient()
+    const content = ref('This is a reply!')
+    reply(content).call(client, interaction, client)
+    expect(mock.reply).toHaveBeenCalledExactlyOnceWith({
+      content: 'This is a reply!',
+    })
+    content.value = 'Updated reply!'
+    await nextTick()
+    // wait for next tick to ensure the watcher has run
+    await Promise.resolve()
+    expect(mockEditFunction).toHaveBeenCalledExactlyOnceWith({
+      content: 'Updated reply!',
     })
   })
 })
