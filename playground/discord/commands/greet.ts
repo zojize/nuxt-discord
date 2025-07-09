@@ -4,18 +4,10 @@
  * @param name The person to greet
  * @param style The greeting style
  */
-export default (name: string, style: string) => {
+export default (name: string, style: 'formal' | 'casual' | 'enthusiastic') => {
   describeOption(name, {
     minLength: 1,
     maxLength: 32,
-  })
-
-  describeOption(style, {
-    choices: [
-      { name: 'Formal', value: 'formal' },
-      { name: 'Casual', value: 'casual' },
-      { name: 'Enthusiastic', value: 'enthusiastic' },
-    ],
   })
 
   const greetings = {
@@ -24,5 +16,5 @@ export default (name: string, style: string) => {
     enthusiastic: `HELLO THERE ${name.toUpperCase()}!!! 🎉`,
   } as const
 
-  return greetings[style as keyof typeof greetings]
+  return greetings[style]
 }

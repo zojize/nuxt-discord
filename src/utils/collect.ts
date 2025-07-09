@@ -71,21 +71,110 @@ export function processCommandFile(ctx: NuxtDiscordContext, file: string): Slash
     return
   }
 
-  for (const param of commandDefinition.parameters) {
-    const name = param.name.getText(sourceFile)
-    let type = param.type?.getText(sourceFile)
+  const whichLiteral = (node: ts.TypeNode): SlashCommandOptionTypeIdentifier | undefined => {
+    if (ts.isLiteralTypeNode(node)) {
+      if (ts.isStringLiteral(node.literal)) {
+        return 'string'
+      }
+      if (ts.isNumericLiteral(node.literal)) {
+        return 'number'
+      }
+    }
+  }
 
-    // TODO: support literal union types
-
-    if (!type || !(type in typeIdentifierToEnum)) {
-      ctx.logger.warn(`Unknown slash command option type: ${type} for parameter ${name} in ${file}, defaulting to string`)
-      type = 'string' as const
+  const getType = (type: ts.TypeNode | undefined): {
+    type: SlashCommandOptionTypeIdentifier
+    choices?: (string | number)[]
+  } => {
+    if (!type) {
+      ctx.logger.warn(`No type found for slash command option in ${file}, defaulting to string`)
+      return { type: 'string' as const }
     }
 
-    const jsdocDescription = jsDocTags
-      .find(tag => ts.isJSDocParameterTag(tag) && tag.name.getText() === name)
-      ?.comment
-      ?.toString() ?? ''
+    if (ts.isUnionTypeNode(type)) {
+      const types = new Set(type.types.map(t => whichLiteral(t)))
+      if (types.size !== 1) {
+        ctx.logger.warn(`Union type with multiple conflicting types found in ${file}, defaulting to string`)
+        return { type: 'string' as const }
+      }
+      const typeName = types.values().next().value
+      if (!(typeName! in typeIdentifierToEnum)) {
+        ctx.logger.warn(`Unrecognizable type ${type.getText(sourceFile)}, defaulting to string`)
+        return { type: 'string' as const }
+      }
+      return {
+        type: typeName as SlashCommandOptionTypeIdentifier,
+        choices: typeName === 'string'
+          ? type.types.map(t => t.getText(sourceFile).slice(1, -1))
+          : type.types.map(t => Number(t.getText(sourceFile))),
+      }
+    }
+
+    if (ts.isLiteralTypeNode(type)) {
+      const typeName = whichLiteral(type)
+      if (!typeName) {
+        ctx.logger.warn(`Unrecognizable literal type ${type.getText(sourceFile)}, defaulting to string`)
+        return { type: 'string' as const }
+      }
+      if (!(typeName in typeIdentifierToEnum)) {
+        ctx.logger.warn(`Unrecognizable literal type ${type.getText(sourceFile)}, defaulting to string`)
+        return { type: 'string' as const }
+      }
+      return {
+        type: typeName,
+        choices: typeName === 'string'
+          ? [type.literal.getText(sourceFile).slice(1, -1)]
+          : [Number(type.literal.getText(sourceFile))],
+      }
+    }
+
+    const typeName = type.getText(sourceFile)
+    if (typeName && typeName in typeIdentifierToEnum) {
+      return { type: typeName as SlashCommandOptionTypeIdentifier }
+    }
+
+    ctx.logger.warn(`Unknown slash command option type: ${type.getText(sourceFile)} in ${file}, defaulting to string`)
+    return { type: 'string' as const }
+  }
+
+  for (const param of commandDefinition.parameters) {
+    const name = param.name.getText(sourceFile)
+    // let type = param.type?.getText(sourceFile)
+    let { type, choices } = getType(param.type)
+
+    const jsDocTagIdx = jsDocTags
+      .findIndex(tag => ts.isJSDocParameterTag(tag) && tag.name.getText() === name)
+
+    const findModifiers = <K extends string>(modifiers: K[]): Record<K, any> => {
+      let idx = jsDocTagIdx
+      const ret = {} as Record<K, any>
+      while (idx >= 0) {
+        const tag = jsDocTags[idx]
+        if (modifiers.includes(tag.tagName.escapedText as string as K) && tag.comment) {
+          ret[tag.tagName.escapedText as string as K] = JSON.parse(tag.comment.toString())
+        }
+        else {
+          return ret
+        }
+        idx -= 1
+      }
+      return ret
+    }
+
+    const jsdocDescription = jsDocTagIdx !== -1
+      ? jsDocTags[jsDocTagIdx].comment?.toString() ?? ''
+      : ''
+
+    const modifiersMap = {
+      string: ['minLength', 'maxLength', 'choices'],
+      number: ['min', 'max', 'choices'],
+      integer: ['min', 'max', 'choices'],
+      boolean: [],
+    }
+
+    const modifiers = findModifiers(modifiersMap[type as SlashCommandOptionTypeIdentifier])
+
+    choices = choices ?? modifiers.choices
 
     command.options!.push({
       name,
@@ -93,6 +182,17 @@ export function processCommandFile(ctx: NuxtDiscordContext, file: string): Slash
       type: typeIdentifierToEnum[type as SlashCommandOptionTypeIdentifier],
       description: jsdocDescription,
       required: !param.questionToken,
+      ...modifiers,
+      ...choices
+        ? {
+            choices: choices.map((choice) => {
+              if (typeof choice === 'string') {
+                return { name: choice, value: choice }
+              }
+              return { name: String(choice), value: choice }
+            }) as any, // hmm... is it possible to not use `any` here?
+          }
+        : {},
     })
   }
 

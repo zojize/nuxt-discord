@@ -120,7 +120,7 @@ const commandsWithStatus = computed(() => {
       name: cmd.name,
       description: cmd.description,
       path: 'unknown',
-      options: (cmd.options as SlashCommandOption[]),
+      options: (cmd.options as SlashCommandOption[]) ?? [],
       status: 'removed' as const,
       remote: cmd,
     })),
@@ -277,7 +277,6 @@ const statusClasses = {
           />
         </div>
 
-        <!-- <UButton icon="i-lucide-circle" @click="test" /> -->
         <UButton
           v-if="!allSynced"
           :icon="pendingSync ? 'i-lucide-refresh-ccw' : 'i-lucide-cloud-upload'"
@@ -398,8 +397,12 @@ const statusClasses = {
                   <!-- Choices dropdown -->
                   <UDropdownMenu
                     v-if="'choices' in option && option.choices && option.choices.length > 0"
-                    :items="option.choices.map(choice => ({ label: choice.name }))"
+                    :items="option.choices.map(choice => ({
+                      label: choice.name,
+                      value: typeof choice.value === 'string' ? `'${choice.value}'` : choice.value,
+                    }))"
                     :popper="{ placement: 'bottom-start' }"
+                    :ui="{ itemTrailing: 'text-sm text-gray-500 dark:text-gray-400' }"
                   >
                     <UBadge
                       v-if="'choices' in option && option.choices && option.choices.length > 0"
@@ -409,6 +412,9 @@ const statusClasses = {
                       size="sm"
                       class="hover:cursor-pointer"
                     />
+                    <template #item-trailing="{ item: { value } }">
+                      {{ value }}
+                    </template>
                   </UDropdownMenu>
                 </div>
 

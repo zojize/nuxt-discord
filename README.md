@@ -132,8 +132,6 @@ export default (name: string, style: string) => {
 }
 ```
 
-> **Coming Soon:** Support choices inferred from Typescript literal union types
-
 ## Web Interface
 
 Access the command management interface at `/discord/slash-commands` in your application. The interface provides:
@@ -272,12 +270,7 @@ Here's what's planned for future releases:
 
 ## Contribution
 
-<details>
-  <summary>Local development</summary>
-
-  Refer to the official [Module Author Guide](https://nuxt.com/docs/guide/going-further/modules)
-
-</details>
+Refer to the official [Module Author Guide](https://nuxt.com/docs/guide/going-further/modules)
 
 ## Acknowledgement
 
