@@ -1,6 +1,18 @@
 # Changelog
 
 
+## v0.0.14
+
+[compare changes](https://github.com/zojize/nuxt-discord/compare/v0.0.13...v0.0.14)
+
+### 🚀 Enhancements
+
+- Autocomplete ([51724db](https://github.com/zojize/nuxt-discord/commit/51724db))
+
+### ❤️ Contributors
+
+- Zojize <jeffzo01@qq.com>
+
 ## v0.0.13
 
 [compare changes](https://github.com/zojize/nuxt-discord/compare/v0.0.12...v0.0.13)
