@@ -1,4 +1,4 @@
-import type { APIApplicationCommandOptionChoice } from 'discord.js'
+import type { APIApplicationCommandOptionChoice, ApplicationCommandOptionChoiceData, AutocompleteInteraction } from 'discord.js'
 import type { SlashCommandOptionType } from '../../../types'
 
 export interface DescribeOptionOptionsBase {
@@ -7,6 +7,12 @@ export interface DescribeOptionOptionsBase {
 
   /** A brief description of the command. */
   description?: string
+}
+
+type MaybePromise<T> = T | Promise<T>
+
+interface AutocompleteFunction {
+  (value: string, interaction: AutocompleteInteraction): MaybePromise<ApplicationCommandOptionChoiceData[]>
 }
 
 export interface IntegerOption<T extends number = number> extends DescribeOptionOptionsBase {
@@ -18,6 +24,9 @@ export interface IntegerOption<T extends number = number> extends DescribeOption
 
   /** An array of choices for the integer option. */
   choices?: APIApplicationCommandOptionChoice<T>[]
+
+  /** A function to handle autocomplete for the integer option. */
+  autocomplete?: AutocompleteFunction
 }
 
 export interface NumberOption<T extends number = number> extends DescribeOptionOptionsBase {
@@ -29,6 +38,9 @@ export interface NumberOption<T extends number = number> extends DescribeOptionO
 
   /** An array of choices for the number option. */
   choices?: APIApplicationCommandOptionChoice<T>[]
+
+  /** A function to handle autocomplete for the number option. */
+  autocomplete?: AutocompleteFunction
 }
 
 export interface StringOption<T extends string = string> extends DescribeOptionOptionsBase {
@@ -40,12 +52,21 @@ export interface StringOption<T extends string = string> extends DescribeOptionO
 
   /** An array of choices for the string option. */
   choices?: APIApplicationCommandOptionChoice<T>[]
+
+  /** A function to handle autocomplete for the string option. */
+  autocomplete?: AutocompleteFunction
 }
 
 export type DescribeOptionOptions
   = | IntegerOption
     | NumberOption
     | StringOption
+
+export type NarrowedDescribeOptionOptions<T extends SlashCommandOptionType>
+  = T extends integer ? IntegerOption<T>
+    : T extends number ? NumberOption<T>
+      : T extends string ? StringOption<T>
+        : never
 
 /**
  * A compiler macro that describes a slash command option. Used for defining
@@ -72,9 +93,7 @@ export type DescribeOptionOptions
  */
 export function describeOption<const T extends SlashCommandOptionType>(
   _option: T | undefined,
-  _options: T extends integer ? IntegerOption<T>
-    : T extends number ? NumberOption<T>
-      : T extends string ? StringOption<T> : never,
+  _options: NarrowedDescribeOptionOptions<T>,
 ): void {
   // This function is a placeholder for the build time macro
 }

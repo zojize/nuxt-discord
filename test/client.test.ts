@@ -143,6 +143,7 @@ function mockChatInputCommandInteraction(commandName: string, options: Record<st
   let replied = false
   const interactionMock = {
     isChatInputCommand: () => true,
+    isAutocomplete: () => false,
     commandName,
     options: {
       get: (name: string) => {

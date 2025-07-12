@@ -6,12 +6,12 @@ import { genArrayFromRaw, genImport, genSafeVariableName, genString } from 'knit
 export function prepareTemplates(ctx: NuxtDiscordContext) {
   addServerTemplate({
     filename: 'discord/slashCommands',
-    getContents: () => getSlashCommandTemplateContent(ctx, /* importExecute */ true),
+    getContents: () => getSlashCommandTemplateContent(ctx, /* commandRuntime */ true),
   })
 
   addTemplate({
     filename: 'discord/slashCommands',
-    getContents: () => `${getSlashCommandTemplateContent(ctx, /* importExecute */ false)}`,
+    getContents: () => getSlashCommandTemplateContent(ctx, /* commandRuntime */ false),
   })
 
   const typesTemplateDst = addTypeTemplate({
@@ -53,8 +53,8 @@ declare global {
   })
 }
 
-function getSlashCommandTemplateContent(ctx: NuxtDiscordContext, importExecute: boolean) {
-  const imports = importExecute
+function getSlashCommandTemplateContent(ctx: NuxtDiscordContext, commandRuntime: boolean) {
+  const imports = commandRuntime
     ? ctx.slashCommands.map(({ path }) => {
         const name = genSafeVariableName(path)
         return { name, code: genImport(path, [{ name: 'default', as: name }]) }
@@ -63,12 +63,11 @@ function getSlashCommandTemplateContent(ctx: NuxtDiscordContext, importExecute: 
 
   return [
     ...imports.map(({ code }) => code),
-    `export default ${genArrayFromRaw(
-      ctx.slashCommands.map(({ options, ...rest }, i) => ({
-        ...Object.fromEntries(Object.entries(rest).map(([key, value]) => [key, genString(value)])),
-        options: genArrayFromRaw(options, undefined, { preserveTypes: true }),
-        ...importExecute ? { execute: imports[i].name } : {},
-      })),
-    )}`,
+    `export default [\n${
+      ctx.slashCommands.map(({ options, ...rest }, i) => `  {\n    ${
+        Object.entries(rest).map(([key, value]) => `${key}: ${genString(value)}`).join(',\n    ')},\n
+    options: ${genArrayFromRaw(options, undefined, { preserveTypes: true })},\n${commandRuntime ? `\n    ...${imports[i].name},\n` : ''}
+  },\n`).join('')
+    }]`,
   ].join('\n')
 }

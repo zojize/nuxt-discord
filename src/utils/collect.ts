@@ -5,38 +5,20 @@ import ts from 'typescript'
 import { typeIdentifierToEnum } from '../types'
 import { macros } from './macros'
 
-export default function collectSlashCommands(ctx: NuxtDiscordContext, out?: SlashCommand[]) {
+export default function collectSlashCommands(ctx: NuxtDiscordContext) {
   const commandFiles = globSync(`${ctx.resolve.root(ctx.options.dir, 'commands')}/**/*.ts`)
-  out ??= ctx.slashCommands
+  ctx.slashCommands = []
   for (const file of commandFiles) {
     const command = processCommandFile(ctx, file)
     if (command) {
-      out.push(command)
+      ctx.slashCommands.push(command)
     }
   }
 }
 
 export function processCommandFile(ctx: NuxtDiscordContext, file: string): SlashCommand | undefined {
-  const sourceFile = ts.createSourceFile(file, readFileSync(file).toString(), ts.ScriptTarget.Latest, true)
-  let commandDefinition: ts.ArrowFunction | ts.FunctionDeclaration | ts.FunctionExpression | undefined
-
-  ts.forEachChild(sourceFile, (node) => {
-    if (ts.isExportAssignment(node)) {
-      if (ts.isArrowFunction(node.expression)) {
-        commandDefinition = node.expression
-      }
-      else if (ts.isCallExpression(node.expression)
-        && ts.isIdentifier(node.expression.expression)
-        && node.expression.expression.escapedText === 'defineSlashCommand'
-        && (ts.isArrowFunction(node.expression.arguments[0]) || ts.isFunctionExpression(node.expression.arguments[0]))
-      ) {
-        commandDefinition = node.expression.arguments[0]
-      }
-    }
-    else if (ts.isFunctionDeclaration(node) && !!(ts.getCombinedModifierFlags(node) & ts.ModifierFlags.ExportDefault)) {
-      commandDefinition = node
-    }
-  })
+  const sourceFile = ts.createSourceFile(file, readFileSync(file).toString(), ts.ScriptTarget.Latest, /* setParentNodes */ true)
+  const commandDefinition = extractCommandDefinition(sourceFile)
 
   if (!commandDefinition) {
     ctx.logger.warn(`No command definition found for ${file}`)
@@ -182,6 +164,8 @@ export function processCommandFile(ctx: NuxtDiscordContext, file: string): Slash
       type: typeIdentifierToEnum[type as SlashCommandOptionTypeIdentifier],
       description: jsdocDescription,
       required: !param.questionToken,
+      varname: name,
+      hasAutocomplete: false,
       ...modifiers,
       ...choices
         ? {
@@ -196,31 +180,78 @@ export function processCommandFile(ctx: NuxtDiscordContext, file: string): Slash
     })
   }
 
+  const [macroCalls, outOfRangMacroCalls] = extractMacroCalls(commandDefinition.body)
+  for (const macroCall of macroCalls) {
+    const macroName = macroCall.expression.escapedText as keyof typeof macros
+    macros[macroName](ctx, macroCall, command)
+  }
+
+  if (outOfRangMacroCalls.length > 0) {
+    // TODO: warn specific macros and line numbers
+    ctx.logger.warn(`Macros in file ${file} must be called at the top of the file`)
+  }
+
+  return command as SlashCommand
+}
+
+export function extractCommandDefinition(sourceFile: ts.SourceFile) {
+  let commandDefinition: ts.ArrowFunction | ts.FunctionDeclaration | ts.FunctionExpression | undefined
+
+  ts.forEachChild(sourceFile, (node) => {
+    if (ts.isExportAssignment(node)) {
+      if (ts.isArrowFunction(node.expression)) {
+        commandDefinition = node.expression
+      }
+      else if (ts.isCallExpression(node.expression)
+        && ts.isIdentifier(node.expression.expression)
+        && node.expression.expression.escapedText === 'defineSlashCommand'
+        && (ts.isArrowFunction(node.expression.arguments[0]) || ts.isFunctionExpression(node.expression.arguments[0]))) {
+        commandDefinition = node.expression.arguments[0]
+      }
+    }
+    else if (ts.isFunctionDeclaration(node) && !!(ts.getCombinedModifierFlags(node) & ts.ModifierFlags.ExportDefault)) {
+      commandDefinition = node
+    }
+  })
+
+  return commandDefinition
+}
+
+type MacroCall = ts.CallExpression & {
+  expression: ts.Identifier
+}
+
+export function extractMacroCalls(
+  definitionBody: ts.ConciseBody,
+): [MacroCall[], MacroCall[]] {
   let macrosEnd = false
-  let warned = false
-  ts.forEachChild(commandDefinition.body, (node) => {
-    if (
-      ts.isExpressionStatement(node)
-      && ts.isCallExpression(node.expression)
-      && ts.isIdentifier(node.expression.expression)
-      && (node.expression.expression.escapedText as string) in macros
-    ) {
+  const macroCalls: ts.CallExpression[] = []
+  const outOfRangMacroCalls: ts.CallExpression[] = []
+  ts.forEachChild(definitionBody, (node) => {
+    if (isMacroCallExpression(node)) {
       if (macrosEnd) {
-        if (!warned) {
-          ctx.logger.warn(`${node.expression.expression.escapedText} macro must be called at the top in file ${file}`)
-          warned = true
-        }
+        outOfRangMacroCalls.push(node.expression)
         return
       }
 
-      macros[node.expression.expression.escapedText as keyof typeof macros](ctx, node.expression, command)
+      macroCalls.push(node.expression)
     }
     else {
       macrosEnd = true
     }
   })
 
-  return command as SlashCommand
+  return [
+    macroCalls as MacroCall[],
+    outOfRangMacroCalls as MacroCall[],
+  ]
+}
+
+export function isMacroCallExpression(node: ts.Node): node is ts.Node & { expression: MacroCall } {
+  return ts.isExpressionStatement(node)
+    && ts.isCallExpression(node.expression)
+    && ts.isIdentifier(node.expression.expression)
+    && (node.expression.expression.escapedText as string) in macros
 }
 
 // ts.getJSDocTags does not seem to always work

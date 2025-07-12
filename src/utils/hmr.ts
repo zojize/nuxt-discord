@@ -3,7 +3,7 @@ import type { Buffer } from 'node:buffer'
 import type { IncomingMessage } from 'node:http'
 import type { InputOptions, OutputOptions, RollupBuild } from 'rollup'
 import type { WebSocket } from 'ws'
-import type { NuxtDiscordContext, SlashCommand } from '../types'
+import type { NuxtDiscordContext } from '../types'
 import fs from 'node:fs'
 import path from 'node:path'
 import { addVitePlugin, isIgnored, updateTemplates } from '@nuxt/kit'
@@ -12,6 +12,7 @@ import { listen } from 'listhen'
 import { rollup } from 'rollup'
 import { WebSocketServer } from 'ws'
 import collectSlashCommands, { processCommandFile } from './collect'
+import TransformPlugin from './transform'
 
 type RollupConfig = InputOptions & {
   output: OutputOptions
@@ -43,11 +44,18 @@ export function prepareHMR(ctx: NuxtDiscordContext) {
         else
           nitroIgnored.push(existingNitroIgnored)
       }
-      // TODO: stop ignoring the commands directory, come back if I figure out how to make HMR work on server
       nitroConfig.watchOptions.ignored = nitroIgnored
 
-      nitroConfig.hooks ??= {
-        'rollup:before': (_, config) => {
+      // @ts-expect-error - i don't understand why ts complains about this
+      const originalBeforeHook = nitroConfig.hooks?.['rollup:before']
+      nitroConfig.hooks = {
+        ...nitroConfig.hooks,
+        'rollup:before': (nitroCtx, config) => {
+          originalBeforeHook?.(nitroCtx, config)
+          config.plugins = [
+            config.plugins,
+            TransformPlugin(ctx),
+          ]
           rollupConfig = config
         },
       }
@@ -86,12 +94,11 @@ export function prepareHMR(ctx: NuxtDiscordContext) {
         listener.server.on('upgrade', websocket.serve)
 
         websocket.on('full-update', (client) => {
-          const commands: SlashCommand[] = []
-          collectSlashCommands(ctx, commands)
+          collectSlashCommands(ctx)
           try {
             client.send(JSON.stringify({
               event: 'full-update',
-              commands,
+              commands: ctx.slashCommands,
             }))
           }
           catch {

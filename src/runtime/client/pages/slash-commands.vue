@@ -5,7 +5,6 @@ import { computed, ref, useFetch, useRuntimeConfig, watchEffect } from '#imports
 import { useWebSocket } from '@vueuse/core'
 import slashCommands from 'discord/slashCommands'
 import TheHeader from '../components/TheHeader.vue'
-
 import '../style.css'
 import './slash-commands.css'
 
@@ -363,6 +362,13 @@ const statusClasses = {
                     label="required"
                     variant="soft"
                     color="error"
+                    size="sm"
+                  />
+                  <UBadge
+                    v-if="option.hasAutocomplete"
+                    label="autocomplete"
+                    variant="soft"
+                    color="info"
                     size="sm"
                   />
                   <!-- Restriction badges -->

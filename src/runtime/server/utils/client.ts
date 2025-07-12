@@ -1,4 +1,4 @@
-import type { APIApplicationCommand, APIApplicationCommandOption, ChatInputCommandInteraction, RESTGetAPIApplicationCommandsResult, RESTPatchAPIApplicationCommandResult, RESTPutAPIApplicationCommandsResult } from 'discord.js'
+import type { APIApplicationCommand, APIApplicationCommandOption, AutocompleteInteraction, ChatInputCommandInteraction, CommandInteraction, Interaction, RESTGetAPIApplicationCommandsResult, RESTPatchAPIApplicationCommandResult, RESTPutAPIApplicationCommandsResult } from 'discord.js'
 import type { EffectScope } from 'vue'
 import type { NuxtDiscordOptions, SlashCommandOption, SlashCommandOptionType, SlashCommandReturnType, SlashCommandRuntime } from '../../../types'
 import process from 'node:process'
@@ -15,19 +15,19 @@ export interface DiscordClientErrorBase {
 
 export interface UnknownSlashCommandError extends DiscordClientErrorBase {
   type: 'UnknownSlashCommandError'
-  interaction: ChatInputCommandInteraction
+  interaction: CommandInteraction
 }
 
 export interface MissingRequiredOptionError extends DiscordClientErrorBase {
   type: 'MissingRequiredOptionError'
-  interaction: ChatInputCommandInteraction
+  interaction: CommandInteraction
   command: SlashCommandRuntime
   option: string
 }
 
 export interface SlashCommandExecutionError extends DiscordClientErrorBase {
   type: 'SlashCommandExecutionError'
-  interaction: ChatInputCommandInteraction
+  interaction: CommandInteraction
   command: SlashCommandRuntime
   error: unknown
 }
@@ -84,11 +84,7 @@ export class DiscordClient {
     this.#clientOptions = { ...options }
     await this.#nitro.hooks.callHook('discord:client:config', this.#clientOptions)
     this.#client = new InternalClient(this.#clientOptions)
-    this.#client.on(Events.InteractionCreate, (interaction) => {
-      if (!interaction.isChatInputCommand())
-        return
-      this.#handleSlashCommand(interaction)
-    })
+    this.#client.on(Events.InteractionCreate, interaction => this.#handleInteraction(interaction))
 
     this.startScope()
 
@@ -103,6 +99,60 @@ export class DiscordClient {
     await this.#client.login(this.#token)
 
     return promise
+  }
+
+  async #handleInteraction(interaction: Interaction) {
+    // TODO: support middleware
+    if (!interaction.isAutocomplete() && !interaction.isChatInputCommand()) {
+      return
+    }
+
+    const commandName = interaction.commandName
+    const command = this.#slashCommands.find(cmd => cmd.name === commandName)
+    if (!command) {
+      logger.warn(`Unknown slash command: ${commandName}`)
+      this.#nitro.hooks.callHook('discord:client:error', {
+        type: 'UnknownSlashCommandError',
+        client: this,
+        interaction,
+      })
+      return
+    }
+
+    if (!command.execute && command.load) {
+      try {
+        const dynamicCommand = await command.load()
+        Object.assign(command, dynamicCommand)
+      }
+      catch (error) {
+        this.#nitro.hooks.callHook('discord:client:error', {
+          type: 'SlashCommandExecutionError',
+          client: this,
+          interaction,
+          command,
+          error,
+        })
+        return
+      }
+    }
+
+    if (!command.execute && !command.load) {
+      this.#nitro.hooks.callHook('discord:client:error', {
+        type: 'SlashCommandExecutionError',
+        client: this,
+        interaction,
+        command,
+        error: new Error(`Slash command "${commandName}" cannot be executed or loaded`),
+      })
+      return
+    }
+
+    if (interaction.isAutocomplete()) {
+      await this.#handleAutocomplete(interaction, command)
+    }
+    else if (interaction.isChatInputCommand()) {
+      await this.#handleSlashCommand(interaction, command)
+    }
   }
 
   public async stop(): Promise<void> {
@@ -169,20 +219,7 @@ export class DiscordClient {
 
   #interactionScopes: WeakMap<ChatInputCommandInteraction, EffectScope> = new WeakMap()
   #commandFinalizationRegistry = new FinalizationRegistry((scope: EffectScope) => scope.stop())
-  async #handleSlashCommand(interaction: ChatInputCommandInteraction): Promise<void> {
-    const name = interaction.commandName
-    const command = this.#slashCommands.find(cmd => cmd.name === name)
-
-    if (!command) {
-      logger.warn(`Unknown slash command: ${name}`)
-      this.#nitro.hooks.callHook('discord:client:error', {
-        type: 'UnknownSlashCommandError',
-        client: this,
-        interaction,
-      })
-      return
-    }
-
+  async #handleSlashCommand(interaction: ChatInputCommandInteraction, command: SlashCommandRuntime): Promise<void> {
     const args: (SlashCommandOptionType | undefined)[] = []
     for (const option of command.options) {
       const opt = interaction.options.get(option.name, option.required)
@@ -199,32 +236,6 @@ export class DiscordClient {
 
       // TODO: handle other types
       args.push(opt?.value)
-    }
-
-    if (!command.execute && !command.load) {
-      this.#nitro.hooks.callHook('discord:client:error', {
-        type: 'SlashCommandExecutionError',
-        client: this,
-        interaction,
-        command,
-        error: new Error(`Slash command "${name}" cannot be executed or loaded`),
-      })
-      return
-    }
-    else if (!command.execute && command.load) {
-      try {
-        command.execute = await command.load()
-      }
-      catch (error) {
-        this.#nitro.hooks.callHook('discord:client:error', {
-          type: 'SlashCommandExecutionError',
-          client: this,
-          interaction,
-          command,
-          error,
-        })
-        return
-      }
     }
 
     let scope!: EffectScope
@@ -329,6 +340,40 @@ export class DiscordClient {
     }
   }
 
+  async #handleAutocomplete(interaction: AutocompleteInteraction, command: SlashCommandRuntime): Promise<void> {
+    const commandName = interaction.commandName
+    // const command = this.#slashCommands.find(cmd => cmd.name === commandName)
+
+    // console.log('Handling autocomplete for command:', commandName, 'focused option:', interaction.options.getFocused(true).name)
+
+    if (!command) {
+      logger.warn(`Unknown slash command: ${commandName}`)
+      this.#nitro.hooks.callHook('discord:client:error', {
+        type: 'UnknownSlashCommandError',
+        client: this,
+        interaction,
+      })
+      return
+    }
+
+    const focusedOption = interaction.options.getFocused(true)
+    const varname = command.options.find(opt => opt.name === focusedOption.name)?.varname
+    if (!varname) {
+      // TODO: error here
+      return
+    }
+
+    const autocompleteFunction = command.optionMacros?.[varname]?.autocomplete
+    if (!autocompleteFunction) {
+      // TODO: error here
+      return
+    }
+
+    const choices = await autocompleteFunction(focusedOption.value as string, interaction)
+
+    await interaction.respond(choices)
+  }
+
   #getSlashCommandBuilder(command: SlashCommandRuntime): SlashCommandBuilder {
     const builder = new SlashCommandBuilder()
       .setName(command.name)
@@ -348,6 +393,9 @@ export class DiscordClient {
               opt = opt.setMaxLength(option.maxLength)
             if (option.choices)
               opt = opt.addChoices(...option.choices)
+            if (option.hasAutocomplete) {
+              opt = opt.setAutocomplete(true)
+            }
             return opt
           })
           break
@@ -363,6 +411,8 @@ export class DiscordClient {
               opt = opt.setMaxValue(option.max)
             if (option.choices)
               opt = opt.addChoices(...option.choices)
+            if (option.hasAutocomplete)
+              opt = opt.setAutocomplete(true)
             return opt
           })
           break
@@ -378,6 +428,8 @@ export class DiscordClient {
               opt = opt.setMaxValue(option.max)
             if (option.choices)
               opt = opt.addChoices(...option.choices)
+            if (option.hasAutocomplete)
+              opt = opt.setAutocomplete(true)
             return opt
           })
           break
@@ -578,6 +630,10 @@ function optionEqual(a: SlashCommandOption, b: APIApplicationCommandOption): boo
     else if ('minLength' in a && 'min_length' in b && a.minLength !== b.min_length) {
       return false
     }
+  }
+
+  if (a.hasAutocomplete !== !!('autocomplete' in b && b.autocomplete)) {
+    return false
   }
 
   // TODO: more

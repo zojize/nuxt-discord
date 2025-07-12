@@ -59,8 +59,13 @@ export const macros = {
 
     const macroOptions = parseLiteral<Partial<Omit<SlashCommandOption, 'type' | 'required'>>>(node.arguments[1])
     const validOptionKeys = ['name', 'description', 'min', 'max', 'minLength', 'maxLength', 'choices']
-    const isValidOptionKey = (key: string): key is keyof typeof macroOptions =>
-      validOptionKeys.includes(key)
+    const isValidOptionKey = (key: string): key is keyof typeof macroOptions => validOptionKeys.includes(key)
+
+    // this might be undefined due to the limitations of parseLiteral, just remove it and set hasAutocomplete directly
+    Reflect.deleteProperty(macroOptions, 'autocomplete')
+    option.hasAutocomplete = node.arguments[1].properties
+      .find(prop => (ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name) && prop.name.escapedText === 'autocomplete')
+        || (ts.isMethodDeclaration(prop) && ts.isIdentifier(prop.name) && prop.name.escapedText === 'autocomplete')) != null
 
     for (const key in macroOptions) {
       if (!isValidOptionKey(key)) {

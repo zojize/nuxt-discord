@@ -2,7 +2,7 @@ import type { DiscordClient } from '#build/types/nitro-imports'
 import type { ChatInputCommandInteraction, ClientOptions } from 'discord.js'
 import type { ListenOptions } from 'listhen'
 import type { MaybeRef } from 'vue'
-import type { IntegerOption, NumberOption, StringOption } from './runtime/server/utils/describeOption'
+import type { DescribeOptionOptions, IntegerOption, NumberOption, StringOption } from './runtime/server/utils/describeOption'
 import { ApplicationCommandOptionType } from 'discord.js'
 
 export interface NuxtDiscordOptions {
@@ -110,6 +110,7 @@ export interface SlashCommandOptionBase {
   description: string
   type: ApplicationCommandOptionType
   required: boolean
+  hasAutocomplete: boolean
   // TODO
 }
 
@@ -152,14 +153,15 @@ export interface SlashCommand {
   description: string
   // TODO: more properties e.g. nsfw, contexts, locales
   path: string
-  options: SlashCommandOption[]
+  options: (SlashCommandOption & { varname: string })[]
 }
 
 export interface SlashCommandRuntime extends SlashCommand {
   /** if execute is not defined load must be defined */
-  load?: () => Promise<SlashCommandRuntime['execute']>
+  load?: () => Promise<Pick<SlashCommandRuntime, 'execute' | 'optionMacros'>>
   execute?: (...args: (SlashCommandOptionType | undefined)[]) => SlashCommandReturnType
   id?: string
+  optionMacros?: Record<string, DescribeOptionOptions>
 }
 
 export interface NuxtDiscordContext {

@@ -253,7 +253,7 @@ Here's what's planned for future releases:
 - [ ] Better JSDocs support JSDoc comments
 - [ ] Localization support
 - [ ] File-based subcommands
-- [ ] Auto-complete API
+- [x] Auto-complete API
 - [ ] Guild-specific commands
 - [ ] Nuxt-devtools integration
 - [ ] Unit tests
