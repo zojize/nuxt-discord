@@ -6,7 +6,7 @@ import type { WebSocket } from 'ws'
 import type { NuxtDiscordContext } from '../types'
 import fs from 'node:fs'
 import path from 'node:path'
-import { addVitePlugin, isIgnored, updateTemplates } from '@nuxt/kit'
+import { addVitePlugin, isIgnored, resolveAlias, updateTemplates } from '@nuxt/kit'
 import chokidar from 'chokidar'
 import { listen } from 'listhen'
 import { rollup } from 'rollup'
@@ -52,6 +52,7 @@ export function prepareHMR(ctx: NuxtDiscordContext) {
         ...nitroConfig.hooks,
         'rollup:before': (nitroCtx, config) => {
           originalBeforeHook?.(nitroCtx, config)
+          // TODO: might need to merge with user nuxt config.server.rollupConfig.plugins
           config.plugins = [
             config.plugins,
             TransformPlugin(ctx),
@@ -247,8 +248,18 @@ async function generateDynamicCommandBuild(file: string, config: RollupConfig, c
     bundle = await rollup({
       ...config,
       input: file,
-      // externalize all modules except the command file itself, excluding .ts files
-      external: id => !id.includes(file) && !id.endsWith('.ts'),
+      plugins: [
+        config.plugins,
+        {
+          name: 'discord:resolve-alias-and-externalize',
+          resolveId: (id) => {
+            // externalize all modules except the command file itself, excluding .ts files
+            if (!id.includes(file) && !id.endsWith('.ts')) {
+              return { id: resolveAlias(id), external: true }
+            }
+          },
+        },
+      ],
     })
     const { output } = await bundle.generate({ ...config.output, sourcemap: false })
     fs.mkdirSync(path.join(ctx.nuxt.options.buildDir, 'discord', 'commands'), { recursive: true })
