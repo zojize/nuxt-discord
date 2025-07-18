@@ -2,7 +2,7 @@ import type { ChatInputCommandInteraction } from 'discord.js'
 import type { DiscordClient } from '~/src/runtime/server/utils/client'
 import { MessageFlags } from 'discord.js'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { effectScope, nextTick, ref } from 'vue'
+import { effectScope, ref } from 'vue'
 import { reply } from '../src/runtime/server/utils/reply'
 
 declare module 'vue' {
@@ -103,10 +103,7 @@ describe('reply', () => {
       content: 'This is a reply!',
     })
     content.value = 'Updated reply!'
-    await nextTick()
-    // wait for next tick to ensure the watcher has run
-    await Promise.resolve()
-    expect(mockEditFunction).toHaveBeenCalledExactlyOnceWith({
+    await expect.poll(() => mockEditFunction).toHaveBeenCalledExactlyOnceWith({
       content: 'Updated reply!',
     })
   })
