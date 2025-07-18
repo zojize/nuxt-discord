@@ -3,7 +3,6 @@ import type { WatchEvent } from 'nuxt/schema'
 import type { SlashCommand, SlashCommandOption } from '../../../types'
 import { computed, ref, useFetch, useRuntimeConfig, watchEffect } from '#imports'
 import { useWebSocket } from '@vueuse/core'
-import slashCommands from 'discord/slashCommands'
 import TheHeader from '../components/TheHeader.vue'
 import '../style.css'
 import './slash-commands.css'
@@ -82,7 +81,7 @@ function getRemoteId(command: any): string | undefined {
   return undefined
 }
 
-const commands = ref(slashCommands)
+const commands = ref([] as typeof import('discord/slashCommands').default)
 
 const {
   data: diff,
