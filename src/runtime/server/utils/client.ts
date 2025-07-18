@@ -342,9 +342,6 @@ export class DiscordClient {
 
   async #handleAutocomplete(interaction: AutocompleteInteraction, command: SlashCommandRuntime): Promise<void> {
     const commandName = interaction.commandName
-    // const command = this.#slashCommands.find(cmd => cmd.name === commandName)
-
-    // console.log('Handling autocomplete for command:', commandName, 'focused option:', interaction.options.getFocused(true).name)
 
     if (!command) {
       logger.warn(`Unknown slash command: ${commandName}`)
