@@ -1,6 +1,34 @@
 # Changelog
 
 
+## v0.0.15
+
+[compare changes](https://github.com/zojize/nuxt-discord/compare/v0.0.14...v0.0.15)
+
+### 🚀 Enhancements
+
+- **hmr:** Add alias resolution to rollup configuration ([b317687](https://github.com/zojize/nuxt-discord/commit/b317687))
+- **reply:** Add button support ([2990716](https://github.com/zojize/nuxt-discord/commit/2990716))
+- **playground:** Add counter command as button example ([17aa950](https://github.com/zojize/nuxt-discord/commit/17aa950))
+
+### 🩹 Fixes
+
+- Update slash-commands page to avoid import issues ([841ade4](https://github.com/zojize/nuxt-discord/commit/841ade4))
+
+### 🏡 Chore
+
+- Update dependencies ([ec560bb](https://github.com/zojize/nuxt-discord/commit/ec560bb))
+- Update dependencies ([d6c8a22](https://github.com/zojize/nuxt-discord/commit/d6c8a22))
+- Remove redundant comments ([04cd953](https://github.com/zojize/nuxt-discord/commit/04cd953))
+
+### ✅ Tests
+
+- Use expect.poll ([eaa6f49](https://github.com/zojize/nuxt-discord/commit/eaa6f49))
+
+### ❤️ Contributors
+
+- Zojize <jeffzo01@qq.com>
+
 ## v0.0.14
 
 [compare changes](https://github.com/zojize/nuxt-discord/compare/v0.0.13...v0.0.14)
