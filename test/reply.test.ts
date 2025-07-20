@@ -1,8 +1,8 @@
 import type { ChatInputCommandInteraction } from 'discord.js'
 import type { DiscordClient } from '~/src/runtime/server/utils/client'
 import { MessageFlags } from 'discord.js'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { effectScope, ref } from 'vue'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ref } from 'vue'
 import { reply } from '../src/runtime/server/utils/reply'
 
 declare module 'vue' {
@@ -25,16 +25,8 @@ describe('reply', () => {
     return [mock as unknown as ChatInputCommandInteraction, mock] as const
   }
 
-  const scope = effectScope()
-
   beforeEach(() => {
     vi.clearAllMocks()
-    scope.on()
-    scope._active = true
-  })
-
-  afterEach(() => {
-    scope.stop()
   })
 
   it('should return a reply function', () => {
