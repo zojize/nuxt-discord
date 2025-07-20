@@ -1,6 +1,27 @@
 # Changelog
 
 
+## v0.0.16
+
+[compare changes](https://github.com/zojize/nuxt-discord/compare/v0.0.15...v0.0.16)
+
+### 🩹 Fixes
+
+- Type import paths in build ([7ea51dc](https://github.com/zojize/nuxt-discord/commit/7ea51dc))
+- **reply:** Correct reactivity behavior for buttons and files ([d60ab7f](https://github.com/zojize/nuxt-discord/commit/d60ab7f))
+
+### 🏡 Chore
+
+- Update dependencies ([8bd990f](https://github.com/zojize/nuxt-discord/commit/8bd990f))
+
+### ✅ Tests
+
+- Update tests ([abb6f66](https://github.com/zojize/nuxt-discord/commit/abb6f66))
+
+### ❤️ Contributors
+
+- Zojize <jeffzo01@qq.com>
+
 ## v0.0.15
 
 [compare changes](https://github.com/zojize/nuxt-discord/compare/v0.0.14...v0.0.15)
