@@ -127,17 +127,18 @@ describe('client', () => {
   })
 })
 
-function mockChatInputCommandInteraction(commandName: string, options: Record<string, any> = {}) {
+function mockChatInputCommandInteraction(commandName: string, options: Record<string, any> = {}, withResponse = false) {
   const messageMock:
     & InteractionResponse
     & InteractionCallbackResponse
     & Message = {
-      edit: vi.fn(() => Promise.resolve({})),
-      resource: {
-        message: {
-          edit: vi.fn(() => Promise.resolve({})),
-        },
-      },
+      ...withResponse
+        ? { resource: {
+            message: {
+              edit: vi.fn(() => Promise.resolve({})),
+            },
+          } }
+        : { edit: vi.fn(() => Promise.resolve({})) },
     } as any
   let deferred = false
   let replied = false

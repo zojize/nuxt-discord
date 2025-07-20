@@ -107,4 +107,19 @@ describe('reply', () => {
       content: 'Updated reply!',
     })
   })
+
+  it('should edit a reactive file reply', async () => {
+    const [interaction, mock] = mockInteraction()
+    const client = new MockClient()
+    const file = ref('file.txt')
+    // @ts-expect-error - this shouldn't error
+    reply.file(file).call(client, interaction, client)
+    expect(mock.reply).toHaveBeenCalledExactlyOnceWith({
+      files: ['file.txt'],
+    })
+    file.value = 'updated-file.txt'
+    await expect.poll(() => mockEditFunction).toHaveBeenCalledExactlyOnceWith({
+      files: ['updated-file.txt'],
+    })
+  })
 })
