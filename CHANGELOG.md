@@ -1,6 +1,22 @@
 # Changelog
 
 
+## v0.0.17
+
+[compare changes](https://github.com/zojize/nuxt-discord/compare/v0.0.16...v0.0.17)
+
+### 🚀 Enhancements
+
+- Implement file based subcommands and update examples in playground ([7bfdc43](https://github.com/zojize/nuxt-discord/commit/7bfdc43))
+
+### ✅ Tests
+
+- Remove unnecessary effect scope ([4900f6a](https://github.com/zojize/nuxt-discord/commit/4900f6a))
+
+### ❤️ Contributors
+
+- Zojize <jeffzo01@qq.com>
+
 ## v0.0.16
 
 [compare changes](https://github.com/zojize/nuxt-discord/compare/v0.0.15...v0.0.16)
