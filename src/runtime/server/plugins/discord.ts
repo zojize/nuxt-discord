@@ -30,7 +30,7 @@ export default defineNitroPlugin(async (nitro) => {
           const buildPath = cmd.path
             .replace(runtimeConfig.discord.rootDir, runtimeConfig.discord.buildDir)
             .replace(/\.ts$/, '.mjs')
-          const existingCommand = slashCommands.find(c => c.path === cmd.path)
+          const existingCommand = client.getSlashCommands().find(c => c.path === cmd.path)
 
           if (fs.existsSync(buildPath)) {
             // get the last modified time of the file
@@ -46,7 +46,7 @@ export default defineNitroPlugin(async (nitro) => {
             continue
           }
 
-          commands.push(runtimeCommand)
+          commands.push(runtimeCommand as SlashCommand)
         }
         client.clearSlashCommands()
         client.addSlashCommands(commands)

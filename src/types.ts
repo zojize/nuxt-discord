@@ -154,14 +154,35 @@ export interface SlashCommand {
   // TODO: more properties e.g. nsfw, contexts, locales
   path: string
   options: (SlashCommandOption & { varname: string })[]
+  parents: []
+  subcommands: (SlashCommandSubcommand | SlashCommandSubcommandGroup)[]
 }
 
-export interface SlashCommandRuntime extends SlashCommand {
+export interface SlashCommandSubcommandGroup extends Omit<SlashCommand, 'subcommands' | 'parents'> {
+  parents: [string]
+  subcommands: SlashCommandSubcommand[]
+}
+export interface SlashCommandSubcommand extends Omit<SlashCommand, 'subcommands' | 'parents'> {
+  parents: [string] | [string, string]
+  subcommands: []
+}
+
+export interface SlashCommandRuntime extends Omit<SlashCommand, 'subcommands'> {
   /** if execute is not defined load must be defined */
   load?: () => Promise<Pick<SlashCommandRuntime, 'execute' | 'optionMacros'>>
   execute?: (...args: (SlashCommandOptionType | undefined)[]) => SlashCommandReturnType
   id?: string
   optionMacros?: Record<string, DescribeOptionOptions>
+  subcommands?: (SlashCommandSubcommandRuntime | SlashCommandSubcommandGroupRuntime)[]
+}
+
+export interface SlashCommandSubcommandGroupRuntime extends Omit<SlashCommandRuntime, 'subcommands' | 'parents'> {
+  parents: [string]
+  subcommands?: SlashCommandSubcommandRuntime[]
+}
+export interface SlashCommandSubcommandRuntime extends Omit<SlashCommandRuntime, 'subcommands' | 'parents'> {
+  parents: [string] | [string, string]
+  subcommands?: []
 }
 
 export interface NuxtDiscordContext {

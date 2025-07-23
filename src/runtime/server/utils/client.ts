@@ -1,8 +1,8 @@
-import type { APIApplicationCommand, APIApplicationCommandOption, AutocompleteInteraction, ChatInputCommandInteraction, CommandInteraction, Interaction, RESTGetAPIApplicationCommandsResult, RESTPatchAPIApplicationCommandResult, RESTPutAPIApplicationCommandsResult } from 'discord.js'
+import type { APIApplicationCommandOption, AutocompleteInteraction, ChatInputCommandInteraction, CommandInteraction, Interaction, RESTGetAPIApplicationCommandsResult, RESTPatchAPIApplicationCommandResult, RESTPutAPIApplicationCommandsResult } from 'discord.js'
 import type { EffectScope } from 'vue'
-import type { NuxtDiscordOptions, SlashCommandOption, SlashCommandOptionType, SlashCommandReturnType, SlashCommandRuntime } from '../../../types'
+import type { NuxtDiscordOptions, SlashCommandOption, SlashCommandOptionType, SlashCommandReturnType, SlashCommandRuntime, SlashCommandSubcommandGroupRuntime, SlashCommandSubcommandRuntime } from '../../../types'
 import process from 'node:process'
-import { ApplicationCommandOptionType, Events, Client as InternalClient, REST, Routes, SlashCommandBuilder } from 'discord.js'
+import { ApplicationCommandOptionType, Events, Client as InternalClient, REST, Routes, SlashCommandBuilder, SlashCommandSubcommandBuilder, SlashCommandSubcommandGroupBuilder } from 'discord.js'
 import { useNitroApp } from 'nitropack/runtime'
 import { effectScope, isRef } from 'vue'
 import { logger } from '../../logger'
@@ -108,7 +108,35 @@ export class DiscordClient {
     }
 
     const commandName = interaction.commandName
-    const command = this.#slashCommands.find(cmd => cmd.name === commandName)
+    let command: SlashCommandRuntime | SlashCommandSubcommandRuntime | undefined
+      = this.#slashCommands.find(cmd => cmd.name === commandName)
+    if (!command) {
+      logger.warn(`Unknown slash command: ${commandName}`)
+      this.#nitro.hooks.callHook('discord:client:error', {
+        type: 'UnknownSlashCommandError',
+        client: this,
+        interaction,
+      })
+      return
+    }
+
+    if (command.subcommands != null && (command.subcommands?.length ?? 0) > 0) {
+      const group = interaction.options.getSubcommandGroup(false)
+      const subcommand = interaction.options.getSubcommand(false)
+      if (group && subcommand) {
+        command = command.subcommands
+          .find(subcmd => subcmd.name === group)
+          ?.subcommands
+          ?.find(subcmd => subcmd.name === subcommand)
+      }
+      else if (subcommand) {
+        command = command.subcommands.find(subcmd => subcmd.name === subcommand) as SlashCommandSubcommandRuntime | undefined
+      }
+      else {
+        logger.warn(`Unknown slash command subcommand: ${commandName} ${group ?? ''} ${subcommand}`)
+      }
+    }
+
     if (!command) {
       logger.warn(`Unknown slash command: ${commandName}`)
       this.#nitro.hooks.callHook('discord:client:error', {
@@ -219,7 +247,7 @@ export class DiscordClient {
 
   #interactionScopes: WeakMap<ChatInputCommandInteraction, EffectScope> = new WeakMap()
   #commandFinalizationRegistry = new FinalizationRegistry((scope: EffectScope) => scope.stop())
-  async #handleSlashCommand(interaction: ChatInputCommandInteraction, command: SlashCommandRuntime): Promise<void> {
+  async #handleSlashCommand(interaction: ChatInputCommandInteraction, command: SlashCommandRuntime | SlashCommandSubcommandRuntime): Promise<void> {
     const args: (SlashCommandOptionType | undefined)[] = []
     for (const option of command.options) {
       const opt = interaction.options.get(option.name, option.required)
@@ -280,7 +308,7 @@ export class DiscordClient {
     // not sure why Awaited<SlashCommandReturnType> does't work here
     result: SlashCommandReturnType,
     interaction: ChatInputCommandInteraction,
-    command: SlashCommandRuntime,
+    command: SlashCommandRuntime | SlashCommandSubcommandRuntime,
     // TODO: type this
   ): Promise<unknown> {
     // @ts-expect-error - i don't know why this error occurs
@@ -340,7 +368,7 @@ export class DiscordClient {
     }
   }
 
-  async #handleAutocomplete(interaction: AutocompleteInteraction, command: SlashCommandRuntime): Promise<void> {
+  async #handleAutocomplete(interaction: AutocompleteInteraction, command: SlashCommandRuntime | SlashCommandSubcommandRuntime): Promise<void> {
     const commandName = interaction.commandName
 
     if (!command) {
@@ -371,75 +399,100 @@ export class DiscordClient {
     await interaction.respond(choices)
   }
 
-  #getSlashCommandBuilder(command: SlashCommandRuntime): SlashCommandBuilder {
-    const builder = new SlashCommandBuilder()
+  #getSlashCommandBuilder<Builder extends SlashCommandBuilder | SlashCommandSubcommandGroupBuilder | SlashCommandSubcommandBuilder>(
+    command: SlashCommandRuntime | SlashCommandSubcommandGroupRuntime | SlashCommandSubcommandRuntime,
+    builder?: Builder,
+  ): Builder {
+    builder ??= new SlashCommandBuilder() as Builder
+    builder
       .setName(command.name)
       .setDescription(command.description)
 
-    for (const option of command.options) {
-      switch (option.type) {
-        case ApplicationCommandOptionType.String:
-          builder.addStringOption((opt) => {
-            opt.setName(option.name)
-              .setRequired(option.required)
-            if (option.description.length > 0)
-              opt = opt.setDescription(option.description)
-            if (option.minLength)
-              opt = opt.setMinLength(option.minLength)
-            if (option.maxLength)
-              opt = opt.setMaxLength(option.maxLength)
-            if (option.choices)
-              opt = opt.addChoices(...option.choices)
-            if (option.hasAutocomplete) {
-              opt = opt.setAutocomplete(true)
-            }
-            return opt
-          })
-          break
-        case ApplicationCommandOptionType.Integer:
-          builder.addIntegerOption((opt) => {
-            opt.setName(option.name)
-              .setRequired(option.required)
-            if (option.description.length > 0)
-              opt = opt.setDescription(option.description)
-            if (option.min)
-              opt = opt.setMinValue(option.min)
-            if (option.max)
-              opt = opt.setMaxValue(option.max)
-            if (option.choices)
-              opt = opt.addChoices(...option.choices)
-            if (option.hasAutocomplete)
-              opt = opt.setAutocomplete(true)
-            return opt
-          })
-          break
-        case ApplicationCommandOptionType.Number:
-          builder.addNumberOption((opt) => {
-            opt.setName(option.name)
-              .setRequired(option.required)
-            if (option.description.length > 0)
-              opt = opt.setDescription(option.description)
-            if (option.min)
-              opt = opt.setMinValue(option.min)
-            if (option.max)
-              opt = opt.setMaxValue(option.max)
-            if (option.choices)
-              opt = opt.addChoices(...option.choices)
-            if (option.hasAutocomplete)
-              opt = opt.setAutocomplete(true)
-            return opt
-          })
-          break
-        case ApplicationCommandOptionType.Boolean:
-          builder.addBooleanOption((opt) => {
-            opt.setName(option.name)
-              .setRequired(option.required)
-            if (option.description.length > 0)
-              opt = opt.setDescription(option.description)
-            return opt
-          })
-          break
+    if (command.subcommands != null && command.subcommands.length > 0) {
+      for (const subcommand of command.subcommands) {
+        if (builder instanceof SlashCommandBuilder) {
+          if ('subcommands' in subcommand && (subcommand.subcommands?.length ?? 0) > 0) {
+            builder.addSubcommandGroup(subcommandGroupBuilder => this.#getSlashCommandBuilder(subcommand, subcommandGroupBuilder))
+          }
+          else {
+            builder.addSubcommand(subcommandBuilder => this.#getSlashCommandBuilder(subcommand, subcommandBuilder))
+          }
+        }
+        else if (builder instanceof SlashCommandSubcommandGroupBuilder) {
+          builder.addSubcommand(subcommandBuilder => this.#getSlashCommandBuilder(subcommand, subcommandBuilder))
+        }
+        else {
+          // this should never happen, but just in case
+          throw new TypeError(`Unexpected builder type: ${builder.constructor.name}`)
+        }
+      }
+    }
+    else if (builder instanceof SlashCommandBuilder || builder instanceof SlashCommandSubcommandBuilder) {
+      for (const option of command.options) {
+        switch (option.type) {
+          case ApplicationCommandOptionType.String:
+            builder.addStringOption((opt) => {
+              opt.setName(option.name)
+                .setRequired(option.required)
+              if (option.description.length > 0)
+                opt = opt.setDescription(option.description)
+              if (option.minLength)
+                opt = opt.setMinLength(option.minLength)
+              if (option.maxLength)
+                opt = opt.setMaxLength(option.maxLength)
+              if (option.choices)
+                opt = opt.addChoices(...option.choices)
+              if (option.hasAutocomplete) {
+                opt = opt.setAutocomplete(true)
+              }
+              return opt
+            })
+            break
+          case ApplicationCommandOptionType.Integer:
+            builder.addIntegerOption((opt) => {
+              opt.setName(option.name)
+                .setRequired(option.required)
+              if (option.description.length > 0)
+                opt = opt.setDescription(option.description)
+              if (option.min)
+                opt = opt.setMinValue(option.min)
+              if (option.max)
+                opt = opt.setMaxValue(option.max)
+              if (option.choices)
+                opt = opt.addChoices(...option.choices)
+              if (option.hasAutocomplete)
+                opt = opt.setAutocomplete(true)
+              return opt
+            })
+            break
+          case ApplicationCommandOptionType.Number:
+            builder.addNumberOption((opt) => {
+              opt.setName(option.name)
+                .setRequired(option.required)
+              if (option.description.length > 0)
+                opt = opt.setDescription(option.description)
+              if (option.min)
+                opt = opt.setMinValue(option.min)
+              if (option.max)
+                opt = opt.setMaxValue(option.max)
+              if (option.choices)
+                opt = opt.addChoices(...option.choices)
+              if (option.hasAutocomplete)
+                opt = opt.setAutocomplete(true)
+              return opt
+            })
+            break
+          case ApplicationCommandOptionType.Boolean:
+            builder.addBooleanOption((opt) => {
+              opt.setName(option.name)
+                .setRequired(option.required)
+              if (option.description.length > 0)
+                opt = opt.setDescription(option.description)
+              return opt
+            })
+            break
           // TODO: handle other types
+        }
       }
     }
 
@@ -452,45 +505,86 @@ export class DiscordClient {
     return this.#cachedRemoteSlashCommands
   }
 
-  public async diffRemoteSlashCommands(localCommands = this.#slashCommands, forceRefresh = false): Promise<{
-    added: SlashCommandRuntime[]
-    removed: APIApplicationCommand[]
-    changed: { local: SlashCommandRuntime, remote: APIApplicationCommand }[]
-    synced: { local: SlashCommandRuntime, remote: APIApplicationCommand }[]
-    conflict: SlashCommandRuntime[]
-  }> {
+  public async diffRemoteSlashCommands(localCommands = this.#slashCommands, forceRefresh = false) {
     if (!this.#cachedRemoteSlashCommands || forceRefresh) {
       await this.getRemoteSlashCommands()
     }
 
     const remoteCommands = this.#cachedRemoteSlashCommands!
+    const flattenedRemoteCommands = remoteCommands.flatMap((cmd) => {
+      const subcommands = cmd.options?.flatMap((option) => {
+        const name = `${cmd.name} ${option.name}`
+        if (option.type === ApplicationCommandOptionType.Subcommand) {
+          return [{ ...option, name, subcommands: [] }]
+        }
+        else if (option.type === ApplicationCommandOptionType.SubcommandGroup) {
+          const subcommands = option.options?.flatMap((suboption) => {
+            return suboption.type === ApplicationCommandOptionType.Subcommand
+              ? [{ ...suboption, name: `${name} ${suboption.name}`, subcommands: [] }]
+              : []
+          }) ?? []
+          return [
+            { ...option, name, subcommands },
+            ...subcommands,
+          ]
+        }
+        return []
+      }) ?? []
 
-    const nameToCommands = localCommands.reduce((acc, command) => {
+      return [
+        { ...cmd, subcommands },
+        ...subcommands,
+      ]
+    })
+
+    type RemoteSlashCommand = typeof flattenedRemoteCommands[number]
+
+    type LocalSlashCommand = SlashCommandRuntime | SlashCommandSubcommandRuntime | SlashCommandSubcommandGroupRuntime
+    const flattenedLocalCommands = localCommands
+      .flatMap<LocalSlashCommand>(
+        cmd => [
+          cmd,
+          ...cmd.subcommands?.flatMap((subcmd) => {
+            const name = `${cmd.name} ${subcmd.name}`
+            return [
+              { ...subcmd, name },
+              ...(subcmd.subcommands?.map(subsubcmd => ({ ...subsubcmd, name: `${name} ${subsubcmd.name}` })) ?? []),
+            ]
+          }) ?? [],
+        ],
+      )
+
+    const nameToCommands = flattenedLocalCommands.reduce((acc, command) => {
       (acc[command.name] ??= []).push(command)
       return acc
-    }, {} as Record<string, SlashCommandRuntime[]>)
+    }, {} as Record<string, LocalSlashCommand[]>)
 
-    return localCommands.reduce((acc, command) => {
-      const remoteCommand = remoteCommands.find(cmd => cmd.name === command.name)
-
-      // if there are multiple commands with the same name, we have a conflict
+    return flattenedLocalCommands.reduce((acc, command) => {
+      // if there are multiple commands with the same name
       if (nameToCommands[command.name].length > 1) {
         acc.conflict.push(command)
+        return acc
       }
-      // if the remote command does not exist, we need to add it
-      else if (!remoteCommand) {
+
+      const remoteCommand = flattenedRemoteCommands.find(cmd => cmd.name === command.name)
+      // if the remote command does not exist
+      if (!remoteCommand) {
         acc.added.push(command)
       }
-      // check if the descriptions and options are the same
       else if (
+        // if some properties are different
         !propsEqual(command, remoteCommand, ['description'/* TODO: more */])
-        || (command.options?.length ?? 0) !== (remoteCommand.options?.length ?? 0)
-        || ((remoteCommand.options ?? []).some((opt, i) => !optionEqual(command.options![i], opt)))
+        // if either command is not a subcommand
+        || (!((command.subcommands?.length ?? 0) > 0 && remoteCommand.subcommands.length > 0)
+          // and if the number of options is different
+          && ((command.options?.length ?? 0) !== (remoteCommand.options?.length ?? 0)
+            // or if the option details are different
+            || ((remoteCommand.options ?? []).some((opt, i) => !optionEqual(command.options![i], opt)))))
       ) {
         acc.changed.push({ local: command, remote: remoteCommand })
       }
       else {
-        if (remoteCommand.id && !command.id) {
+        if ('id' in remoteCommand && !command.id) {
           // if the remote command has an ID but the local command does not, it means it was registered before
           // and we need to update the local command with the remote ID
           command.id = remoteCommand.id
@@ -501,11 +595,11 @@ export class DiscordClient {
 
       return acc
     }, {
-      added: [] as SlashCommandRuntime[],
-      removed: remoteCommands.filter(({ name }) => !localCommands.some(cmd => cmd.name === name)),
-      changed: [] as { local: SlashCommandRuntime, remote: APIApplicationCommand }[],
-      synced: [] as { local: SlashCommandRuntime, remote: APIApplicationCommand }[],
-      conflict: [] as SlashCommandRuntime[],
+      added: [] as LocalSlashCommand[],
+      removed: flattenedRemoteCommands.filter(({ name }) => !(name in nameToCommands)),
+      changed: [] as { local: LocalSlashCommand, remote: RemoteSlashCommand }[],
+      synced: [] as { local: LocalSlashCommand, remote: RemoteSlashCommand }[],
+      conflict: [] as LocalSlashCommand[],
     })
   }
 
@@ -522,7 +616,10 @@ export class DiscordClient {
     this.#cachedRemoteSlashCommands = null
 
     // do a full refresh if there are commands added or removed or more than 2 commands changed
-    if (diff.added.length > 0 || diff.removed.length > 0 || diff.changed.length > 2) {
+    // if (diff.added.length > 0 || diff.removed.length > 0 || diff.changed.length > 2) {
+
+    // always do a full refresh
+    if (true) {
       try {
         const result = await this.#rest.put(
           Routes.applicationCommands(this.#clientId),
@@ -547,10 +644,13 @@ export class DiscordClient {
         return []
       }
     }
+    // TODO: handle partial updates correctly with subcommands
     else {
       // only update changed commands
       const results = await Promise.allSettled(
         diff.changed.map((command) => {
+          if (!('id' in command.remote))
+            return Promise.reject(new Error(`Remote command ${command.local.name} does not have an ID`))
           logger.log(`Updating slash command: ${command.local.name}`)
           const builder = this.#getSlashCommandBuilder(command.local)
           return this.#rest.patch(

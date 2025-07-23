@@ -1,4 +1,4 @@
-import type { NuxtDiscordContext, SlashCommand, SlashCommandOptionTypeIdentifier } from '../types'
+import type { NuxtDiscordContext, SlashCommand, SlashCommandOptionTypeIdentifier, SlashCommandSubcommand, SlashCommandSubcommandGroup } from '../types'
 import { globSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import ts from 'typescript'
@@ -14,6 +14,8 @@ export default function collectSlashCommands(ctx: NuxtDiscordContext) {
       ctx.slashCommands.push(command)
     }
   }
+
+  processSubcommands(ctx)
 }
 
 export function processCommandFile(ctx: NuxtDiscordContext, file: string): SlashCommand | undefined {
@@ -29,6 +31,7 @@ export function processCommandFile(ctx: NuxtDiscordContext, file: string): Slash
   const command: Partial<SlashCommand> = {
     path: file,
     options: [],
+    subcommands: [],
     name,
   }
 
@@ -191,7 +194,68 @@ export function processCommandFile(ctx: NuxtDiscordContext, file: string): Slash
     ctx.logger.warn(`Macros in file ${file} must be called at the top of the file`)
   }
 
+  const commandsDir = ctx.resolve.root(ctx.options.dir, 'commands')
+  const parents = path.relative(commandsDir, file)
+    .split(path.sep)
+    .slice(0, -1)
+
+  if (parents.length > 2) {
+    ctx.logger.warn(`Only 2 levels of subcommand nesting are supported, see https://discord.com/developers/docs/interactions/application-commands#subcommands-and-subcommand-groups`)
+    return
+  }
+  else if (parents.length === 1) {
+    (command as unknown as SlashCommandSubcommand | SlashCommandSubcommandGroup).parents = [
+      path.resolve(commandsDir, `${parents[0]}.ts`),
+    ]
+  }
+  else if (parents.length === 2) {
+    (command as unknown as SlashCommandSubcommand).parents = [
+      path.resolve(commandsDir, `${parents[0]}.ts`),
+      path.resolve(commandsDir, parents[0], `${parents[1]}.ts`),
+    ]
+  }
+  else {
+    (command as SlashCommand).parents = []
+  }
+
   return command as SlashCommand
+}
+
+export function processSubcommands(ctx: NuxtDiscordContext) {
+  for (let i = 0; i < 2; i++) {
+    const done: number[] = []
+    ;(ctx.slashCommands as (SlashCommand | SlashCommandSubcommand | SlashCommandSubcommandGroup)[]).forEach((command, i) => {
+      if (command.parents.length > 0) {
+        const rootCommand = ctx.slashCommands.find(c => c.path === command.parents[0])
+        if (rootCommand) {
+          if (command.parents.length === 1) {
+            done.unshift(i)
+            rootCommand.subcommands.push(command as SlashCommandSubcommand | SlashCommandSubcommandGroup)
+          }
+          else {
+            const subcommandGroup = rootCommand.subcommands.find(
+              c => c.path === command.parents[1],
+            ) as SlashCommandSubcommandGroup | undefined
+            if (subcommandGroup) {
+              done.unshift(i)
+              subcommandGroup.subcommands.push(command as SlashCommandSubcommand)
+            }
+          }
+        }
+      }
+    })
+
+    // remove processed commands
+    done.forEach(i => ctx.slashCommands.splice(i, 1))
+  }
+
+  const notProcessed = ctx.slashCommands.filter(c => c.parents.length > 0)
+  for (const command of notProcessed) {
+    ctx.logger.warn(`Slash command ${command.name} is not processed, please create dummy parent command files:
+${command.parents.map(p => `  - ${p}`).join('\n')}`)
+  }
+
+  ctx.slashCommands = ctx.slashCommands.filter(c => c.parents.length === 0)
 }
 
 export function extractCommandDefinition(sourceFile: ts.SourceFile) {

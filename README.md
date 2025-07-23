@@ -252,11 +252,11 @@ Here's what's planned for future releases:
   - [ ] Attachment type
 - [ ] Better JSDocs support JSDoc comments
 - [ ] Localization support
-- [ ] File-based subcommands
+- [x] File-based subcommands
 - [x] Auto-complete API
 - [ ] Guild-specific commands
 - [ ] Nuxt-devtools integration
-- [ ] Unit tests
+- [ ] Unit tests (WIP)
 
 ### Web Interface Enhancements
 

@@ -44,6 +44,8 @@ describe('client', () => {
     description: 'Ping the bot',
     options: [],
     path: 'ping.ts',
+    parents: [],
+    subcommands: [],
     execute: vi.fn(() => 'pong'),
   }
 
@@ -68,6 +70,8 @@ describe('client', () => {
     description: 'Edit the message after 100ms',
     options: [],
     path: 'editAfter100ms.ts',
+    parents: [],
+    subcommands: [],
     execute: vi.fn(() => {
       const message = ref('Before edit')
       setTimeout(() => {
@@ -103,6 +107,8 @@ describe('client', () => {
     description: 'Reply with hello twice',
     options: [],
     path: 'helloTwice.ts',
+    parents: [],
+    subcommands: [],
     execute: vi.fn(function* () {
       yield 'hello'
       yield 'hello again'

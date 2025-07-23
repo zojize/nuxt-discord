@@ -121,6 +121,7 @@ export function prepareHMR(ctx: NuxtDiscordContext) {
 
         const fullPath = ctx.resolve.root(path)
         if (fullPath.startsWith(commandsDir)) {
+          // TODO: subcommands
           path = ctx.resolve.root(path)
           const command = processCommandFile(ctx, path) ?? null
           if (event === 'add' || event === 'change') {
@@ -245,6 +246,7 @@ export function createWebSocket() {
 async function generateDynamicCommandBuild(file: string, config: RollupConfig, ctx: NuxtDiscordContext) {
   let bundle: RollupBuild
   try {
+    // TODO: this still seem to have issues with typescript files
     bundle = await rollup({
       ...config,
       input: file,
@@ -262,10 +264,11 @@ async function generateDynamicCommandBuild(file: string, config: RollupConfig, c
       ],
     })
     const { output } = await bundle.generate({ ...config.output, sourcemap: false })
-    fs.mkdirSync(path.join(ctx.nuxt.options.buildDir, 'discord', 'commands'), { recursive: true })
-    fs.writeFileSync(file
+    const outputFilePath = file
       .replace(ctx.resolve.root(ctx.nuxt.options.rootDir), ctx.nuxt.options.buildDir)
-      .replace('.ts', '.mjs'), output[0].code, { encoding: 'utf-8', flush: true })
+      .replace('.ts', '.mjs')
+    fs.mkdirSync(path.dirname(outputFilePath), { recursive: true })
+    fs.writeFileSync(outputFilePath, output[0].code, { encoding: 'utf-8', flush: true })
   }
   catch (error) {
     ctx.logger.error(`Error processing command file ${file}:`, error)

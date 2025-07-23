@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { WatchEvent } from 'nuxt/schema'
 import type { SlashCommand, SlashCommandOption } from '../../../types'
+import slashCommands from '#build/discord/slashCommands'
 import { computed, ref, useFetch, useRuntimeConfig, watchEffect } from '#imports'
 import { useWebSocket } from '@vueuse/core'
 import TheHeader from '../components/TheHeader.vue'
@@ -81,7 +82,7 @@ function getRemoteId(command: any): string | undefined {
   return undefined
 }
 
-const commands = ref([] as typeof import('discord/slashCommands').default)
+const commands = ref(slashCommands)
 
 const {
   data: diff,
@@ -90,9 +91,6 @@ const {
   '/api/discord/slash-command/remote-diff',
   {
     method: 'post',
-    body: {
-      commands,
-    },
     immediate: import.meta.dev,
   },
 )
@@ -301,9 +299,9 @@ const statusClasses = {
         >
           <template #header>
             <div class="flex items-center justify-between">
-              <div class="flex gap-3 items-center">
-                <UIcon name="i-heroicons-command-line" class="text-primary-500 h-5 w-5" />
-                <div>
+              <div class="flex gap-3 items-start">
+                <UIcon name="i-heroicons-command-line" class="text-primary-500 my-0.75 size-6" />
+                <div class="flex flex-col gap-1 items-start">
                   <h3
                     class="text-lg text-gray-700 font-semibold dark:text-gray-200"
                     :class="command.status === 'conflict' && 'text-[var(--ui-error)]!'"
@@ -314,7 +312,14 @@ const statusClasses = {
                     {{ command.description }}
                   </p>
                   <UBadge
-                    v-if="command.options.length > 0"
+                    v-if="'subcommands' in command && (command.subcommands?.length ?? 0) > 0"
+                    :label="`${command.subcommands!.length} subcommand${command.subcommands!.length === 1 ? '' : 's'}`"
+                    variant="soft"
+                    color="info"
+                    size="sm"
+                  />
+                  <UBadge
+                    v-else-if="command.options.length > 0"
                     :label="`${command.options.length} option${command.options.length === 1 ? '' : 's'}`"
                     variant="soft"
                     color="neutral"

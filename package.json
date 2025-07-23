@@ -38,7 +38,7 @@
   "scripts": {
     "prepack": "nuxt-module-build build",
     "dev": "pnpm run dev:prepare && nuxi dev playground",
-    "dev:debug": "pnpm run dev:prepare && NODE_OPTIONS='--inspect' nuxi dev playground",
+    "dev:debug": "pnpm run dev:prepare && node --inspect ./node_modules/nuxt/bin/nuxt.mjs dev playground --no-fork",
     "dev:build": "nuxi build playground",
     "dev:prepare": "nuxt-module-build build --stub && nuxt-module-build prepare && nuxi prepare playground",
     "release": "pnpm run lint && pnpm run test && pnpm run prepack && changelogen --release && pnpm publish && git push --follow-tags",

@@ -1,4 +1,4 @@
-import type { NuxtDiscordContext } from '../types'
+import type { NuxtDiscordContext, SlashCommand, SlashCommandSubcommand, SlashCommandSubcommandGroup } from '../types'
 import { addServerTemplate, addTemplate, addTypeTemplate } from '@nuxt/kit'
 import defu from 'defu'
 import { genArrayFromRaw, genImport, genSafeVariableName, genString } from 'knitwork'
@@ -20,6 +20,11 @@ export function prepareTemplates(ctx: NuxtDiscordContext) {
     getContents: () => `
 declare module 'discord/slashCommands' {
   declare const slashCommands: import('nuxt-discord').SlashCommandRuntime[]
+  export default slashCommands
+}
+
+declare module '#build/discord/slashCommands' {
+  declare const slashCommands: import('nuxt-discord').SlashCommand[]
   export default slashCommands
 }
 
@@ -55,19 +60,38 @@ declare global {
 
 function getSlashCommandTemplateContent(ctx: NuxtDiscordContext, commandRuntime: boolean) {
   const imports = commandRuntime
-    ? ctx.slashCommands.map(({ path }) => {
-        const name = genSafeVariableName(path)
-        return { name, code: genImport(path, [{ name: 'default', as: name }]) }
-      })
-    : []
+    ? Object.fromEntries(ctx.slashCommands.flatMap(
+        function getImports(cmd: SlashCommand | SlashCommandSubcommandGroup | SlashCommandSubcommand): [string, { name: string, code: string }][] {
+          const name = genSafeVariableName(cmd.path)
+          return [
+            [cmd.path, { name, code: genImport(cmd.path, [{ name: 'default', as: name }]) }],
+            ...('subcommands' in cmd ? cmd.subcommands.flatMap(getImports) : []),
+          ]
+        },
+      ))
+    : {}
 
   return [
-    ...imports.map(({ code }) => code),
+    ...Object.values(imports)
+      .map(({ code }) => code),
     `export default [\n${
-      ctx.slashCommands.map(({ options, ...rest }, i) => `  {\n    ${
-        Object.entries(rest).map(([key, value]) => `${key}: ${genString(value)}`).join(',\n    ')},\n
-    options: ${genArrayFromRaw(options, undefined, { preserveTypes: true })},\n${commandRuntime ? `\n    ...${imports[i].name},\n` : ''}
-  },\n`).join('')
+      ctx.slashCommands.map(cmd => genCommandObject(cmd)).join(',\n')
     }]`,
   ].join('\n')
+
+  function genCommandObject(
+    {
+      options,
+      parents,
+      subcommands,
+      ...rest
+    }: (SlashCommand | SlashCommandSubcommand | SlashCommandSubcommandGroup),
+  ): string {
+    return `  {
+    ${Object.entries(rest).map(([key, value]) => `${key}: ${genString(value)}`).join(',\n    ')},
+    options: ${genArrayFromRaw(options, undefined, { preserveTypes: true })},
+    ${subcommands.length > 0 ? `subcommands: [${subcommands.map(genCommandObject).join(',')}],` : ''}
+    ${commandRuntime ? `...${imports[rest.path].name},` : ''}
+  }`
+  }
 }
