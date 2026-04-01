@@ -2,6 +2,7 @@ import type { NuxtDiscordContext, SlashCommand, SlashCommandOptionTypeIdentifier
 import { globSync, readFileSync }
   from 'node:fs'
 import path from 'node:path'
+import { Locale } from 'discord.js'
 import ts from 'typescript'
 import { typeIdentifierToEnum } from '../types'
 import { macros } from './macros'
@@ -32,6 +33,79 @@ export default function collectSlashCommands(ctx: NuxtDiscordContext) {
   }
 
   processSubcommands(ctx)
+  applyLocalizations(ctx)
+}
+
+interface LocaleCommandEntry {
+  name?: string
+  description?: string
+  options?: Record<string, { name?: string, description?: string }>
+}
+
+/**
+ * Load locale files from discord/locales/*.json and apply
+ * name_localizations / description_localizations to commands and options.
+ */
+function applyLocalizations(ctx: NuxtDiscordContext) {
+  const localesDir = ctx.resolve.root(ctx.options.dir, 'locales')
+  const localeFiles = globSync(`${localesDir}/*.json`)
+
+  if (localeFiles.length === 0)
+    return
+
+  const validLocales: Set<string> = new Set(Object.values(Locale))
+
+  for (const localeFile of localeFiles) {
+    const localeName = path.parse(localeFile).name
+    if (!validLocales.has(localeName)) {
+      ctx.logger.warn(`Unknown locale "${localeName}" in ${localeFile}, skipping. Valid locales: ${[...validLocales].join(', ')}`)
+      continue
+    }
+    const locale = localeName as Locale
+    let entries: Record<string, LocaleCommandEntry>
+    try {
+      entries = JSON.parse(readFileSync(localeFile, 'utf-8'))
+    }
+    catch {
+      ctx.logger.warn(`Failed to parse locale file: ${localeFile}`)
+      continue
+    }
+
+    for (const [commandName, entry] of Object.entries(entries)) {
+      const command = ctx.slashCommands.find(c => c.name === commandName)
+      if (!command) {
+        ctx.logger.warn(`Locale "${locale}": command "${commandName}" not found`)
+        continue
+      }
+
+      if (entry.name) {
+        command.nameLocalizations ??= {}
+        command.nameLocalizations[locale] = entry.name
+      }
+      if (entry.description) {
+        command.descriptionLocalizations ??= {}
+        command.descriptionLocalizations[locale] = entry.description
+      }
+
+      if (entry.options) {
+        for (const [optionName, optionEntry] of Object.entries(entry.options)) {
+          const option = command.options.find(o => o.name === optionName)
+          if (!option) {
+            ctx.logger.warn(`Locale "${locale}": option "${optionName}" not found in command "${commandName}"`)
+            continue
+          }
+          if (optionEntry.name) {
+            option.nameLocalizations ??= {}
+            option.nameLocalizations[locale] = optionEntry.name
+          }
+          if (optionEntry.description) {
+            option.descriptionLocalizations ??= {}
+            option.descriptionLocalizations[locale] = optionEntry.description
+          }
+        }
+      }
+    }
+  }
 }
 
 export function processCommandFile(ctx: NuxtDiscordContext, file: string): SlashCommand | undefined {

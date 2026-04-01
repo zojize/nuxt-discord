@@ -1,5 +1,5 @@
 import type { DiscordClient } from '#build/types/nitro-imports'
-import type { APIInteractionDataResolvedGuildMember, APIRole, Attachment, ChatInputCommandInteraction, ClientOptions, GuildMember, Role, User } from 'discord.js'
+import type { APIInteractionDataResolvedGuildMember, APIRole, Attachment, ChatInputCommandInteraction, ClientOptions, GuildMember, LocalizationMap, Role, User } from 'discord.js'
 import type { ListenOptions } from 'listhen'
 import type { MaybeRef } from 'vue'
 import type { DescribeOptionOptions, IntegerOption, NumberOption, StringOption } from './runtime/server/utils/describeOption'
@@ -136,7 +136,8 @@ export interface SlashCommandOptionBase {
   type: ApplicationCommandOptionType
   required: boolean
   hasAutocomplete: boolean
-  // TODO
+  nameLocalizations?: LocalizationMap
+  descriptionLocalizations?: LocalizationMap
 }
 
 export interface SlashCommandIntegerOption extends SlashCommandOptionBase, Omit<IntegerOption, 'name' | 'description'> {
@@ -201,6 +202,8 @@ export interface SlashCommand {
   defaultMemberPermissions?: string | null
   /** Register this command to specific guilds instead of globally */
   guildOnly?: boolean
+  nameLocalizations?: LocalizationMap
+  descriptionLocalizations?: LocalizationMap
   path: string
   options: (SlashCommandOption & { varname: string })[]
   parents: []

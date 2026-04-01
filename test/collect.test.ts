@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { ApplicationCommandOptionType } from 'discord.js'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { processCommandFile, processSubcommands } from '../src/utils/collect'
+import collectSlashCommands, { processCommandFile, processSubcommands } from '../src/utils/collect'
 
 function createMockContext(commandsDir: string): NuxtDiscordContext {
   return {
@@ -567,6 +567,96 @@ const x = 42
         expect.stringContaining('not processed'),
       )
       expect(ctx.slashCommands).toHaveLength(0)
+    })
+  })
+
+  describe('localization', () => {
+    it('should apply name and description localizations from locale files', () => {
+      writeCommand(commandsDir, 'ping.ts', `
+/** Ping the bot */
+export default () => {
+  return 'pong'
+}
+`)
+      const localesDir = path.join(tmpDir, 'discord', 'locales')
+      fs.mkdirSync(localesDir, { recursive: true })
+      fs.writeFileSync(path.join(localesDir, 'ja.json'), JSON.stringify({
+        ping: { name: 'ピング', description: 'ボットにピングする' },
+      }))
+      fs.writeFileSync(path.join(localesDir, 'fr.json'), JSON.stringify({
+        ping: { description: 'Ping le bot' },
+      }))
+
+      collectSlashCommands(ctx)
+
+      expect(ctx.slashCommands).toHaveLength(1)
+      const cmd = ctx.slashCommands[0]!
+      expect(cmd.nameLocalizations).toEqual({ ja: 'ピング' })
+      expect(cmd.descriptionLocalizations).toEqual({ ja: 'ボットにピングする', fr: 'Ping le bot' })
+    })
+
+    it('should apply option localizations from locale files', () => {
+      writeCommand(commandsDir, 'greet.ts', `
+/**
+ * @description Greet someone
+ * @param name The person
+ */
+export default (name: string) => {
+  return name
+}
+`)
+      const localesDir = path.join(tmpDir, 'discord', 'locales')
+      fs.mkdirSync(localesDir, { recursive: true })
+      fs.writeFileSync(path.join(localesDir, 'ja.json'), JSON.stringify({
+        greet: {
+          description: '挨拶する',
+          options: {
+            name: { description: '挨拶する人' },
+          },
+        },
+      }))
+
+      collectSlashCommands(ctx)
+
+      const cmd = ctx.slashCommands.find(c => c.name === 'greet')!
+      expect(cmd.descriptionLocalizations).toEqual({ ja: '挨拶する' })
+      expect(cmd.options[0]!.descriptionLocalizations).toEqual({ ja: '挨拶する人' })
+    })
+
+    it('should warn on invalid locale filenames', () => {
+      writeCommand(commandsDir, 'ping.ts', `
+/** Ping */
+export default () => 'pong'
+`)
+      const localesDir = path.join(tmpDir, 'discord', 'locales')
+      fs.mkdirSync(localesDir, { recursive: true })
+      fs.writeFileSync(path.join(localesDir, 'invalid-locale.json'), JSON.stringify({
+        ping: { name: 'test' },
+      }))
+
+      collectSlashCommands(ctx)
+
+      expect(ctx.logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Unknown locale'),
+      )
+    })
+
+    it('should warn on unknown command in locale file', () => {
+      writeCommand(commandsDir, 'ping.ts', `
+/** Ping */
+export default () => 'pong'
+`)
+      const localesDir = path.join(tmpDir, 'discord', 'locales')
+      fs.mkdirSync(localesDir, { recursive: true })
+      fs.writeFileSync(path.join(localesDir, 'ja.json'), JSON.stringify({
+        nonexistent: { name: 'test' },
+      }))
+
+      collectSlashCommands(ctx)
+
+      expect(ctx.logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('command "nonexistent" not found'),
+      )
     })
   })
 })

@@ -425,6 +425,11 @@ export class DiscordClient {
       .setName(command.name)
       .setDescription(command.description)
 
+    if (command.nameLocalizations)
+      builder.setNameLocalizations(command.nameLocalizations)
+    if (command.descriptionLocalizations)
+      builder.setDescriptionLocalizations(command.descriptionLocalizations)
+
     // Command-level properties only apply to the top-level builder
     if (builder instanceof SlashCommandBuilder) {
       if (command.nsfw != null)
@@ -459,53 +464,43 @@ export class DiscordClient {
         switch (option.type) {
           case ApplicationCommandOptionType.String:
             builder.addStringOption((opt) => {
-              opt.setName(option.name)
-                .setRequired(option.required)
-              if (option.description.length > 0)
-                opt = opt.setDescription(option.description)
+              setBasicOptionFields(opt, option)
               if (option.minLength)
-                opt = opt.setMinLength(option.minLength)
+                opt.setMinLength(option.minLength)
               if (option.maxLength)
-                opt = opt.setMaxLength(option.maxLength)
+                opt.setMaxLength(option.maxLength)
               if (option.choices)
-                opt = opt.addChoices(...option.choices)
-              if (option.hasAutocomplete) {
-                opt = opt.setAutocomplete(true)
-              }
+                opt.addChoices(...option.choices)
+              if (option.hasAutocomplete)
+                opt.setAutocomplete(true)
               return opt
             })
             break
           case ApplicationCommandOptionType.Integer:
             builder.addIntegerOption((opt) => {
-              opt.setName(option.name)
-                .setRequired(option.required)
-              if (option.description.length > 0)
-                opt = opt.setDescription(option.description)
+              setBasicOptionFields(opt, option)
               if (option.min)
-                opt = opt.setMinValue(option.min)
+                opt.setMinValue(option.min)
               if (option.max)
-                opt = opt.setMaxValue(option.max)
+                opt.setMaxValue(option.max)
               if (option.choices)
-                opt = opt.addChoices(...option.choices)
+                opt.addChoices(...option.choices)
               if (option.hasAutocomplete)
-                opt = opt.setAutocomplete(true)
+                opt.setAutocomplete(true)
               return opt
             })
             break
           case ApplicationCommandOptionType.Number:
             builder.addNumberOption((opt) => {
-              opt.setName(option.name)
-                .setRequired(option.required)
-              if (option.description.length > 0)
-                opt = opt.setDescription(option.description)
+              setBasicOptionFields(opt, option)
               if (option.min)
-                opt = opt.setMinValue(option.min)
+                opt.setMinValue(option.min)
               if (option.max)
-                opt = opt.setMaxValue(option.max)
+                opt.setMaxValue(option.max)
               if (option.choices)
-                opt = opt.addChoices(...option.choices)
+                opt.addChoices(...option.choices)
               if (option.hasAutocomplete)
-                opt = opt.setAutocomplete(true)
+                opt.setAutocomplete(true)
               return opt
             })
             break
@@ -697,13 +692,23 @@ export class DiscordClient {
   }
 }
 
-function setBasicOptionFields<T extends { setName: (name: string) => T, setRequired: (required: boolean) => T, setDescription: (description: string) => T }>(
+function setBasicOptionFields<T extends {
+  setName: (name: string) => T
+  setRequired: (required: boolean) => T
+  setDescription: (description: string) => T
+  setNameLocalizations: (map: import('discord.js').LocalizationMap | null) => T
+  setDescriptionLocalizations: (map: import('discord.js').LocalizationMap | null) => T
+}>(
   opt: T,
-  option: { name: string, required: boolean, description: string },
+  option: { name: string, required: boolean, description: string, nameLocalizations?: import('discord.js').LocalizationMap, descriptionLocalizations?: import('discord.js').LocalizationMap },
 ): T {
   opt.setName(option.name).setRequired(option.required)
   if (option.description.length > 0)
     opt.setDescription(option.description)
+  if (option.nameLocalizations)
+    opt.setNameLocalizations(option.nameLocalizations)
+  if (option.descriptionLocalizations)
+    opt.setDescriptionLocalizations(option.descriptionLocalizations)
   return opt
 }
 
