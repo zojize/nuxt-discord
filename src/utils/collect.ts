@@ -135,7 +135,7 @@ export function processCommandFile(ctx: NuxtDiscordContext, file: string): Slash
       let idx = jsDocTagIdx
       const ret = {} as Record<K, any>
       while (idx >= 0) {
-        const tag = jsDocTags[idx]
+        const tag = jsDocTags[idx]!
         if (modifiers.includes(tag.tagName.escapedText as string as K) && tag.comment) {
           ret[tag.tagName.escapedText as string as K] = JSON.parse(tag.comment.toString())
         }
@@ -148,7 +148,7 @@ export function processCommandFile(ctx: NuxtDiscordContext, file: string): Slash
     }
 
     const jsdocDescription = jsDocTagIdx !== -1
-      ? jsDocTags[jsDocTagIdx].comment?.toString() ?? ''
+      ? jsDocTags[jsDocTagIdx]!.comment?.toString() ?? ''
       : ''
 
     const modifiersMap = {
@@ -212,7 +212,7 @@ export function processCommandFile(ctx: NuxtDiscordContext, file: string): Slash
   else if (parents.length === 2) {
     (command as unknown as SlashCommandSubcommand).parents = [
       path.resolve(commandsDir, `${parents[0]}.ts`),
-      path.resolve(commandsDir, parents[0], `${parents[1]}.ts`),
+      path.resolve(commandsDir, parents[0]!, `${parents[1]}.ts`),
     ]
   }
   else {
@@ -270,8 +270,8 @@ export function extractCommandDefinition(sourceFile: ts.SourceFile) {
       else if (ts.isCallExpression(node.expression)
         && ts.isIdentifier(node.expression.expression)
         && node.expression.expression.escapedText === 'defineSlashCommand'
-        && (ts.isArrowFunction(node.expression.arguments[0]) || ts.isFunctionExpression(node.expression.arguments[0]))) {
-        commandDefinition = node.expression.arguments[0]
+        && (ts.isArrowFunction(node.expression.arguments[0]!) || ts.isFunctionExpression(node.expression.arguments[0]!))) {
+        commandDefinition = node.expression.arguments[0]!
       }
     }
     else if (ts.isFunctionDeclaration(node) && !!(ts.getCombinedModifierFlags(node) & ts.ModifierFlags.ExportDefault)) {

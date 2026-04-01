@@ -4,7 +4,7 @@ import ts from 'typescript'
 
 export const macros = {
   describeCommand(ctx, node, command) {
-    if (node.arguments.length === 0 || !ts.isObjectLiteralExpression(node.arguments[0])) {
+    if (node.arguments.length === 0 || !ts.isObjectLiteralExpression(node.arguments[0]!)) {
       ctx.logger.warn('describeCommand macro requires a object literal as the first argument')
       return
     }
@@ -40,12 +40,12 @@ export const macros = {
       return
     }
 
-    if (!ts.isIdentifier(node.arguments[0])) {
+    if (!ts.isIdentifier(node.arguments[0]!)) {
       ctx.logger.warn('describeOption macro requires the first argument to be the option parameter')
       return
     }
 
-    if (!ts.isObjectLiteralExpression(node.arguments[1])) {
+    if (!ts.isObjectLiteralExpression(node.arguments[1]!)) {
       ctx.logger.warn('describeOption macro requires the second argument to be an object literal')
       return
     }

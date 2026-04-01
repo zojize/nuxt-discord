@@ -1,4 +1,4 @@
-import type { APIApplicationCommandOption, AutocompleteInteraction, ChatInputCommandInteraction, CommandInteraction, Interaction, RESTGetAPIApplicationCommandsResult, RESTPatchAPIApplicationCommandResult, RESTPutAPIApplicationCommandsResult } from 'discord.js'
+import type { APIApplicationCommandOption, AutocompleteInteraction, ChatInputCommandInteraction, CommandInteraction, Interaction, RESTGetAPIApplicationCommandsResult, RESTPutAPIApplicationCommandsResult } from 'discord.js'
 import type { EffectScope } from 'vue'
 import type { NuxtDiscordOptions, SlashCommandOption, SlashCommandOptionType, SlashCommandReturnType, SlashCommandRuntime, SlashCommandSubcommandGroupRuntime, SlashCommandSubcommandRuntime } from '../../../types'
 import process from 'node:process'
@@ -561,7 +561,7 @@ export class DiscordClient {
 
     return flattenedLocalCommands.reduce((acc, command) => {
       // if there are multiple commands with the same name
-      if (nameToCommands[command.name].length > 1) {
+      if (nameToCommands[command.name]!.length > 1) {
         acc.conflict.push(command)
         return acc
       }
@@ -579,7 +579,7 @@ export class DiscordClient {
           // and if the number of options is different
           && ((command.options?.length ?? 0) !== (remoteCommand.options?.length ?? 0)
             // or if the option details are different
-            || ((remoteCommand.options ?? []).some((opt, i) => !optionEqual(command.options![i], opt)))))
+            || ((remoteCommand.options ?? []).some((opt, i) => !optionEqual(command.options![i]!, opt)))))
       ) {
         acc.changed.push({ local: command, remote: remoteCommand })
       }
@@ -615,67 +615,28 @@ export class DiscordClient {
     // nullify the cache to force a refresh on next diff
     this.#cachedRemoteSlashCommands = null
 
-    // do a full refresh if there are commands added or removed or more than 2 commands changed
-    // if (diff.added.length > 0 || diff.removed.length > 0 || diff.changed.length > 2) {
+    try {
+      const result = await this.#rest.put(
+        Routes.applicationCommands(this.#clientId),
+        { body: this.#slashCommands.map(command => this.#getSlashCommandBuilder(command).toJSON()) },
+      ) as RESTPutAPIApplicationCommandsResult
 
-    // always do a full refresh
-    if (true) {
-      try {
-        const result = await this.#rest.put(
-          Routes.applicationCommands(this.#clientId),
-          { body: this.#slashCommands.map(command => this.#getSlashCommandBuilder(command).toJSON()) },
-        ) as RESTPutAPIApplicationCommandsResult
-
-        result.forEach((command, i) => {
-          const localCommand = this.#slashCommands[i]
-          if (localCommand) {
-            localCommand.id = command.id
-          }
-        })
-
-        return result
-      }
-      catch (error) {
-        this.#nitro.hooks.callHook('discord:client:error', {
-          type: 'SlashCommandRegistrationError',
-          client: this,
-          error,
-        })
-        return []
-      }
-    }
-    // TODO: handle partial updates correctly with subcommands
-    else {
-      // only update changed commands
-      const results = await Promise.allSettled(
-        diff.changed.map((command) => {
-          if (!('id' in command.remote))
-            return Promise.reject(new Error(`Remote command ${command.local.name} does not have an ID`))
-          logger.log(`Updating slash command: ${command.local.name}`)
-          const builder = this.#getSlashCommandBuilder(command.local)
-          return this.#rest.patch(
-            Routes.applicationCommand(this.#clientId, command.remote.id),
-            { body: builder.toJSON() },
-          ) as Promise<RESTPatchAPIApplicationCommandResult>
-        }),
-      )
-
-      results.forEach((result, i) => {
-        if (result.status === 'rejected') {
-          this.#nitro.hooks.callHook('discord:client:error', {
-            type: 'SlashCommandRegistrationError',
-            client: this,
-            command: result.reason.command,
-            error: result.reason.error,
-          })
-        }
-        else {
-          const command = diff.changed[i]
-          command.local.id = result.value.id
+      result.forEach((command, i) => {
+        const localCommand = this.#slashCommands[i]
+        if (localCommand) {
+          localCommand.id = command.id
         }
       })
 
-      return results
+      return result
+    }
+    catch (error) {
+      this.#nitro.hooks.callHook('discord:client:error', {
+        type: 'SlashCommandRegistrationError',
+        client: this,
+        error,
+      })
+      return []
     }
   }
 }
@@ -705,7 +666,7 @@ function optionEqual(a: SlashCommandOption, b: APIApplicationCommandOption): boo
     }
 
     for (let i = 0; i < a.choices.length; i++) {
-      if (a.choices[i].name !== b.choices[i].name || a.choices[i].value !== b.choices[i].value) {
+      if (a.choices[i]!.name !== b.choices[i]!.name || a.choices[i]!.value !== b.choices[i]!.value) {
         return false
       }
     }

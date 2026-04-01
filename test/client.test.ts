@@ -125,6 +125,100 @@ describe('client', () => {
     expect(messageMock.edit).toHaveBeenCalledTimes(1)
   })
 
+  it('should route to subcommand', async () => {
+    const subExecute = vi.fn(() => 'sub result')
+    const parentCommand: SlashCommandRuntime = {
+      name: 'parent',
+      description: 'Parent command',
+      options: [],
+      path: 'parent.ts',
+      parents: [],
+      subcommands: [
+        {
+          name: 'child',
+          description: 'Child subcommand',
+          options: [],
+          path: 'parent/child.ts',
+          parents: ['parent.ts'],
+          subcommands: [],
+          execute: subExecute,
+        },
+      ],
+    }
+
+    const client = new DiscordClient()
+    client.start({ intents: [] })
+    await expect.poll(() => mockedClient.on)
+      .toHaveBeenCalledWith(Events.InteractionCreate, expect.any(Function))
+
+    client.addSlashCommand(parentCommand)
+
+    const { interaction } = mockChatInputCommandInteraction('parent', {}, false, { subcommand: 'child' })
+    mockedClient.emit(Events.InteractionCreate, interaction)
+
+    await expect.poll(() => subExecute).toHaveBeenCalled()
+    await expect.poll(() => interaction.reply).toHaveBeenCalledWith({ content: 'sub result' })
+  })
+
+  it('should route to nested subcommand group', async () => {
+    const leafExecute = vi.fn(() => 'leaf result')
+    const parentCommand: SlashCommandRuntime = {
+      name: 'parent',
+      description: 'Parent',
+      options: [],
+      path: 'parent.ts',
+      parents: [],
+      subcommands: [
+        {
+          name: 'group',
+          description: 'Group',
+          options: [],
+          path: 'parent/group.ts',
+          parents: ['parent.ts'],
+          subcommands: [
+            {
+              name: 'leaf',
+              description: 'Leaf',
+              options: [],
+              path: 'parent/group/leaf.ts',
+              parents: ['parent.ts', 'parent/group.ts'],
+              subcommands: [],
+              execute: leafExecute,
+            },
+          ],
+        },
+      ],
+    }
+
+    const client = new DiscordClient()
+    client.start({ intents: [] })
+    await expect.poll(() => mockedClient.on)
+      .toHaveBeenCalledWith(Events.InteractionCreate, expect.any(Function))
+
+    client.addSlashCommand(parentCommand)
+
+    const { interaction } = mockChatInputCommandInteraction('parent', {}, false, { group: 'group', subcommand: 'leaf' })
+    mockedClient.emit(Events.InteractionCreate, interaction)
+
+    await expect.poll(() => leafExecute).toHaveBeenCalled()
+    await expect.poll(() => interaction.reply).toHaveBeenCalledWith({ content: 'leaf result' })
+  })
+
+  it('should fire error hook for unknown command', async () => {
+    const client = new DiscordClient()
+    client.start({ intents: [] })
+    await expect.poll(() => mockedClient.on)
+      .toHaveBeenCalledWith(Events.InteractionCreate, expect.any(Function))
+
+    const { interaction } = mockChatInputCommandInteraction('nonexistent')
+    mockedClient.emit(Events.InteractionCreate, interaction)
+
+    await expect.poll(() => mockedNitroApp.hooks.callHook)
+      .toHaveBeenCalledWith('discord:client:error', expect.objectContaining({
+        type: 'UnknownSlashCommandError',
+      }))
+  })
+
   const helloTwice: SlashCommandRuntime = {
     name: 'helloTwice',
     description: 'Reply with hello twice',
@@ -156,7 +250,7 @@ describe('client', () => {
   })
 })
 
-function mockChatInputCommandInteraction(commandName: string, options: Record<string, any> = {}, withResponse = false) {
+function mockChatInputCommandInteraction(commandName: string, options: Record<string, any> = {}, withResponse = false, subcommandInfo: { group?: string, subcommand?: string } = {}) {
   const messageMock:
     & InteractionResponse
     & InteractionCallbackResponse
@@ -181,6 +275,8 @@ function mockChatInputCommandInteraction(commandName: string, options: Record<st
           return { value: options[name] }
         return null
       },
+      getSubcommand: () => subcommandInfo.subcommand ?? null,
+      getSubcommandGroup: () => subcommandInfo.group ?? null,
     },
     get deferred() {
       return deferred

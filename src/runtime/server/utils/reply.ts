@@ -101,7 +101,7 @@ function createReplyFunction(
             ...collectorOptions,
           }))
         }
-        buttonInteractionCollectors.at(-1)
+        buttonInteractionCollectors.at(-1)!
           .on('collect', async (buttonInteraction) => {
             if (options?.defer ?? true)
               buttonInteraction.deferUpdate()
@@ -114,7 +114,7 @@ function createReplyFunction(
       const [text, options] = args
       let message: Promise<Msg>
 
-      // TODO: fix deep reactivity (files, etc)
+      // deepToRaw below handles unwrapping nested refs/reactives (workaround for vuejs/core#5303)
       const replyOptions = reactive({
         content: text,
         ...buttonComponents.value.length > 0 ? { components: buttonComponents } : {},

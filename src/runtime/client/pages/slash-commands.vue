@@ -2,7 +2,7 @@
 import type { WatchEvent } from 'nuxt/schema'
 import type { SlashCommand, SlashCommandOption } from '../../../types'
 import slashCommands from '#build/discord/slashCommands'
-import { computed, ref, useFetch, useRuntimeConfig, watchEffect } from '#imports'
+import { computed, ref, useFetch, useRuntimeConfig, useToast, watchEffect } from '#imports'
 import { useWebSocket } from '@vueuse/core'
 import TheHeader from '../components/TheHeader.vue'
 import '../style.css'
@@ -169,6 +169,7 @@ if (import.meta.dev && runtimeConfig.public.discord?.wsUrl) {
   }
 }
 
+const toast = useToast()
 const pendingSync = ref(false)
 async function syncCommands() {
   try {
@@ -176,10 +177,10 @@ async function syncCommands() {
     await $fetch('/api/discord/slash-command/register', { method: 'POST' })
     await refreshDiff()
     ws?.send(JSON.stringify({ event: 'full-update' }))
+    toast.add({ title: 'Commands synced', color: 'success' })
   }
   catch (error) {
-    // TODO: display error toast
-    console.error('Error registering commands:', error)
+    toast.add({ title: 'Sync failed', description: String(error), color: 'error' })
   }
   finally {
     pendingSync.value = false

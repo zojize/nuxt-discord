@@ -79,7 +79,7 @@ describe('reply', () => {
     const [interaction, mock] = mockInteraction()
     const client = new MockClient()
     const files = ['file1.txt', 'file2.txt', 'file3.txt', 'file4.txt']
-    const [f1, f2, ...rest] = files
+    const [f1, f2, ...rest] = files as [string, string, ...string[]]
     reply.file(f1).file(f2).files(rest).send('Lots of files').call(client, interaction, client)
     expect(mock.reply).toHaveBeenCalledExactlyOnceWith({
       content: 'Lots of files',

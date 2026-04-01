@@ -85,8 +85,8 @@ export default (ctx: NuxtDiscordContext): InputPluginOption => {
                       'optionMacros',
                       ts.factory.createObjectLiteralExpression(
                         macroCalls
-                          .filter(m => m.expression.escapedText === 'describeOption' && ts.isIdentifier(m.arguments[0]) && m.arguments.length > 1)
-                          .map(m => ts.factory.createPropertyAssignment((m.arguments[0] as ts.Identifier).escapedText!, m.arguments[1])),
+                          .filter(m => m.expression.escapedText === 'describeOption' && ts.isIdentifier(m.arguments[0]!) && m.arguments.length > 1)
+                          .map(m => ts.factory.createPropertyAssignment((m.arguments[0] as ts.Identifier).escapedText!, m.arguments[1]!)),
                       ),
                     ),
                   ]),
@@ -105,7 +105,7 @@ export default (ctx: NuxtDiscordContext): InputPluginOption => {
           removeComments: false,
         })
 
-        const transformed = printer.printFile(res.transformed[0])
+        const transformed = printer.printFile(res.transformed[0]!)
 
         // no source map but this shouldn't cause issues
         return transformed

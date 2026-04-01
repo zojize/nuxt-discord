@@ -11,8 +11,6 @@ const TS_EXT_RE = /\.ts$/
 export default defineNitroPlugin(async (nitro) => {
   const runtimeConfig = useRuntimeConfig()
 
-  // TODO: decide if plugin should be disabled in production builds
-
   const client = new DiscordClient()
   ;(globalThis as any)[Symbol.for('discord-client')] = client
 
