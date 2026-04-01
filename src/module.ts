@@ -34,6 +34,10 @@ export default defineNuxtModule<NuxtDiscordOptions>({
   setup(discordOptions, nuxt) {
     const ctx = createContext(discordOptions, nuxt)
 
+    // Disable SSR for the client-only admin UI pages
+    nuxt.options.routeRules ??= {}
+    nuxt.options.routeRules['/discord/**'] = { ssr: false }
+
     addServerScanDir(ctx.resolve.module('runtime/server'))
     // this prevents not found errors in the client
     addImports([{

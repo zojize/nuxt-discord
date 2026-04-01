@@ -5,14 +5,7 @@ import slashCommands from '#build/discord/slashCommands'
 import { computed, ref, useFetch, useRuntimeConfig, useToast, watchEffect } from '#imports'
 import { useWebSocket } from '@vueuse/core'
 import TheHeader from '../components/TheHeader.vue'
-import '../style.css'
-import './slash-commands.css'
 
-/**
- * Copied straight from discord-api-types/v10, importing it directly seems to cause issues
- *
- * @see {@link https://discord.com/developers/docs/interactions/application-commands#application-command-object-application-command-option-type}
- */
 enum ApplicationCommandOptionType {
   Subcommand = 1,
   SubcommandGroup = 2,
@@ -27,59 +20,21 @@ enum ApplicationCommandOptionType {
   Attachment = 11,
 }
 
-function getOptionTypeLabel(type: ApplicationCommandOptionType) {
-  switch (type) {
-    case ApplicationCommandOptionType.String:
-      return 'text'
-    case ApplicationCommandOptionType.Integer:
-      return 'integer'
-    case ApplicationCommandOptionType.Number:
-      return 'number'
-    case ApplicationCommandOptionType.Boolean:
-      return 'boolean'
-    case ApplicationCommandOptionType.User:
-      return 'user'
-    case ApplicationCommandOptionType.Channel:
-      return 'channel'
-    case ApplicationCommandOptionType.Role:
-      return 'role'
-    case ApplicationCommandOptionType.Mentionable:
-      return 'mention'
-    case ApplicationCommandOptionType.Attachment:
-      return 'file'
-    default:
-      return 'unknown'
-  }
+const typeConfig: Record<number, { label: string, color: string }> = {
+  [ApplicationCommandOptionType.String]: { label: 'str', color: 'primary' },
+  [ApplicationCommandOptionType.Integer]: { label: 'int', color: 'info' },
+  [ApplicationCommandOptionType.Number]: { label: 'num', color: 'info' },
+  [ApplicationCommandOptionType.Boolean]: { label: 'bool', color: 'success' },
+  [ApplicationCommandOptionType.User]: { label: 'user', color: 'secondary' },
+  [ApplicationCommandOptionType.Channel]: { label: 'chan', color: 'warning' },
+  [ApplicationCommandOptionType.Role]: { label: 'role', color: 'secondary' },
+  [ApplicationCommandOptionType.Mentionable]: { label: '@', color: 'secondary' },
+  [ApplicationCommandOptionType.Attachment]: { label: 'file', color: 'neutral' },
 }
 
-function getOptionTypeColor(type: ApplicationCommandOptionType) {
-  switch (type) {
-    case ApplicationCommandOptionType.String:
-      return 'primary'
-    case ApplicationCommandOptionType.Integer:
-    case ApplicationCommandOptionType.Number:
-      return 'info'
-    case ApplicationCommandOptionType.Boolean:
-      return 'success'
-    case ApplicationCommandOptionType.User:
-    case ApplicationCommandOptionType.Role:
-    case ApplicationCommandOptionType.Mentionable:
-      return 'secondary'
-    case ApplicationCommandOptionType.Channel:
-      return 'warning'
-    case ApplicationCommandOptionType.Attachment:
-      return 'neutral'
-    default:
-      return 'neutral'
-  }
-}
-
-// Helper function to get remote ID from command
 function getRemoteId(command: any): string | undefined {
-  if ('remote' in command && command.remote?.id) {
+  if ('remote' in command && command.remote?.id)
     return command.remote.id
-  }
-  return undefined
 }
 
 const commands = ref(slashCommands)
@@ -89,10 +44,7 @@ const {
   refresh: refreshDiff,
 } = useFetch(
   '/api/discord/slash-command/remote-diff',
-  {
-    method: 'post',
-    immediate: import.meta.dev,
-  },
+  { method: 'post', immediate: import.meta.dev },
 )
 
 const commandsWithStatus = computed(() => {
@@ -104,14 +56,8 @@ const commandsWithStatus = computed(() => {
   }
 
   return [
-    ...diff.value.conflict.map(cmd => ({
-      ...cmd,
-      status: 'conflict' as const,
-    })),
-    ...diff.value.added.map(cmd => ({
-      ...cmd,
-      status: 'added' as const,
-    })),
+    ...diff.value.conflict.map(cmd => ({ ...cmd, status: 'conflict' as const })),
+    ...diff.value.added.map(cmd => ({ ...cmd, status: 'added' as const })),
     ...diff.value.removed.map(cmd => ({
       name: cmd.name,
       description: cmd.description,
@@ -120,49 +66,29 @@ const commandsWithStatus = computed(() => {
       status: 'removed' as const,
       remote: cmd,
     })),
-    ...diff.value.changed.map(({ remote, local }) => ({
-      ...local,
-      status: 'changed' as const,
-      remote,
-    })),
-    ...diff.value.synced.map(({ remote, local }) => ({
-      ...local,
-      status: 'synced' as const,
-      remote,
-    })),
+    ...diff.value.changed.map(({ remote, local }) => ({ ...local, status: 'changed' as const, remote })),
+    ...diff.value.synced.map(({ remote, local }) => ({ ...local, status: 'synced' as const, remote })),
   ]
 })
 
+const sortedCommands = computed(() =>
+  [...commandsWithStatus.value].sort((a, b) => a.name.localeCompare(b.name)),
+)
+
 const allSynced = computed(() => commandsWithStatus.value.every(cmd => cmd.status === 'synced'))
 const stats = computed(() => commandsWithStatus.value.reduce((acc, cmd) => {
-  if (cmd.status === 'added')
-    acc.added++
-  else if (cmd.status === 'removed')
-    acc.removed++
-  else if (cmd.status === 'changed')
-    acc.changed++
-  else if (cmd.status === 'synced')
-    acc.synced++
-  else if (cmd.status === 'conflict')
-    acc.conflict++
+  acc[cmd.status]++
   return acc
 }, { added: 0, removed: 0, changed: 0, synced: 0, conflict: 0 }))
 
 const runtimeConfig = useRuntimeConfig()
 
 let ws: ReturnType<typeof useWebSocket> | undefined
-
 if (import.meta.dev && runtimeConfig.public.discord?.wsUrl) {
-  if (!('WebSocket' in window)) {
-    console.warn('Could not enable hot reload, your browser does not support WebSocket')
-  }
-  else {
+  if ('WebSocket' in window) {
     ws = useWebSocket(runtimeConfig.public.discord.wsUrl, {
       autoReconnect: true,
       onConnected: (ws) => {
-        // eslint-disable-next-line no-console
-        console.log('WebSocket connection established for slash command hot reload')
-        // always rely on hmr full-update result as the source of truth on dev
         ws.send(JSON.stringify({ event: 'full-update' }))
       },
     })
@@ -191,286 +117,175 @@ watchEffect(() => {
   const message = ws?.data.value
   if (!message)
     return
-
   const data = JSON.parse(message as string) as
     | { event: WatchEvent, path: string, command: SlashCommand | null }
     | { event: 'full-update', commands: SlashCommand[] }
-
-  if (data.event === 'full-update') {
+  if (data.event === 'full-update')
     commands.value = data.commands
-  }
-  else {
+  else
     ws?.send(JSON.stringify({ event: 'full-update' }))
-  }
 })
 
-const statusColors = {
-  synced: 'primary',
-  added: 'secondary',
-  changed: 'warning',
-  removed: 'neutral',
-  conflict: 'error',
+const statusMeta = {
+  synced: { color: 'primary', classes: '' },
+  added: { color: 'success', classes: 'border-dashed border-emerald-500/40' },
+  changed: { color: 'warning', classes: 'border-dashed border-amber-500/40' },
+  removed: { color: 'neutral', classes: 'border-dashed border-neutral-400/40 opacity-60' },
+  conflict: { color: 'error', classes: 'border-dashed border-red-500/40' },
 } as const
 
-const statusClasses = {
-  synced: '',
-  added: 'ring-0 border border-dashed border-[var(--ui-secondary)]/50 divide-[var(--ui-secondary)]/50 divide-dashed',
-  changed: 'ring-0 border border-dashed border-[var(--ui-warning)]/50 divide-[var(--ui-warning)]/50 divide-dashed',
-  removed: 'ring-0 border border-dashed border-[var(--ui-neutral)]/50 divide-[var(--ui-neutral)]/50 divide-dashed',
-  conflict: 'ring-0 border border-dashed border-[var(--ui-error)]/50 divide-[var(--ui-error)]/50 divide-dashed',
-} as const
+function constraintBadges(option: SlashCommandOption) {
+  const badges: string[] = []
+  if ('min' in option && option.min !== undefined)
+    badges.push(`>=${option.min}`)
+  if ('max' in option && option.max !== undefined)
+    badges.push(`<=${option.max}`)
+  if ('minLength' in option && option.minLength !== undefined)
+    badges.push(`len>=${option.minLength}`)
+  if ('maxLength' in option && option.maxLength !== undefined)
+    badges.push(`len<=${option.maxLength}`)
+  if ('choices' in option && option.choices?.length)
+    badges.push(`${option.choices.length} choices`)
+  return badges
+}
 </script>
 
 <template>
-  <UApp>
+  <div class="bg-default min-h-screen">
     <TheHeader />
-    <div class="mx-auto mb-16 px-6 container">
-      <!-- Title Section -->
-      <div class="my-6">
-        <h1 class="text-3xl text-gray-900 font-bold mb-2 dark:text-white">
-          Discord Slash Commands
-        </h1>
-        <p class="text-sm text-gray-600 dark:text-gray-400">
-          Manage and view your registered Discord slash commands
-        </p>
-      </div>
 
-      <!-- Commands Count Badge -->
-      <div class="mb-6 flex w-full items-center justify-between">
-        <div class="flex gap-2 items-center">
-          <UBadge
-            :label="`${stats.synced} ${stats.synced === 1 ? 'command' : 'commands'} synced`"
-            variant="subtle"
-            color="primary"
-            size="lg"
-          />
-          <UBadge
-            v-if="stats.conflict > 0"
-            :label="`${stats.conflict} conflict${stats.conflict === 1 ? '' : 's'}`"
-            variant="outline"
-            color="error"
-            size="lg"
-          />
-          <UBadge
-            v-if="stats.added > 0"
-            :label="`${stats.added} added`"
-            variant="outline"
-            color="secondary"
-            size="lg"
-          />
-          <UBadge
-            v-if="stats.changed > 0"
-            :label="`${stats.changed} changed`"
-            variant="outline"
-            color="warning"
-            size="lg"
-          />
-          <UBadge
-            v-if="stats.removed > 0"
-            :label="`${stats.removed} removed`"
-            variant="outline"
-            color="neutral"
-            size="lg"
-          />
+    <main class="mx-auto px-6 py-8 max-w-6xl">
+      <!-- Title bar -->
+      <div class="mb-8 flex items-start justify-between">
+        <div>
+          <h1 class="text-2xl tracking-tight font-bold">
+            Slash Commands
+          </h1>
+          <p class="text-muted text-sm mt-1">
+            {{ commandsWithStatus.length }} command{{ commandsWithStatus.length === 1 ? '' : 's' }} registered
+          </p>
         </div>
-
         <UButton
           v-if="!allSynced"
-          :icon="pendingSync ? 'i-lucide-refresh-ccw' : 'i-lucide-cloud-upload'"
-          variant="outline"
-          color="secondary"
-          class="hover:cursor-pointer disabled:hover:cursor-not-allowed"
+          label="Sync to Discord"
+          color="primary"
+          variant="solid"
+          size="sm"
+          class="cursor-pointer"
+          :loading="pendingSync"
           :disabled="stats.conflict > 0"
-          :title="stats.conflict > 0 ? 'Resolve conflicts before syncing' : 'Register out of sync commands'"
-          :ui="{ leadingIcon: pendingSync ? 'animate-spin' : '' }"
           @click="syncCommands"
-        >
-          Sync
-        </UButton>
+        />
       </div>
 
-      <!-- Commands List -->
-      <div v-if="commandsWithStatus.length > 0" class="flex flex-col gap-4">
+      <!-- Status pills -->
+      <div v-if="!allSynced" class="mb-6 flex flex-wrap gap-2">
+        <template v-for="(count, key) in stats" :key="key">
+          <UBadge
+            v-if="count > 0"
+            :color="statusMeta[key].color"
+            variant="subtle"
+            size="sm"
+          >
+            {{ count }} {{ key }}
+          </UBadge>
+        </template>
+      </div>
+
+      <USeparator class="mb-8" />
+
+      <!-- Commands -->
+      <div v-if="sortedCommands.length > 0" class="space-y-3">
         <UCard
-          v-for="command in commandsWithStatus.sort((a, b) => a.name.localeCompare(b.name))"
+          v-for="command in sortedCommands"
           :key="command.name"
-          class="transition-shadow duration-200 overflow-hidden"
-          :class="statusClasses[command.status]"
-          :ui="{ body: 'pt-2' }"
+          variant="outline"
+          :class="statusMeta[command.status].classes"
+          :ui="command.options.length === 0 ? { body: 'hidden' } : {}"
         >
           <template #header>
-            <div class="flex items-center justify-between">
-              <div class="flex gap-3 items-start">
-                <UIcon name="i-heroicons-command-line" class="text-primary-500 my-0.75 size-6" />
-                <div class="flex flex-col gap-1 items-start">
-                  <h3
-                    class="text-lg text-gray-700 font-semibold dark:text-gray-200"
-                    :class="command.status === 'conflict' && 'text-[var(--ui-error)]!'"
-                  >
-                    /{{ command.name }}
-                  </h3>
-                  <p class="text-sm text-gray-600 dark:text-gray-400">
-                    {{ command.description }}
-                  </p>
+            <div class="flex gap-4 items-start justify-between">
+              <div class="flex-1 min-w-0">
+                <div class="flex flex-wrap gap-2 items-center">
+                  <code class="text-highlighted text-base font-semibold">/{{ command.name }}</code>
                   <UBadge
-                    v-if="'subcommands' in command && (command.subcommands?.length ?? 0) > 0"
-                    :label="`${command.subcommands!.length} subcommand${command.subcommands!.length === 1 ? '' : 's'}`"
-                    variant="soft"
-                    color="info"
-                    size="sm"
+                    :color="statusMeta[command.status].color"
+                    variant="subtle"
+                    size="xs"
+                    :label="command.status"
                   />
-                  <UBadge
-                    v-else-if="command.options.length > 0"
-                    :label="`${command.options.length} option${command.options.length === 1 ? '' : 's'}`"
-                    variant="soft"
-                    color="neutral"
-                    size="sm"
-                  />
+                  <UBadge v-if="'nsfw' in command && command.nsfw" label="nsfw" color="error" variant="soft" size="xs" />
+                  <UBadge v-if="'guildOnly' in command && command.guildOnly" label="guild" color="warning" variant="soft" size="xs" />
+                  <UBadge v-if="'contexts' in command && command.contexts?.length === 1" label="no DM" color="neutral" variant="outline" size="xs" />
+                  <UBadge v-if="'defaultMemberPermissions' in command && command.defaultMemberPermissions" label="restricted" color="warning" variant="outline" size="xs" :title="`permissions: ${command.defaultMemberPermissions}`" />
                 </div>
+                <p class="text-muted text-sm mt-1">
+                  {{ command.description }}
+                </p>
               </div>
 
-              <div class="flex gap-2 items-center">
+              <div class="pt-0.5 flex shrink-0 flex-wrap gap-1.5 items-center">
                 <UBadge
-                  :label="command.status"
-                  :color="statusColors[command.status]"
-                  size="sm"
-                  variant="soft"
+                  v-if="'subcommands' in command && (command.subcommands?.length ?? 0) > 0"
+                  :label="`${command.subcommands!.length} sub`"
+                  color="info" variant="soft" size="xs"
+                />
+                <UBadge
+                  v-if="getRemoteId(command)"
+                  label="registered" color="success" variant="soft" size="xs"
+                  :title="`ID: ${getRemoteId(command)}`"
                 />
               </div>
             </div>
           </template>
 
-          <!-- Command Options -->
-          <div v-if="command.options.length > 0" class="mt-4">
-            <h4 class="text-sm text-gray-700 font-medium mb-3 dark:text-gray-300">
-              Command Options:
-            </h4>
-            <div class="gap-3 grid lg:grid-cols-3 sm:grid-cols-2">
-              <UCard
-                v-for="option in command.options"
-                :key="option.name"
-                variant="soft"
-                class="transition-shadow duration-200 overflow-hidden"
-              >
-                <div class="mb-1 flex flex-wrap gap-2 items-center">
-                  <span class="text-lg text-gray-900 dark:text-white">
-                    {{ option.name + (!option.required ? '?' : '') }}
-                  </span>
-                  <UBadge
-                    :label="getOptionTypeLabel(option.type)"
-                    variant="soft"
-                    :color="getOptionTypeColor(option.type)"
-                    size="sm"
-                  />
-                  <UBadge
-                    v-if="option.required"
-                    label="required"
-                    variant="soft"
-                    color="error"
-                    size="sm"
-                  />
-                  <UBadge
-                    v-if="option.hasAutocomplete"
-                    label="autocomplete"
-                    variant="soft"
-                    color="info"
-                    size="sm"
-                  />
-                  <!-- Restriction badges -->
-                  <UBadge
-                    v-if="'min' in option && option.min !== undefined"
-                    :label="`min: ${option.min}`"
-                    variant="outline"
-                    color="neutral"
-                    size="sm"
-                  />
-                  <UBadge
-                    v-if="'max' in option && option.max !== undefined"
-                    :label="`max: ${option.max}`"
-                    variant="outline"
-                    color="neutral"
-                    size="sm"
-                  />
-                  <UBadge
-                    v-if="'minLength' in option && option.minLength !== undefined"
-                    :label="`min: ${option.minLength}`"
-                    variant="outline"
-                    color="neutral"
-                    size="sm"
-                  />
-                  <UBadge
-                    v-if="'maxLength' in option && option.maxLength !== undefined"
-                    :label="`max: ${option.maxLength}`"
-                    variant="outline"
-                    color="neutral"
-                    size="sm"
-                  />
-                  <!-- Choices dropdown -->
-                  <UDropdownMenu
-                    v-if="'choices' in option && option.choices && option.choices.length > 0"
-                    :items="option.choices.map(choice => ({
-                      label: choice.name,
-                      value: typeof choice.value === 'string' ? `'${choice.value}'` : choice.value,
-                    }))"
-                    :popper="{ placement: 'bottom-start' }"
-                    :ui="{ itemTrailing: 'text-sm text-gray-500 dark:text-gray-400' }"
-                  >
-                    <UBadge
-                      v-if="'choices' in option && option.choices && option.choices.length > 0"
-                      :label="`${option.choices.length} choices`"
-                      variant="outline"
-                      color="info"
-                      size="sm"
-                      class="hover:cursor-pointer"
-                    />
-                    <template #item-trailing="{ item: { value } }">
-                      {{ value }}
-                    </template>
-                  </UDropdownMenu>
-                </div>
-
-                <p class="text-sm text-gray-600 dark:text-gray-400">
-                  {{ option.description }}
-                </p>
-              </UCard>
+          <!-- Options (body hidden via ui prop when empty) -->
+          <div v-if="command.options.length > 0" class="flex flex-wrap gap-2">
+            <div
+              v-for="option in command.options"
+              :key="option.name"
+              :title="option.description || option.name"
+              class="border-default bg-elevated text-xs px-2.5 py-1.5 border rounded-md flex gap-1.5 items-center cursor-default"
+            >
+              <span class="font-medium">{{ option.name }}</span>
+              <span v-if="!option.required" class="text-dimmed">?</span>
+              <UBadge
+                :label="typeConfig[option.type]?.label ?? '?'"
+                :color="(typeConfig[option.type]?.color ?? 'neutral') as any"
+                variant="subtle" size="xs"
+              />
+              <UBadge
+                v-for="c in constraintBadges(option)" :key="c"
+                :label="c" color="neutral" variant="outline" size="xs"
+              />
+              <UBadge
+                v-if="option.hasAutocomplete"
+                label="auto" color="info" variant="outline" size="xs"
+              />
             </div>
           </div>
-          <div v-else class="mt-4">
-            <p class="text-sm text-gray-500 dark:text-gray-400">
-              No parameters defined for this command
-            </p>
-          </div>
 
-          <!-- Command Path -->
           <template #footer>
-            <div class="space-y-1">
-              <div class="text-xs text-gray-500 flex gap-2 items-center dark:text-gray-400">
-                <UIcon name="i-heroicons-folder" class="h-4 w-4" />
-                <span>{{ command.path }}</span>
-              </div>
-              <div v-if="getRemoteId(command)" class="text-xs text-gray-500 flex gap-2 items-center dark:text-gray-400">
-                <UIcon name="i-heroicons-cloud" class="h-4 w-4" />
-                <span>Command ID: {{ getRemoteId(command) }}</span>
-              </div>
+            <div class="text-dimmed text-xs flex items-center justify-between">
+              <span class="font-mono truncate">{{ command.path.split('/discord/commands/').pop() }}</span>
+              <span v-if="getRemoteId(command)" class="font-mono shrink-0">{{ getRemoteId(command) }}</span>
             </div>
           </template>
         </UCard>
       </div>
 
-      <!-- No Command -->
-      <UCard v-else class="py-12 text-center">
-        <div class="flex flex-col gap-4 items-center">
-          <UIcon name="i-heroicons-command-line" class="text-gray-400 h-12 w-12" />
-          <div>
-            <h3 class="text-lg text-gray-900 font-medium mb-2 dark:text-white">
-              No commands found
-            </h3>
-            <p class="text-gray-600 dark:text-gray-400">
-              Create your first slash command to get started
-            </p>
-          </div>
+      <!-- Empty state -->
+      <div v-else class="py-20 text-center flex flex-col items-center justify-center">
+        <div class="bg-elevated mb-4 rounded-2xl flex size-16 items-center justify-center">
+          <span class="text-2xl">/</span>
         </div>
-      </UCard>
-    </div>
-  </UApp>
+        <h3 class="text-lg font-semibold">
+          No commands yet
+        </h3>
+        <p class="text-muted text-sm mt-1 max-w-sm">
+          Create a file in <code class="bg-elevated text-xs px-1.5 py-0.5 rounded">discord/commands/</code> to get started.
+        </p>
+      </div>
+    </main>
+  </div>
 </template>

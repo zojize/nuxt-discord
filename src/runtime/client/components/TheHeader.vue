@@ -1,26 +1,39 @@
 <script lang="ts" setup>
-import { useDark } from '@vueuse/core'
+import { Icon } from '@iconify/vue'
+import { ref } from 'vue'
 
-import './TheHeader.css'
+const isDark = ref(false)
 
-const dark = useDark()
+function toggleDark() {
+  isDark.value = !isDark.value
+  document.documentElement.classList.toggle('dark', isDark.value)
+}
 </script>
 
 <template>
-  <header class="bg-default/75 border-default border-b flex h-16 w-full top-0 justify-center sticky z-10 backdrop-blur">
-    <div class="mx-auto px-6 container flex items-center justify-between">
-      <ULink to="/discord/slash-commands" :active="false">
-        <h1 class="text-2xl font-bold">
-          <span class="text-primary"> Nuxt </span>
-          <span class="text-secondary"> Discord </span>
-        </h1>
-      </ULink>
+  <header class="sticky top-0 z-50 w-full border-b border-default bg-default/80 backdrop-blur-xl">
+    <div class="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
+      <NuxtLink to="/discord/slash-commands" class="flex items-center gap-2.5">
+        <div class="flex size-7 items-center justify-center rounded-lg bg-[#5865F2]">
+          <span class="text-sm font-bold text-white">/</span>
+        </div>
+        <span class="text-sm font-semibold tracking-tight">nuxt-discord</span>
+      </NuxtLink>
 
-      <div class="flex gap-4 items-center justify-center">
-        <USwitch v-model="dark" unchecked-icon="i-lucide-sun" checked-icon="i-lucide-moon" size="xl" />
-        <ULink to="http://github.com/zojize/nuxt-discord" target="_blank" external class="flex items-center">
-          <UIcon name="i-simple-icons:github" size="1.25rem" />
-        </ULink>
+      <div class="flex items-center gap-1">
+        <button
+          class="flex size-8 cursor-pointer items-center justify-center rounded-md text-muted transition-colors hover:bg-elevated hover:text-highlighted"
+          @click="toggleDark"
+        >
+          <Icon :name="isDark ? 'lucide:moon' : 'lucide:sun'" class="size-4" />
+        </button>
+        <a
+          href="https://github.com/zojize/nuxt-discord"
+          target="_blank"
+          class="flex size-8 cursor-pointer items-center justify-center rounded-md text-muted transition-colors hover:bg-elevated hover:text-highlighted"
+        >
+          <Icon name="simple-icons:github" class="size-4" />
+        </a>
       </div>
     </div>
   </header>

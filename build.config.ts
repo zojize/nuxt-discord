@@ -16,7 +16,6 @@ export default defineBuildConfig({
     'nuxt/schema',
     '@nuxt/kit',
     '@nuxt/schema',
-    '@unocss/core',
     'chokidar',
     'rollup',
   ],

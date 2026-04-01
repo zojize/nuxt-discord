@@ -12,7 +12,14 @@ const TS_EXT_RE = /\.ts$/
 export default defineNitroPlugin(async (nitro) => {
   const runtimeConfig = useRuntimeConfig()
 
-  const client = new DiscordClient()
+  let client: DiscordClient
+  try {
+    client = new DiscordClient()
+  }
+  catch (error) {
+    logger.error('Failed to initialize Discord client:', error)
+    return
+  }
   ;(globalThis as any)[Symbol.for('discord-client')] = client
 
   if ('wsUrl' in (runtimeConfig.public.discord ?? {}) && typeof runtimeConfig.public.discord.wsUrl === 'string') {
@@ -66,16 +73,21 @@ export default defineNitroPlugin(async (nitro) => {
 
   client.addSlashCommands(slashCommands as SlashCommandRuntime[])
 
-  if (runtimeConfig.discord.sync) {
-    // Support DISCORD_GUILD_ID env var (comma-separated) as fallback for guild IDs
-    const envGuilds = process.env.DISCORD_GUILD_ID?.split(',').map(id => id.trim()).filter(Boolean) ?? []
-    const guildIds = runtimeConfig.discord.guilds.length > 0
-      ? runtimeConfig.discord.guilds
-      : envGuilds
-    await client.registerSlashCommands(guildIds)
-  }
+  try {
+    if (runtimeConfig.discord.sync) {
+      // Support DISCORD_GUILD_ID env var (comma-separated) as fallback for guild IDs
+      const envGuilds = process.env.DISCORD_GUILD_ID?.split(',').map(id => id.trim()).filter(Boolean) ?? []
+      const guildIds = runtimeConfig.discord.guilds.length > 0
+        ? runtimeConfig.discord.guilds
+        : envGuilds
+      await client.registerSlashCommands(guildIds)
+    }
 
-  if (runtimeConfig.discord.autoStart) {
-    await client.start(runtimeConfig.discord.client)
+    if (runtimeConfig.discord.autoStart) {
+      await client.start(runtimeConfig.discord.client)
+    }
+  }
+  catch (error) {
+    logger.error('Failed to start Discord client:', error)
   }
 })

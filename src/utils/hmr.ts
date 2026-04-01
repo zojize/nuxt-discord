@@ -6,7 +6,7 @@ import type { WebSocket } from 'ws'
 import type { NuxtDiscordContext } from '../types'
 import fs from 'node:fs'
 import path from 'node:path'
-import { addVitePlugin, isIgnored, resolveAlias, updateTemplates } from '@nuxt/kit'
+import { isIgnored, resolveAlias, updateTemplates } from '@nuxt/kit'
 import chokidar from 'chokidar'
 import { listen } from 'listhen'
 import { rollup } from 'rollup'
@@ -141,38 +141,6 @@ export function prepareHMR(ctx: NuxtDiscordContext) {
       listener?.server.close()
       websocket?.close()
     })
-
-    // generate unocss for client vue components when developing the module
-    const packageJson = ctx.resolve.module('../package.json')
-    if (fs.existsSync(packageJson) && JSON.parse(fs.readFileSync(packageJson, 'utf-8')).name === 'nuxt-discord') {
-      (async () => {
-        const { createGenerator } = await import('unocss')
-        // @ts-expect-error - suppress builder error
-        const config = (await import('../runtime/client/uno.config.ts')).default
-        const generator = await createGenerator(config)
-        const clientDir = ctx.resolve.module('runtime/client')
-
-        const generateCSS = async (path: string) => {
-          if (path.startsWith(clientDir) && path.endsWith('.vue')) {
-            const content = fs.readFileSync(path, 'utf-8')
-            const tokens = await generator.applyExtractors(content, path)
-            const { css } = await generator.generate(tokens)
-            fs.writeFileSync(path.replace('.vue', '.css'), css, 'utf-8')
-          }
-        }
-
-        const globPattern = `${clientDir}/**/*.vue`
-        fs.globSync(globPattern).forEach(generateCSS)
-
-        addVitePlugin({
-          name: 'dev-nuxt-discord-generate-css',
-          configureServer(server) {
-            server.watcher.add(globPattern)
-            server.watcher.on('change', generateCSS)
-          },
-        })
-      })()
-    }
   }
 }
 
@@ -181,7 +149,7 @@ export function prepareHMR(ctx: NuxtDiscordContext) {
  *
  * WebSocket server useful for live content reload.
  */
-export function createWebSocket() {
+function createWebSocket() {
   const wss = new WebSocketServer({ noServer: true })
 
   const serve = (req: IncomingMessage, socket = req.socket, head: Buffer) =>
