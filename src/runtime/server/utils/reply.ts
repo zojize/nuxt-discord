@@ -101,7 +101,7 @@ function createReplyFunction(
             ...collectorOptions,
           }))
         }
-        buttonInteractionCollectors[buttonInteractionCollectors.length - 1]
+        buttonInteractionCollectors.at(-1)
           .on('collect', async (buttonInteraction) => {
             if (options?.defer ?? true)
               buttonInteraction.deferUpdate()
@@ -274,9 +274,7 @@ function getButtonComponent(buttons: Parameters<ReplyFunction['button']>[]): Non
   const it = Iterator.from(buttons)
     .filter(([, , options]) => !(toValue(options?.hide ?? false)))
     .map(([label, , options]) => {
-      if (options == null) {
-        options = {} as NonNullable<typeof options>
-      }
+      options ??= {} as NonNullable<typeof options>
 
       if (toValue(options.style) == null) {
         options.style = ButtonStyle.Primary

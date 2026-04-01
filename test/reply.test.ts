@@ -41,6 +41,7 @@ describe('reply', () => {
     expect(mock.reply).toHaveBeenCalledExactlyOnceWith({
       content: 'Hello, world!',
     })
+    expect(1).toMatchInlineSnapshot(`1`)
   })
 
   it('should reply with ephemeral flag', async () => {

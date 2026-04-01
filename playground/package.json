@@ -8,7 +8,7 @@
     "generate": "nuxi generate"
   },
   "dependencies": {
-    "discord.js": "catalog:",
-    "nuxt": "catalog:"
+    "discord.js": "^14.26.0",
+    "nuxt": "^4.4.2"
   }
 }

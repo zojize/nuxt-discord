@@ -2,7 +2,7 @@
   "name": "nuxt-discord",
   "type": "module",
   "version": "0.0.17",
-  "packageManager": "pnpm@10.12.3",
+  "packageManager": "bun@1.3.0",
   "description": "A Nuxt module for building Discord bots",
   "author": "Jize Zou <jeffzou2001@gmail.com> (https://github.com/zojize)",
   "license": "MIT",
@@ -37,11 +37,11 @@
   ],
   "scripts": {
     "prepack": "nuxt-module-build build",
-    "dev": "pnpm run dev:prepare && nuxi dev playground",
-    "dev:debug": "pnpm run dev:prepare && node --inspect ./node_modules/nuxt/bin/nuxt.mjs dev playground --no-fork",
+    "dev": "bun run dev:prepare && nuxi dev playground",
+    "dev:debug": "bun run dev:prepare && node --inspect ./node_modules/nuxt/bin/nuxt.mjs dev playground --no-fork",
     "dev:build": "nuxi build playground",
     "dev:prepare": "nuxt-module-build build --stub && nuxt-module-build prepare && nuxi prepare playground",
-    "release": "pnpm run lint && pnpm run test && pnpm run prepack && changelogen --release && pnpm publish && git push --follow-tags",
+    "release": "bun run lint && bun run test && bun run prepack && changelogen --release && bun publish && git push --follow-tags",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest watch",
@@ -49,46 +49,50 @@
     "prepare": "simple-git-hooks"
   },
   "peerDependencies": {
-    "discord.js": "catalog:"
+    "discord.js": "^14.26.0"
   },
   "dependencies": {
-    "@nuxt/kit": "catalog:",
-    "@nuxt/ui": "catalog:",
-    "ansis": "catalog:",
-    "chokidar": "catalog:",
-    "defu": "catalog:",
-    "knitwork": "catalog:",
-    "listhen": "catalog:",
-    "rollup": "catalog:",
-    "simple-icons": "catalog:",
-    "unocss": "catalog:",
-    "ws": "catalog:"
+    "@nuxt/kit": "^4.4.2",
+    "@nuxt/ui": "^4.6.0",
+    "ansis": "^4.2.0",
+    "chokidar": "^5.0.0",
+    "defu": "^6.1.4",
+    "knitwork": "^1.3.0",
+    "listhen": "^1.9.0",
+    "rollup": "^4.60.1",
+    "simple-icons": "^16.14.0",
+    "unocss": "^66.6.7",
+    "ws": "^8.20.0"
   },
   "devDependencies": {
-    "@antfu/eslint-config": "catalog:",
-    "@nuxt/devtools": "catalog:",
-    "@nuxt/eslint-config": "catalog:",
-    "@nuxt/module-builder": "catalog:",
-    "@nuxt/schema": "catalog:",
-    "@nuxt/test-utils": "catalog:",
-    "@types/node": "catalog:",
-    "@unocss/eslint-plugin": "catalog:",
-    "@vueuse/core": "catalog:",
-    "changelogen": "catalog:",
-    "eslint": "catalog:",
-    "lint-staged": "catalog:",
-    "nuxt": "catalog:",
-    "simple-git-hooks": "catalog:",
-    "typescript": "catalog:",
-    "unbuild": "catalog:",
-    "vitest": "catalog:",
-    "vue-tsc": "catalog:"
+    "@antfu/eslint-config": "^7.7.3",
+    "@nuxt/devtools": "^4.0.0-alpha.3",
+    "@nuxt/eslint-config": "^1.15.2",
+    "@nuxt/module-builder": "^1.0.2",
+    "@nuxt/schema": "^4.4.2",
+    "@nuxt/test-utils": "^4.0.0",
+    "@types/node": "^24.0.15",
+    "@unocss/eslint-plugin": "^66.6.7",
+    "@vueuse/core": "^14.2.1",
+    "changelogen": "^0.6.2",
+    "eslint": "^10.1.0",
+    "lint-staged": "^16.4.0",
+    "nuxt": "^4.4.2",
+    "simple-git-hooks": "^2.13.1",
+    "typescript": "^6.0.2",
+    "unbuild": "^3.6.1",
+    "vitest": "^4.1.2",
+    "vue": "^3.5.31",
+    "vue-tsc": "^3.2.6"
   },
+  "workspaces": [
+    "playground"
+  ],
   "resolutions": {
-    "nuxt-discord": "workspace:*"
+    "nuxt-discord": "link:."
   },
   "simple-git-hooks": {
-    "pre-commit": "pnpm i --frozen-lockfile --ignore-scripts --offline && npx lint-staged"
+    "pre-commit": "bun install --frozen-lockfile && bunx lint-staged"
   },
   "lint-staged": {
     "*": "eslint --fix"

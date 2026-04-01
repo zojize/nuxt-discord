@@ -69,14 +69,10 @@
 .text-center{text-align:center;}
 .outline{outline-style:var(--un-outline-style);outline-width:1px;}
 .border{border-width:1px;}
-.border-\[var\(--ui-error\)\]\/50,
-.divide-\[var\(--ui-error\)\]\/50>:not(:last-child){border-color:color-mix(in oklab, var(--ui-error) 50%, transparent);}
-.border-\[var\(--ui-neutral\)\]\/50,
-.divide-\[var\(--ui-neutral\)\]\/50>:not(:last-child){border-color:color-mix(in oklab, var(--ui-neutral) 50%, transparent);}
-.border-\[var\(--ui-secondary\)\]\/50,
-.divide-\[var\(--ui-secondary\)\]\/50>:not(:last-child){border-color:color-mix(in oklab, var(--ui-secondary) 50%, transparent);}
-.border-\[var\(--ui-warning\)\]\/50,
-.divide-\[var\(--ui-warning\)\]\/50>:not(:last-child){border-color:color-mix(in oklab, var(--ui-warning) 50%, transparent);}
+.border-\[var\(--ui-error\)\]\/50{border-color:color-mix(in oklab, var(--ui-error) 50%, transparent);}
+.border-\[var\(--ui-neutral\)\]\/50{border-color:color-mix(in oklab, var(--ui-neutral) 50%, transparent);}
+.border-\[var\(--ui-secondary\)\]\/50{border-color:color-mix(in oklab, var(--ui-secondary) 50%, transparent);}
+.border-\[var\(--ui-warning\)\]\/50{border-color:color-mix(in oklab, var(--ui-warning) 50%, transparent);}
 .border-dashed{--un-border-style:dashed;border-style:dashed;}
 .flex{display:flex;}
 .flex-col{flex-direction:column;}
@@ -103,8 +99,24 @@
 .overflow-hidden{overflow:hidden;}
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 .animate-spin{animation:spin 1s linear infinite;}
-.space-y-1>:not(:last-child){--un-space-y-reverse:0;margin-block-start: calc(calc(var(--spacing) * 1) * var(--un-space-y-reverse));margin-block-end: calc(calc(var(--spacing) * 1) * calc(1 - var(--un-space-y-reverse)));}
-.divide-dashed>:not(:last-child){border-style:dashed;}
+.divide-\[var\(--ui-error\)\]\/50{
+:where(&>:not(:last-child)){border-color:color-mix(in oklab, var(--ui-error) 50%, transparent);}
+}
+.divide-\[var\(--ui-neutral\)\]\/50{
+:where(&>:not(:last-child)){border-color:color-mix(in oklab, var(--ui-neutral) 50%, transparent);}
+}
+.divide-\[var\(--ui-secondary\)\]\/50{
+:where(&>:not(:last-child)){border-color:color-mix(in oklab, var(--ui-secondary) 50%, transparent);}
+}
+.divide-\[var\(--ui-warning\)\]\/50{
+:where(&>:not(:last-child)){border-color:color-mix(in oklab, var(--ui-warning) 50%, transparent);}
+}
+.divide-dashed{
+:where(&>:not(:last-child)){border-style:dashed;}
+}
+.space-y-1{
+:where(&>:not(:last-child)){--un-space-y-reverse:0;margin-block-start:calc(calc(var(--spacing) * 1) * var(--un-space-y-reverse));margin-block-end:calc(calc(var(--spacing) * 1) * calc(1 - var(--un-space-y-reverse)));}
+}
 @supports (color: color-mix(in lab, red, red)){
 .dark .dark\:text-gray-200{color:color-mix(in oklab, var(--colors-gray-200) var(--un-text-opacity), transparent);}
 .dark .dark\:text-gray-300{color:color-mix(in oklab, var(--colors-gray-300) var(--un-text-opacity), transparent);}

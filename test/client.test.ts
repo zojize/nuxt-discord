@@ -6,7 +6,30 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import { DiscordClient } from '../src/runtime/server/utils/client'
 
-vi.mock('discord.js')
+vi.mock('discord.js', async (importOriginal) => {
+  const { EventEmitter } = await import('node:events')
+  const original = await importOriginal<typeof import('discord.js')>()
+  const emitter = new EventEmitter()
+  // Add spy methods that DiscordClient calls
+  ;(emitter as any).login = vi.fn(() => Promise.resolve('token'))
+  // Wrap .on so it's a spy but still registers listeners
+  const originalOn = emitter.on.bind(emitter)
+  ;(emitter as any).on = vi.fn((event: string, listener: (...args: any[]) => void) => originalOn(event, listener))
+  // eslint-disable-next-line prefer-arrow-callback
+  const MockClient = vi.fn(function () {
+    return emitter
+  }) as any
+  MockClient.prototype = emitter
+  Object.setPrototypeOf(emitter, EventEmitter.prototype)
+  return {
+    ...original,
+    Client: MockClient,
+    // eslint-disable-next-line prefer-arrow-callback
+    REST: vi.fn(function () {
+      return { setToken: vi.fn().mockReturnThis() }
+    }),
+  }
+})
 vi.mock('nitropack/runtime')
 
 vi.stubEnv('DISCORD_TOKEN', 'test-token')

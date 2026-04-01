@@ -6,8 +6,12 @@ import { defineNitroPlugin, useRuntimeConfig } from 'nitropack/runtime'
 import { logger } from '../../logger'
 import { DiscordClient } from '../utils/client'
 
+const TS_EXT_RE = /\.ts$/
+
 export default defineNitroPlugin(async (nitro) => {
   const runtimeConfig = useRuntimeConfig()
+
+  // TODO: decide if plugin should be disabled in production builds
 
   const client = new DiscordClient()
   ;(globalThis as any)[Symbol.for('discord-client')] = client
@@ -29,7 +33,7 @@ export default defineNitroPlugin(async (nitro) => {
           const runtimeCommand = cmd as SlashCommandRuntime
           const buildPath = cmd.path
             .replace(runtimeConfig.discord.rootDir, runtimeConfig.discord.buildDir)
-            .replace(/\.ts$/, '.mjs')
+            .replace(TS_EXT_RE, '.mjs')
           const existingCommand = client.getSlashCommands().find(c => c.path === cmd.path)
 
           if (fs.existsSync(buildPath)) {

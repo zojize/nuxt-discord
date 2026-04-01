@@ -1,5 +1,6 @@
 import type { NuxtDiscordContext, SlashCommand, SlashCommandOptionTypeIdentifier, SlashCommandSubcommand, SlashCommandSubcommandGroup } from '../types'
-import { globSync, readFileSync } from 'node:fs'
+import { globSync, readFileSync }
+  from 'node:fs'
 import path from 'node:path'
 import ts from 'typescript'
 import { typeIdentifierToEnum } from '../types'
