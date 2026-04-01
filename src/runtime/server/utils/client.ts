@@ -423,6 +423,16 @@ export class DiscordClient {
       .setName(command.name)
       .setDescription(command.description)
 
+    // Command-level properties only apply to the top-level builder
+    if (builder instanceof SlashCommandBuilder) {
+      if (command.nsfw != null)
+        builder.setNSFW(command.nsfw)
+      if (command.contexts != null)
+        builder.setContexts(...command.contexts)
+      if (command.defaultMemberPermissions !== undefined)
+        builder.setDefaultMemberPermissions(command.defaultMemberPermissions)
+    }
+
     if (command.subcommands != null && command.subcommands.length > 0) {
       for (const subcommand of command.subcommands) {
         if (builder instanceof SlashCommandBuilder) {

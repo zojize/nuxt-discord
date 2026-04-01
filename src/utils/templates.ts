@@ -88,7 +88,7 @@ function getSlashCommandTemplateContent(ctx: NuxtDiscordContext, commandRuntime:
     }: (SlashCommand | SlashCommandSubcommand | SlashCommandSubcommandGroup),
   ): string {
     return `  {
-    ${Object.entries(rest).map(([key, value]) => `${key}: ${genString(value)}`).join(',\n    ')},
+    ${Object.entries(rest).filter(([, v]) => v !== undefined).map(([key, value]) => `${key}: ${typeof value === 'string' ? genString(value) : JSON.stringify(value)}`).join(',\n    ')},
     options: ${genArrayFromRaw(options, undefined, { preserveTypes: true })},
     ${subcommands.length > 0 ? `subcommands: [${subcommands.map(genCommandObject).join(',')}],` : ''}
     ${commandRuntime ? `...${imports[rest.path]!.name},` : ''}

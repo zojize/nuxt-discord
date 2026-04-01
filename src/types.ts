@@ -181,7 +181,10 @@ export type SlashCommandReturnType
 export interface SlashCommand {
   name: string
   description: string
-  // TODO: more properties e.g. nsfw, contexts, locales
+  nsfw?: boolean
+  /** Interaction contexts where this command is available (Guild=0, BotDM=1, PrivateChannel=2) */
+  contexts?: number[]
+  defaultMemberPermissions?: string | null
   path: string
   options: (SlashCommandOption & { varname: string })[]
   parents: []

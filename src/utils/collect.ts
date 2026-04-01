@@ -45,12 +45,34 @@ export function processCommandFile(ctx: NuxtDiscordContext, file: string): Slash
     command.name = commandDefinition.name.escapedText
   }
 
+  const jsDocComment = getJSDocComment(commandDefinition)
   const jsDocTags = getJSDocTags(commandDefinition)
   const nameTag = jsDocTags.find(tag => tag.tagName.escapedText === 'name')
   const descriptionTag = jsDocTags.find(tag => tag.tagName.escapedText === 'description')
 
   command.name = nameTag?.comment?.toString() ?? command.name
-  command.description = descriptionTag?.comment?.toString() ?? command.description
+  // @description tag takes priority, then JSDoc body text
+  command.description = descriptionTag?.comment?.toString()
+    ?? jsDocComment
+    ?? command.description
+
+  // Command-level JSDoc tags
+  const nsfwTag = jsDocTags.find(tag => tag.tagName.escapedText === 'nsfw')
+  if (nsfwTag) {
+    command.nsfw = nsfwTag.comment?.toString().trim() !== 'false'
+  }
+
+  const dmTag = jsDocTags.find(tag => tag.tagName.escapedText === 'dm')
+  if (dmTag) {
+    const allowDm = dmTag.comment?.toString().trim() !== 'false'
+    // InteractionContextType: Guild=0, BotDM=1, PrivateChannel=2
+    command.contexts = allowDm ? [0, 1, 2] : [0]
+  }
+
+  const permissionsTag = jsDocTags.find(tag => tag.tagName.escapedText === 'defaultMemberPermissions')
+  if (permissionsTag && permissionsTag.comment) {
+    command.defaultMemberPermissions = permissionsTag.comment.toString().trim()
+  }
 
   if (!commandDefinition.body) {
     ctx.logger.warn(`No body found for command definition in ${file}`)
@@ -321,6 +343,21 @@ export function isMacroCallExpression(node: ts.Node): node is ts.Node & { expres
     && ts.isCallExpression(node.expression)
     && ts.isIdentifier(node.expression.expression)
     && (node.expression.expression.escapedText as string) in macros
+}
+
+/** Extract the JSDoc body comment (text before any tags) */
+function getJSDocComment(node: ts.Node): string | undefined {
+  const jsDocs = ts.getJSDocCommentsAndTags(node)
+  for (const doc of jsDocs) {
+    if (ts.isJSDoc(doc) && doc.comment) {
+      return typeof doc.comment === 'string' ? doc.comment : doc.comment.map(c => c.text).join('')
+    }
+  }
+
+  // Walk up to parent (for arrow functions inside export default)
+  if (node.parent) {
+    return getJSDocComment(node.parent)
+  }
 }
 
 // ts.getJSDocTags does not seem to always work

@@ -94,6 +94,108 @@ export default () => {
       expect(command!.name).toBe('mycommand')
     })
 
+    it('should use JSDoc body text as description', () => {
+      const file = writeCommand(commandsDir, 'simple.ts', `
+/** A simple command that does things */
+export default () => {
+  return 'ok'
+}
+`)
+      const command = processCommandFile(ctx, file)
+      expect(command).toBeDefined()
+      expect(command!.description).toBe('A simple command that does things')
+    })
+
+    it('should prefer @description tag over body text', () => {
+      const file = writeCommand(commandsDir, 'prio.ts', `
+/**
+ * Body text description
+ * @description Tag description wins
+ */
+export default () => {
+  return 'ok'
+}
+`)
+      const command = processCommandFile(ctx, file)
+      expect(command).toBeDefined()
+      expect(command!.description).toBe('Tag description wins')
+    })
+
+    it('should parse @nsfw tag', () => {
+      const file = writeCommand(commandsDir, 'adult.ts', `
+/**
+ * @description An NSFW command
+ * @nsfw
+ */
+export default () => {
+  return 'ok'
+}
+`)
+      const command = processCommandFile(ctx, file)
+      expect(command).toBeDefined()
+      expect(command!.nsfw).toBe(true)
+    })
+
+    it('should parse @nsfw false', () => {
+      const file = writeCommand(commandsDir, 'safe.ts', `
+/**
+ * @description A safe command
+ * @nsfw false
+ */
+export default () => {
+  return 'ok'
+}
+`)
+      const command = processCommandFile(ctx, file)
+      expect(command).toBeDefined()
+      expect(command!.nsfw).toBe(false)
+    })
+
+    it('should parse @dm false to restrict to guild-only', () => {
+      const file = writeCommand(commandsDir, 'guild.ts', `
+/**
+ * @description Guild only command
+ * @dm false
+ */
+export default () => {
+  return 'ok'
+}
+`)
+      const command = processCommandFile(ctx, file)
+      expect(command).toBeDefined()
+      expect(command!.contexts).toEqual([0]) // Guild only
+    })
+
+    it('should parse @dm to allow DMs', () => {
+      const file = writeCommand(commandsDir, 'everywhere.ts', `
+/**
+ * @description Available everywhere
+ * @dm
+ */
+export default () => {
+  return 'ok'
+}
+`)
+      const command = processCommandFile(ctx, file)
+      expect(command).toBeDefined()
+      expect(command!.contexts).toEqual([0, 1, 2])
+    })
+
+    it('should parse @defaultMemberPermissions', () => {
+      const file = writeCommand(commandsDir, 'admin.ts', `
+/**
+ * @description Admin only
+ * @defaultMemberPermissions 8
+ */
+export default () => {
+  return 'ok'
+}
+`)
+      const command = processCommandFile(ctx, file)
+      expect(command).toBeDefined()
+      expect(command!.defaultMemberPermissions).toBe('8')
+    })
+
     it('should parse string parameters', () => {
       const file = writeCommand(commandsDir, 'greet.ts', `
 /**
