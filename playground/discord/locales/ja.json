@@ -1,0 +1,32 @@
+{
+  "ping": {
+    "name": "ピング",
+    "description": "ポンと返すシンプルなコマンド"
+  },
+  "greet": {
+    "description": "カスタムメッセージで挨拶する",
+    "options": {
+      "name": { "description": "挨拶する相手" },
+      "style": { "description": "挨拶のスタイル" }
+    }
+  },
+  "add": {
+    "description": "2つの数を足す",
+    "options": {
+      "a": { "description": "足す最初の数" },
+      "b": { "description": "足す2番目の数" }
+    }
+  },
+  "userinfo": {
+    "description": "ユーザー情報を表示する",
+    "options": {
+      "user": { "description": "情報を見たいユーザー" }
+    }
+  },
+  "upload": {
+    "description": "ファイルをアップロードして詳細を表示する",
+    "options": {
+      "file": { "description": "検査するファイル" }
+    }
+  }
+}

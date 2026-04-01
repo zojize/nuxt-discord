@@ -1,0 +1,18 @@
+{
+  "ping": {
+    "description": "一个简单的ping命令"
+  },
+  "greet": {
+    "description": "用自定义消息问候某人",
+    "options": {
+      "name": { "description": "要问候的人" },
+      "style": { "description": "问候方式" }
+    }
+  },
+  "add": {
+    "description": "将两个数字相加"
+  },
+  "userinfo": {
+    "description": "显示用户信息"
+  }
+}
