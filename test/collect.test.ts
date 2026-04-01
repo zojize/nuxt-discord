@@ -168,6 +168,70 @@ export default (enabled: boolean) => {
       expect(command!.options[0]!.type).toBe(ApplicationCommandOptionType.Boolean)
     })
 
+    it('should parse User parameters', () => {
+      const file = writeCommand(commandsDir, 'ban.ts', `
+/**
+ * @name ban
+ * @description Ban a user
+ * @param target The user to ban
+ */
+export default (target: User) => {
+  return \`Banned \${target}\`
+}
+`)
+      const command = processCommandFile(ctx, file)
+      expect(command).toBeDefined()
+      expect(command!.options[0]!.type).toBe(ApplicationCommandOptionType.User)
+    })
+
+    it('should parse Role parameters', () => {
+      const file = writeCommand(commandsDir, 'assign.ts', `
+/**
+ * @name assign
+ * @description Assign a role
+ * @param role The role to assign
+ */
+export default (role: Role) => {
+  return \`Assigned \${role}\`
+}
+`)
+      const command = processCommandFile(ctx, file)
+      expect(command).toBeDefined()
+      expect(command!.options[0]!.type).toBe(ApplicationCommandOptionType.Role)
+    })
+
+    it('should parse Mentionable parameters', () => {
+      const file = writeCommand(commandsDir, 'mention.ts', `
+/**
+ * @name mention
+ * @description Mention someone
+ * @param target The target to mention
+ */
+export default (target: Mentionable) => {
+  return \`Mentioned \${target}\`
+}
+`)
+      const command = processCommandFile(ctx, file)
+      expect(command).toBeDefined()
+      expect(command!.options[0]!.type).toBe(ApplicationCommandOptionType.Mentionable)
+    })
+
+    it('should parse Attachment parameters', () => {
+      const file = writeCommand(commandsDir, 'upload.ts', `
+/**
+ * @name upload
+ * @description Upload a file
+ * @param file The file to upload
+ */
+export default (file: Attachment) => {
+  return \`Uploaded \${file}\`
+}
+`)
+      const command = processCommandFile(ctx, file)
+      expect(command).toBeDefined()
+      expect(command!.options[0]!.type).toBe(ApplicationCommandOptionType.Attachment)
+    })
+
     it('should parse optional parameters', () => {
       const file = writeCommand(commandsDir, 'say.ts', `
 /**

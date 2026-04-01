@@ -262,8 +262,23 @@ export class DiscordClient {
         return
       }
 
-      // TODO: handle other types
-      args.push(opt?.value)
+      switch (option.type) {
+        case ApplicationCommandOptionType.User:
+          args.push(opt?.user ?? undefined)
+          break
+        case ApplicationCommandOptionType.Role:
+          args.push((opt?.role as SlashCommandOptionType) ?? undefined)
+          break
+        case ApplicationCommandOptionType.Mentionable:
+          args.push((opt?.user ?? opt?.member ?? opt?.role) as SlashCommandOptionType ?? undefined)
+          break
+        case ApplicationCommandOptionType.Attachment:
+          args.push(opt?.attachment ?? undefined)
+          break
+        default:
+          args.push(opt?.value)
+          break
+      }
     }
 
     let scope!: EffectScope
@@ -491,7 +506,42 @@ export class DiscordClient {
               return opt
             })
             break
-          // TODO: handle other types
+          case ApplicationCommandOptionType.User:
+            builder.addUserOption((opt) => {
+              opt.setName(option.name)
+                .setRequired(option.required)
+              if (option.description.length > 0)
+                opt = opt.setDescription(option.description)
+              return opt
+            })
+            break
+          case ApplicationCommandOptionType.Role:
+            builder.addRoleOption((opt) => {
+              opt.setName(option.name)
+                .setRequired(option.required)
+              if (option.description.length > 0)
+                opt = opt.setDescription(option.description)
+              return opt
+            })
+            break
+          case ApplicationCommandOptionType.Mentionable:
+            builder.addMentionableOption((opt) => {
+              opt.setName(option.name)
+                .setRequired(option.required)
+              if (option.description.length > 0)
+                opt = opt.setDescription(option.description)
+              return opt
+            })
+            break
+          case ApplicationCommandOptionType.Attachment:
+            builder.addAttachmentOption((opt) => {
+              opt.setName(option.name)
+                .setRequired(option.required)
+              if (option.description.length > 0)
+                opt = opt.setDescription(option.description)
+              return opt
+            })
+            break
         }
       }
     }

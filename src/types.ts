@@ -1,5 +1,5 @@
 import type { DiscordClient } from '#build/types/nitro-imports'
-import type { ChatInputCommandInteraction, ClientOptions } from 'discord.js'
+import type { Attachment, ChatInputCommandInteraction, ClientOptions, GuildMember, Role, User } from 'discord.js'
 import type { ListenOptions } from 'listhen'
 import type { MaybeRef } from 'vue'
 import type { DescribeOptionOptions, IntegerOption, NumberOption, StringOption } from './runtime/server/utils/describeOption'
@@ -79,6 +79,10 @@ export const slashCommandOptionTypeIdentifiers = [
   'integer',
   'string',
   'boolean',
+  'User',
+  'Role',
+  'Mentionable',
+  'Attachment',
 ] as const
 
 export const typeIdentifierToEnum = {
@@ -86,6 +90,10 @@ export const typeIdentifierToEnum = {
   integer: ApplicationCommandOptionType.Integer,
   string: ApplicationCommandOptionType.String,
   boolean: ApplicationCommandOptionType.Boolean,
+  User: ApplicationCommandOptionType.User,
+  Role: ApplicationCommandOptionType.Role,
+  Mentionable: ApplicationCommandOptionType.Mentionable,
+  Attachment: ApplicationCommandOptionType.Attachment,
 } as const
 
 export type SlashCommandOptionTypeIdentifier = (typeof slashCommandOptionTypeIdentifiers)[number]
@@ -103,7 +111,10 @@ export type SlashCommandOptionType
     | integer
     | string
     | boolean
-    // TODO: more types
+    | User
+    | Role
+    | User | GuildMember | Role // Mentionable
+    | Attachment
 
 export interface SlashCommandOptionBase {
   name: string
@@ -130,12 +141,31 @@ export interface SlashCommandBooleanOption extends SlashCommandOptionBase {
   type: ApplicationCommandOptionType.Boolean
 }
 
+export interface SlashCommandUserOption extends SlashCommandOptionBase {
+  type: ApplicationCommandOptionType.User
+}
+
+export interface SlashCommandRoleOption extends SlashCommandOptionBase {
+  type: ApplicationCommandOptionType.Role
+}
+
+export interface SlashCommandMentionableOption extends SlashCommandOptionBase {
+  type: ApplicationCommandOptionType.Mentionable
+}
+
+export interface SlashCommandAttachmentOption extends SlashCommandOptionBase {
+  type: ApplicationCommandOptionType.Attachment
+}
+
 export type SlashCommandOption
   = | SlashCommandIntegerOption
     | SlashCommandNumberOption
     | SlashCommandStringOption
     | SlashCommandBooleanOption
-    // | SlashCommandOptionBase
+    | SlashCommandUserOption
+    | SlashCommandRoleOption
+    | SlashCommandMentionableOption
+    | SlashCommandAttachmentOption
 
 export type SlashCommandCustomReturnHandler
   = (this: DiscordClient, interaction: ChatInputCommandInteraction, client: DiscordClient) => unknown

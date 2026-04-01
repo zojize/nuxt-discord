@@ -151,11 +151,15 @@ export function processCommandFile(ctx: NuxtDiscordContext, file: string): Slash
       ? jsDocTags[jsDocTagIdx]!.comment?.toString() ?? ''
       : ''
 
-    const modifiersMap = {
+    const modifiersMap: Record<SlashCommandOptionTypeIdentifier, string[]> = {
       string: ['minLength', 'maxLength', 'choices'],
       number: ['min', 'max', 'choices'],
       integer: ['min', 'max', 'choices'],
       boolean: [],
+      User: [],
+      Role: [],
+      Mentionable: [],
+      Attachment: [],
     }
 
     const modifiers = findModifiers(modifiersMap[type as SlashCommandOptionTypeIdentifier])
