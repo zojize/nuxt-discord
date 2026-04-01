@@ -196,6 +196,35 @@ export default () => {
       expect(command!.defaultMemberPermissions).toBe('8')
     })
 
+    it('should parse @guild tag', () => {
+      const file = writeCommand(commandsDir, 'guildcmd.ts', `
+/**
+ * @description Guild-only command
+ * @guild
+ */
+export default () => {
+  return 'ok'
+}
+`)
+      const command = processCommandFile(ctx, file)
+      expect(command).toBeDefined()
+      expect(command!.guildOnly).toBe(true)
+    })
+
+    it('should not set guildOnly when @guild tag is absent', () => {
+      const file = writeCommand(commandsDir, 'globalcmd.ts', `
+/**
+ * @description Global command
+ */
+export default () => {
+  return 'ok'
+}
+`)
+      const command = processCommandFile(ctx, file)
+      expect(command).toBeDefined()
+      expect(command!.guildOnly).toBeUndefined()
+    })
+
     it('should parse string parameters', () => {
       const file = writeCommand(commandsDir, 'greet.ts', `
 /**

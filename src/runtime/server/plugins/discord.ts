@@ -1,6 +1,7 @@
 import type { WatchEvent } from 'nuxt/schema'
 import type { SlashCommand, SlashCommandRuntime } from '../../../types'
 import fs from 'node:fs'
+import process from 'node:process'
 import slashCommands from 'discord/slashCommands'
 import { defineNitroPlugin, useRuntimeConfig } from 'nitropack/runtime'
 import { logger } from '../../logger'
@@ -66,7 +67,12 @@ export default defineNitroPlugin(async (nitro) => {
   client.addSlashCommands(slashCommands as SlashCommandRuntime[])
 
   if (runtimeConfig.discord.sync) {
-    await client.registerSlashCommands()
+    // Support DISCORD_GUILD_ID env var (comma-separated) as fallback for guild IDs
+    const envGuilds = process.env.DISCORD_GUILD_ID?.split(',').map(id => id.trim()).filter(Boolean) ?? []
+    const guildIds = runtimeConfig.discord.guilds.length > 0
+      ? runtimeConfig.discord.guilds
+      : envGuilds
+    await client.registerSlashCommands(guildIds)
   }
 
   if (runtimeConfig.discord.autoStart) {

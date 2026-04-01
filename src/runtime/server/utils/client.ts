@@ -635,26 +635,50 @@ export class DiscordClient {
     })
   }
 
-  public async registerSlashCommands() {
-    const diff = await this.diffRemoteSlashCommands()
+  public async registerSlashCommands(guildIds: string[] = []) {
+    const globalCommands = this.#slashCommands.filter(cmd => !cmd.guildOnly)
+    const guildCommands = this.#slashCommands.filter(cmd => cmd.guildOnly)
 
-    if (diff.added.length === 0 && diff.removed.length === 0 && diff.changed.length === 0) {
-      // no changes, nothing to do
-      logger.log('No changes to slash commands, skipping registration.')
-      return []
+    const results: RESTPutAPIApplicationCommandsResult = []
+
+    // Register global commands
+    if (globalCommands.length > 0) {
+      const globalResult = await this.#registerCommandsToRoute(
+        Routes.applicationCommands(this.#clientId),
+        globalCommands,
+      )
+      results.push(...globalResult)
+    }
+
+    // Register guild-specific commands to each configured guild
+    if (guildCommands.length > 0 && guildIds.length > 0) {
+      for (const guildId of guildIds) {
+        const guildResult = await this.#registerCommandsToRoute(
+          Routes.applicationGuildCommands(this.#clientId, guildId),
+          guildCommands,
+        )
+        results.push(...guildResult)
+      }
+    }
+    else if (guildCommands.length > 0 && guildIds.length === 0) {
+      logger.warn(`${guildCommands.length} guild-only command(s) found but no guild IDs configured. Set discord.guilds in nuxt.config or DISCORD_GUILD_ID env var.`)
     }
 
     // nullify the cache to force a refresh on next diff
     this.#cachedRemoteSlashCommands = null
 
+    return results
+  }
+
+  async #registerCommandsToRoute(route: `/${string}`, commands: SlashCommandRuntime[]) {
     try {
       const result = await this.#rest.put(
-        Routes.applicationCommands(this.#clientId),
-        { body: this.#slashCommands.map(command => this.#getSlashCommandBuilder(command).toJSON()) },
+        route,
+        { body: commands.map(command => this.#getSlashCommandBuilder(command).toJSON()) },
       ) as RESTPutAPIApplicationCommandsResult
 
       result.forEach((command, i) => {
-        const localCommand = this.#slashCommands[i]
+        const localCommand = commands[i]
         if (localCommand) {
           localCommand.id = command.id
         }

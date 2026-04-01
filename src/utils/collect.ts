@@ -89,6 +89,11 @@ export function processCommandFile(ctx: NuxtDiscordContext, file: string): Slash
     command.defaultMemberPermissions = permissionsTag.comment.toString().trim()
   }
 
+  const guildTag = jsDocTags.find(tag => tag.tagName.escapedText === 'guild')
+  if (guildTag) {
+    command.guildOnly = true
+  }
+
   if (!commandDefinition.body) {
     ctx.logger.warn(`No body found for command definition in ${file}`)
     return

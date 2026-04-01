@@ -39,6 +39,17 @@ export interface NuxtDiscordOptions {
   autoStart: boolean
 
   /**
+   * Guild IDs to register guild-specific commands to.
+   * Commands tagged with `@guild` will be registered to these guilds
+   * instead of globally. Useful for development (instant updates)
+   * or server-specific commands.
+   *
+   * Can also be set via the DISCORD_GUILD_ID environment variable
+   * (comma-separated for multiple guilds).
+   */
+  guilds?: string[]
+
+  /**
    * HMR options
    */
   watch: Partial<ListenOptions> & {
@@ -69,6 +80,7 @@ export interface DiscordRuntimeConfig {
   client: NuxtDiscordOptions['client']
   autoStart: boolean
   sync: NuxtDiscordOptions['watch']['sync']
+  guilds: string[]
   dir: string
   buildDir: string
   rootDir: string
@@ -187,6 +199,8 @@ export interface SlashCommand {
   /** Interaction contexts where this command is available (Guild=0, BotDM=1, PrivateChannel=2) */
   contexts?: number[]
   defaultMemberPermissions?: string | null
+  /** Register this command to specific guilds instead of globally */
+  guildOnly?: boolean
   path: string
   options: (SlashCommandOption & { varname: string })[]
   parents: []
