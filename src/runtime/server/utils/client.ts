@@ -248,6 +248,8 @@ export class DiscordClient {
   #interactionScopes: WeakMap<ChatInputCommandInteraction, EffectScope> = new WeakMap()
   #commandFinalizationRegistry = new FinalizationRegistry((scope: EffectScope) => scope.stop())
   async #handleSlashCommand(interaction: ChatInputCommandInteraction, command: SlashCommandRuntime | SlashCommandSubcommandRuntime): Promise<void> {
+    // discord.js option getters may return API types (e.g. APIRole) alongside class types,
+    // but gateway bots always receive the class instances at runtime
     const args: (SlashCommandOptionType | undefined)[] = []
     for (const option of command.options) {
       const opt = interaction.options.get(option.name, option.required)
@@ -267,10 +269,10 @@ export class DiscordClient {
           args.push(opt?.user ?? undefined)
           break
         case ApplicationCommandOptionType.Role:
-          args.push((opt?.role as SlashCommandOptionType) ?? undefined)
+          args.push(opt?.role ?? undefined)
           break
         case ApplicationCommandOptionType.Mentionable:
-          args.push((opt?.user ?? opt?.member ?? opt?.role) as SlashCommandOptionType ?? undefined)
+          args.push(opt?.user ?? opt?.member ?? opt?.role ?? undefined)
           break
         case ApplicationCommandOptionType.Attachment:
           args.push(opt?.attachment ?? undefined)
@@ -508,49 +510,19 @@ export class DiscordClient {
             })
             break
           case ApplicationCommandOptionType.Boolean:
-            builder.addBooleanOption((opt) => {
-              opt.setName(option.name)
-                .setRequired(option.required)
-              if (option.description.length > 0)
-                opt = opt.setDescription(option.description)
-              return opt
-            })
+            builder.addBooleanOption(opt => setBasicOptionFields(opt, option))
             break
           case ApplicationCommandOptionType.User:
-            builder.addUserOption((opt) => {
-              opt.setName(option.name)
-                .setRequired(option.required)
-              if (option.description.length > 0)
-                opt = opt.setDescription(option.description)
-              return opt
-            })
+            builder.addUserOption(opt => setBasicOptionFields(opt, option))
             break
           case ApplicationCommandOptionType.Role:
-            builder.addRoleOption((opt) => {
-              opt.setName(option.name)
-                .setRequired(option.required)
-              if (option.description.length > 0)
-                opt = opt.setDescription(option.description)
-              return opt
-            })
+            builder.addRoleOption(opt => setBasicOptionFields(opt, option))
             break
           case ApplicationCommandOptionType.Mentionable:
-            builder.addMentionableOption((opt) => {
-              opt.setName(option.name)
-                .setRequired(option.required)
-              if (option.description.length > 0)
-                opt = opt.setDescription(option.description)
-              return opt
-            })
+            builder.addMentionableOption(opt => setBasicOptionFields(opt, option))
             break
           case ApplicationCommandOptionType.Attachment:
-            builder.addAttachmentOption((opt) => {
-              opt.setName(option.name)
-                .setRequired(option.required)
-              if (option.description.length > 0)
-                opt = opt.setDescription(option.description)
-              return opt
-            })
+            builder.addAttachmentOption(opt => setBasicOptionFields(opt, option))
             break
         }
       }
@@ -699,6 +671,16 @@ export class DiscordClient {
       return []
     }
   }
+}
+
+function setBasicOptionFields<T extends { setName: (name: string) => T, setRequired: (required: boolean) => T, setDescription: (description: string) => T }>(
+  opt: T,
+  option: { name: string, required: boolean, description: string },
+): T {
+  opt.setName(option.name).setRequired(option.required)
+  if (option.description.length > 0)
+    opt.setDescription(option.description)
+  return opt
 }
 
 function propsEqual<const T, const U>(a: T, b: U, props: (keyof T & keyof U)[]): boolean

@@ -1,5 +1,5 @@
 import type { DiscordClient } from '#build/types/nitro-imports'
-import type { Attachment, ChatInputCommandInteraction, ClientOptions, GuildMember, Role, User } from 'discord.js'
+import type { APIInteractionDataResolvedGuildMember, APIRole, Attachment, ChatInputCommandInteraction, ClientOptions, GuildMember, Role, User } from 'discord.js'
 import type { ListenOptions } from 'listhen'
 import type { MaybeRef } from 'vue'
 import type { DescribeOptionOptions, IntegerOption, NumberOption, StringOption } from './runtime/server/utils/describeOption'
@@ -113,7 +113,9 @@ export type SlashCommandOptionType
     | boolean
     | User
     | Role
-    | User | GuildMember | Role // Mentionable
+    | APIRole
+    | GuildMember
+    | APIInteractionDataResolvedGuildMember
     | Attachment
 
 export interface SlashCommandOptionBase {

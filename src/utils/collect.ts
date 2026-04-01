@@ -6,6 +6,21 @@ import ts from 'typescript'
 import { typeIdentifierToEnum } from '../types'
 import { macros } from './macros'
 
+function isOptionTypeIdentifier(s: string): s is SlashCommandOptionTypeIdentifier {
+  return s in typeIdentifierToEnum
+}
+
+const modifiersMap: Record<SlashCommandOptionTypeIdentifier, string[]> = {
+  string: ['minLength', 'maxLength', 'choices'],
+  number: ['min', 'max', 'choices'],
+  integer: ['min', 'max', 'choices'],
+  boolean: [],
+  User: [],
+  Role: [],
+  Mentionable: [],
+  Attachment: [],
+}
+
 export default function collectSlashCommands(ctx: NuxtDiscordContext) {
   const commandFiles = globSync(`${ctx.resolve.root(ctx.options.dir, 'commands')}/**/*.ts`)
   ctx.slashCommands = []
@@ -96,22 +111,22 @@ export function processCommandFile(ctx: NuxtDiscordContext, file: string): Slash
   } => {
     if (!type) {
       ctx.logger.warn(`No type found for slash command option in ${file}, defaulting to string`)
-      return { type: 'string' as const }
+      return { type: 'string' }
     }
 
     if (ts.isUnionTypeNode(type)) {
       const types = new Set(type.types.map(t => whichLiteral(t)))
       if (types.size !== 1) {
         ctx.logger.warn(`Union type with multiple conflicting types found in ${file}, defaulting to string`)
-        return { type: 'string' as const }
+        return { type: 'string' }
       }
       const typeName = types.values().next().value
-      if (!(typeName! in typeIdentifierToEnum)) {
+      if (!typeName || !isOptionTypeIdentifier(typeName)) {
         ctx.logger.warn(`Unrecognizable type ${type.getText(sourceFile)}, defaulting to string`)
-        return { type: 'string' as const }
+        return { type: 'string' }
       }
       return {
-        type: typeName as SlashCommandOptionTypeIdentifier,
+        type: typeName,
         choices: typeName === 'string'
           ? type.types.map(t => t.getText(sourceFile).slice(1, -1))
           : type.types.map(t => Number(t.getText(sourceFile))),
@@ -122,11 +137,11 @@ export function processCommandFile(ctx: NuxtDiscordContext, file: string): Slash
       const typeName = whichLiteral(type)
       if (!typeName) {
         ctx.logger.warn(`Unrecognizable literal type ${type.getText(sourceFile)}, defaulting to string`)
-        return { type: 'string' as const }
+        return { type: 'string' }
       }
       if (!(typeName in typeIdentifierToEnum)) {
         ctx.logger.warn(`Unrecognizable literal type ${type.getText(sourceFile)}, defaulting to string`)
-        return { type: 'string' as const }
+        return { type: 'string' }
       }
       return {
         type: typeName,
@@ -137,12 +152,12 @@ export function processCommandFile(ctx: NuxtDiscordContext, file: string): Slash
     }
 
     const typeName = type.getText(sourceFile)
-    if (typeName && typeName in typeIdentifierToEnum) {
-      return { type: typeName as SlashCommandOptionTypeIdentifier }
+    if (typeName && isOptionTypeIdentifier(typeName)) {
+      return { type: typeName }
     }
 
     ctx.logger.warn(`Unknown slash command option type: ${type.getText(sourceFile)} in ${file}, defaulting to string`)
-    return { type: 'string' as const }
+    return { type: 'string' }
   }
 
   for (const param of commandDefinition.parameters) {
@@ -173,25 +188,13 @@ export function processCommandFile(ctx: NuxtDiscordContext, file: string): Slash
       ? jsDocTags[jsDocTagIdx]!.comment?.toString() ?? ''
       : ''
 
-    const modifiersMap: Record<SlashCommandOptionTypeIdentifier, string[]> = {
-      string: ['minLength', 'maxLength', 'choices'],
-      number: ['min', 'max', 'choices'],
-      integer: ['min', 'max', 'choices'],
-      boolean: [],
-      User: [],
-      Role: [],
-      Mentionable: [],
-      Attachment: [],
-    }
-
-    const modifiers = findModifiers(modifiersMap[type as SlashCommandOptionTypeIdentifier])
+    const modifiers = findModifiers(modifiersMap[type])
 
     choices = choices ?? modifiers.choices
 
     command.options!.push({
       name,
-      // TODO: remove this type assertion
-      type: typeIdentifierToEnum[type as SlashCommandOptionTypeIdentifier],
+      type: typeIdentifierToEnum[type],
       description: jsdocDescription,
       required: !param.questionToken,
       varname: name,
