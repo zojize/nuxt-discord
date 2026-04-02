@@ -4,286 +4,303 @@
 [![License][license-src]][license-href]
 [![Nuxt][nuxt-src]][nuxt-href]
 
-A Nuxt module for building Discord bots with slash commands, featuring hot module replacement, automatic command registration, and web interface for command management.
+A Nuxt module for building Discord bots with slash commands, featuring hot module replacement, automatic command registration, and a web interface for command management.
 
 ## Features
 
-- 🤖 **Discord Bot Integration** - Seamlessly integrate Discord.js with your Nuxt application
-- ⚡ **Slash Commands** - Type-safe slash command definitions with automatic registration
-- 🎯 **Auto-sync** - Automatically sync commands with Discord's servers
-- 🖥️ **Web Interface** - Beautiful UI for managing and viewing slash commands
-- 🔄 **Real-time Updates** - WebSocket-based live updates in development
+- **Slash Commands** - Type-safe definitions with automatic registration
+- **File-based Routing** - Directory structure maps to subcommand hierarchy
+- **All Option Types** - String, Number, Integer, Boolean, User, Role, Mentionable, Attachment
+- **JSDoc Metadata** - `@nsfw`, `@guild`, `@dm`, `@defaultMemberPermissions` tags
+- **Localization** - i18n via `discord/locales/*.json` files
+- **Guild Commands** - Register commands per-guild for instant updates
+- **HMR** - Hot reload commands during development
+- **Web Dashboard** - View commands, sync status, and register with one click
 
 ## Quick Setup
 
-Install the module to your Nuxt application:
-
 ```bash
-pnpm install nuxt-discord discord.js
+bun add nuxt-discord discord.js
 ```
 
-Add the module to your `nuxt.config.ts`:
-
 ```ts
+// nuxt.config.ts
 export default defineNuxtConfig({
   modules: ['nuxt-discord'],
   discord: {
-    // Discord bot configuration
-    client: {
-      intents: ['Guilds'], // Discord gateway intents
-      deferOnPromise: true, // Auto-defer interactions when command returns a promise
-    },
-    dir: 'discord', // Directory for Discord-related files
-    autoStart: true, // Auto-start the bot on server startup
+    autoStart: true,
     watch: {
-      enabled: true, // Enable HMR for commands
-      port: 5720, // HMR server port
-      showURL: false, // Show HMR server URL in console
-      sync: {
-        debounce: 1000 // Sync delay in milliseconds
-      }
-    }
-  }
+      sync: { debounce: 1000 },
+    },
+  },
 })
 ```
 
-Set up your environment variables:
-
 ```bash
 # .env
-DISCORD_TOKEN=your_bot_token_here
-DISCORD_CLIENT_ID=your_application_id_here
+DISCORD_TOKEN=your_bot_token
+DISCORD_CLIENT_ID=your_application_id
 ```
 
-## Creating Slash Commands
+## Creating Commands
 
-Create slash commands in the `/discord/commands` directory:
+Create files in `discord/commands/`:
 
 ```ts
 // discord/commands/ping.ts
-/**
- * @name ping
- * @description A simple ping command that responds with 'pong!'
- */
+
+/** A simple ping command */
 export default function ping() {
   return 'pong!'
 }
 ```
 
-Defining a command this way this module automatically deduces the name and description from the JSDoc comments. The command name is inferred following this set of priorities: `describeCommand` macro > `@name` JSDoc tag > function name > file name.
+The description is inferred from the JSDoc body text. Name priority: `describeCommand` macro > `@name` tag > function name > file name.
 
-### Commands with Parameters
+### Parameters
+
+Types are inferred from TypeScript signatures:
 
 ```ts
 // discord/commands/add.ts
+
 /**
- * @name add
- * @description Adds two numbers together
- * @param a The first number to add
- * @param b The second number to add
+ * Adds two numbers together
+ * @param a The first number
+ * @param b The second number
  */
 export default (a: number, b: number) => {
-  // Add parameter validation
-  describeOption(a, {
-    min: -100,
-    max: 100,
-  })
-
-  describeOption(b, {
-    min: -100,
-    max: 100,
-  })
-
-  return `The sum of ${a} and ${b} is ${a + b}!`
+  describeOption(a, { min: -100, max: 100 })
+  describeOption(b, { min: -100, max: 100 })
+  return `${a} + ${b} = ${a + b}`
 }
 ```
 
-### String Parameters with Choices
+All Discord option types are supported:
 
 ```ts
-// discord/commands/greet.ts
+export default (
+  name: string, // String option
+  count: number, // Number option
+  sides: integer, // Integer option (phantom type)
+  verbose: boolean, // Boolean option
+  user: User, // User option
+  role: Role, // Role option
+  target: Mentionable, // Mentionable option
+  file: Attachment, // Attachment option
+) => { /* ... */ }
+```
+
+### Union Types as Choices
+
+```ts
+export default (color: 'red' | 'green' | 'blue') => {
+  return `You picked ${color}`
+}
+```
+
+### Subcommands
+
+Directory structure maps to Discord's subcommand hierarchy:
+
+```
+discord/commands/
+  channel.ts              # /channel (parent)
+  channel/
+    send.ts               # /channel send
+    members.ts            # /channel members (group)
+    members/
+      count.ts            # /channel members count
+      names.ts            # /channel members names
+```
+
+## Command Metadata
+
+Use JSDoc tags to configure command properties:
+
+```ts
 /**
- * @name greet
- * @description Greet someone with a custom message
- * @param name The person to greet
- * @param style The greeting style
+ * Admin-only moderation command
+ * @nsfw
+ * @guild
+ * @dm false
+ * @defaultMemberPermissions 8
  */
-export default (name: string, style: string) => {
-  describeOption(name, {
-    minLength: 1,
-    maxLength: 32,
-  })
-
-  describeOption(style, {
-    choices: [
-      { name: 'Formal', value: 'formal' },
-      { name: 'Casual', value: 'casual' },
-      { name: 'Enthusiastic', value: 'enthusiastic' },
-    ],
-  })
-
-  const greetings = {
-    formal: `Good day, ${name}.`,
-    casual: `Hey ${name}!`,
-    enthusiastic: `HELLO THERE ${name.toUpperCase()}!!! 🎉`,
-  } as const
-
-  return greetings[style as keyof typeof greetings]
+export default () => {
+  return reply.ephemeral('Secret admin action!')
 }
 ```
 
-## Web Interface
+| Tag | Effect |
+|---|---|
+| `@nsfw` | Mark as age-restricted |
+| `@guild` | Register to guilds only (instant updates) |
+| `@dm false` | Disable in DMs |
+| `@defaultMemberPermissions <bits>` | Require permissions (e.g. `8` = Administrator) |
 
-Access the command management interface at `/discord/slash-commands` in your application. The interface provides:
+### Guild Commands
 
-- 📋 **Command Overview** - View all registered commands with their parameters
-- 🏷️ **Parameter Details** - See type information, validation rules, and constraints
-- 🔄 **Sync Commands** - Monitor local commands' synced status with server
-- ➕ **Register Commands** - Easily register newly added commands
-- ⚡ **Live Updates** - Real-time updates during development
+Commands tagged with `@guild` register to specific guilds instead of globally. Guild commands update instantly (vs up to 1 hour for global).
 
-> **Coming Soon:** Live command execution/testing, i18n support, logging dashboard, and more fine-grained client control
+Configure guild IDs via environment variable:
 
-## Advanced Usage & Customization
+```bash
+DISCORD_GUILD_ID=123456789,987654321
+```
 
-The module is highly customizable and provides access to the internal Discord client and runtime hooks for advanced use cases.
-
-### Using the Discord Client in Server
+Or in `nuxt.config.ts`:
 
 ```ts
-import { useDiscordClient } from '#imports'
+export default defineNuxtConfig({
+  discord: {
+    guilds: ['123456789', '987654321'],
+  },
+})
+```
 
-export default async () => {
-  const client = useDiscordClient()
+## Localization
 
-  // Access the internal Discord.js client
-  const discordJS = client.internalClient
-  const guilds = discordJS?.guilds.cache.size || 0
+Create JSON files in `discord/locales/` named after Discord locale codes:
 
-  return `Bot is in ${guilds} servers!`
+```json
+// discord/locales/ja.json
+{
+  "ping": {
+    "name": "ピング",
+    "description": "ポンと返すコマンド"
+  },
+  "add": {
+    "description": "2つの数を足す",
+    "options": {
+      "a": { "description": "最初の数" },
+      "b": { "description": "2番目の数" }
+    }
+  }
 }
 ```
 
-### Runtime Hooks
+Valid locale codes: `ja`, `zh-CN`, `zh-TW`, `ko`, `fr`, `de`, `es-ES`, `pt-BR`, `ru`, `uk`, `pl`, `nl`, `it`, `sv-SE`, `no`, `da`, `fi`, `hu`, `cs`, `ro`, `el`, `bg`, `th`, `vi`, `hi`, `tr`, `id`, `en-US`, `en-GB`, and [more](https://discord.com/developers/docs/reference#locales).
 
-The module provides several hooks for customizing bot behavior:
+## Response Types
 
 ```ts
-// nitro/plugins/discord-config.ts
+// Simple string
+export default () => 'Hello!'
+
+// Ephemeral (only visible to user)
+export default () => reply.ephemeral('Secret!')
+
+// With files
+export default () => reply.file('hello.txt').send('Here is your file')
+
+// Reactive (auto-edits when ref changes)
+export default () => {
+  const msg = ref('Loading...')
+  setTimeout(() => {
+    msg.value = 'Done!'
+  }, 2000)
+  return msg
+}
+
+// Generator (multiple replies)
+export default function* () {
+  yield 'First message'
+  yield 'Follow-up'
+}
+
+// Interactive buttons
+export default () => {
+  const count = ref(0)
+  return reply
+    .button('+1', () => { count.value++ })
+    .send(computed(() => `Count: ${count.value}`))
+}
+```
+
+## Web Dashboard
+
+Access `/discord/slash-commands` to view:
+
+- All registered commands with option types and constraints
+- Sync status (synced, added, changed, removed, conflict)
+- Command metadata (nsfw, guild-only, permissions)
+- One-click sync to Discord
+
+## Runtime Hooks
+
+```ts
+// server/plugins/discord.ts
 export default defineNitroPlugin(async (nitro) => {
-  // Configure Discord client options
   nitro.hooks.hook('discord:client:config', (options) => {
     options.presence = {
       status: 'online',
-      activities: [{
-        name: 'Powered by Nuxt',
-      }]
+      activities: [{ name: 'Powered by Nuxt' }],
     }
   })
 
-  // Handle client ready event
   nitro.hooks.hook('discord:client:ready', (client) => {
-    console.log('Discord bot is ready!')
+    console.log('Bot is ready!')
   })
 
-  // Handle client errors
   nitro.hooks.hook('discord:client:error', (error) => {
     console.error('Discord error:', error)
   })
 })
 ```
 
-### Custom Response Handling
+## Server-side Client Access
 
 ```ts
-export default (message: string) => {
-  // Return different response types
-  return reply.ephemeral(`This is private: ${message}`) // Only visible to user
-  // or
-  return `Public response: ${message}` // Visible to everyone
+export default async () => {
+  const client = useDiscordClient()
+  const guilds = client.internalClient?.guilds.cache.size || 0
+  return `Bot is in ${guilds} servers!`
 }
 ```
 
-> Refer to [/src/types.ts](/src/types.ts) for detailed type definitions for how you can define commands return types for advanced behavior.
-
-## Configuration Options
+## Configuration
 
 ```ts
-// nuxt.config.ts
 export default defineNuxtConfig({
   discord: {
     client: {
-      intents: [
-        'Guilds',
-        'GuildMessages'
-      ],
-      deferOnPromise: true, // Auto-defer interactions when command returns a promise
+      intents: ['Guilds', 'GuildMessages'],
+      deferOnPromise: true,
     },
     dir: 'discord',
     autoStart: true,
+    guilds: [], // Guild IDs for @guild commands
     watch: {
       enabled: true,
-      port: 5720, // HMR server port
-      showURL: false, // Show HMR server URL in console
-      sync: {
-        debounce: 1000
-      }
-    }
-  }
+      port: 5720,
+      showURL: false,
+      sync: { debounce: 1000 },
+    },
+  },
 })
 ```
 
-> Use the 'nitro:client:config' hook to configure other options passed to the Discord client.
-
-## Roadmap
-
-Here's what's planned for future releases:
-
-### Core Features
-
-- [ ] Full slash command options support
-  - [x] String type
-  - [x] Number type
-  - [x] Integer type
-  - [x] Boolean type
-  - [ ] Role type
-  - [ ] User type
-  - [ ] Mentionable type
-  - [ ] Attachment type
-- [ ] Better JSDocs support JSDoc comments
-- [ ] Localization support
-- [x] File-based subcommands
-- [x] Auto-complete API
-- [ ] Guild-specific commands
-- [ ] Nuxt-devtools integration
-- [ ] Unit tests (WIP)
-
-### Web Interface Enhancements
-
-- [ ] Live command execution
-- [ ] Command testing interface
-- [ ] i18n management
-- [ ] Logging dashboard
-- [ ] Detailed client control panel
-- [ ] Command analytics
-- [ ] Fine grained diff display
-
 ## Contribution
 
-Refer to the official [Module Author Guide](https://nuxt.com/docs/guide/going-further/modules)
+```bash
+bun install
+bun run dev        # Start playground
+bun run test       # Run tests
+bun run lint       # Lint
+bun run prepack    # Build module
+```
+
+Refer to the [Nuxt Module Author Guide](https://nuxt.com/docs/guide/going-further/modules).
 
 ## Acknowledgement
 
-- Generated from the [module starter template](https://github.com/nuxt/starter/tree/module)
-- Implementation details and best practices are inspired by
-  - [@nuxt/content](https://github.com/nuxt/content)
-  - [@nuxtjs/i18n](https://github.com/nuxt-modules/i18n)
-  - [@nuxt/devtools](https://github.com/nuxt/devtools)
-- UI components are based on [Nuxt UI](https://ui.nuxt.com/) and [UnoCSS](https://unocss.dev/)
+- Built with the [Nuxt module starter](https://github.com/nuxt/starter/tree/module)
+- Inspired by [@nuxt/content](https://github.com/nuxt/content), [@nuxtjs/i18n](https://github.com/nuxt-modules/i18n), [@nuxt/devtools](https://github.com/nuxt/devtools)
+- UI powered by [Nuxt UI](https://ui.nuxt.com/)
 
 ## License
 
-[MIT](./LICENSE) - Made with 💚
+[MIT](./LICENSE)
 
 [npm-version-src]: https://img.shields.io/npm/v/nuxt-discord/latest.svg?style=flat&colorA=18181B&colorB=28CF8D
 [npm-version-href]: https://npmjs.com/package/nuxt-discord

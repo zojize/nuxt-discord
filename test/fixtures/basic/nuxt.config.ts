@@ -4,4 +4,11 @@ export default defineNuxtConfig({
   modules: [
     MyModule,
   ],
+  discord: {
+    autoStart: false,
+    watch: {
+      enabled: false,
+      sync: false,
+    },
+  },
 })

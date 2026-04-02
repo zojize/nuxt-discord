@@ -1,6 +1,6 @@
 import type { ChatInputCommandInteraction, InteractionCallbackResponse, InteractionResponse, Message } from 'discord.js'
 import type { SlashCommandRuntime } from '../src/types'
-import { Client, Events, REST } from 'discord.js'
+import { ApplicationCommandOptionType, Client, Events, REST } from 'discord.js'
 import { useNitroApp } from 'nitropack/runtime'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
@@ -231,6 +231,141 @@ describe('client', () => {
       yield 'hello again'
     }),
   }
+
+  it('should pass option values to command execute', async () => {
+    const addExecute = vi.fn((...args: any[]) => `${Number(args[0]) + Number(args[1])}`)
+    const addCommand: SlashCommandRuntime = {
+      name: 'add',
+      description: 'Add numbers',
+      options: [
+        { name: 'a', description: 'First', type: ApplicationCommandOptionType.Number, required: true, hasAutocomplete: false, varname: 'a' },
+        { name: 'b', description: 'Second', type: ApplicationCommandOptionType.Number, required: true, hasAutocomplete: false, varname: 'b' },
+      ],
+      path: 'add.ts',
+      parents: [],
+      subcommands: [],
+      execute: addExecute,
+    }
+
+    const client = new DiscordClient()
+    client.start({ intents: [] })
+    await expect.poll(() => mockedClient.on)
+      .toHaveBeenCalledWith(Events.InteractionCreate, expect.any(Function))
+
+    client.addSlashCommand(addCommand)
+
+    const { interaction } = mockChatInputCommandInteraction('add', { a: 3, b: 7 })
+    mockedClient.emit(Events.InteractionCreate, interaction)
+
+    await expect.poll(() => addExecute).toHaveBeenCalledWith(3, 7)
+    await expect.poll(() => interaction.reply).toHaveBeenCalledWith({ content: '10' })
+  })
+
+  it('should handle optional parameters as undefined', async () => {
+    const greetExecute = vi.fn((...args: any[]) => args[1] ? String(args[0]).toUpperCase() : String(args[0]))
+    const greetCommand: SlashCommandRuntime = {
+      name: 'greet',
+      description: 'Greet',
+      options: [
+        { name: 'name', description: 'Name', type: ApplicationCommandOptionType.String, required: true, hasAutocomplete: false, varname: 'name' },
+        { name: 'loud', description: 'Loud', type: ApplicationCommandOptionType.Boolean, required: false, hasAutocomplete: false, varname: 'loud' },
+      ],
+      path: 'greet.ts',
+      parents: [],
+      subcommands: [],
+      execute: greetExecute,
+    }
+
+    const client = new DiscordClient()
+    client.start({ intents: [] })
+    await expect.poll(() => mockedClient.on)
+      .toHaveBeenCalledWith(Events.InteractionCreate, expect.any(Function))
+
+    client.addSlashCommand(greetCommand)
+
+    // Only provide 'name', not 'loud'
+    const { interaction } = mockChatInputCommandInteraction('greet', { name: 'Alice' })
+    mockedClient.emit(Events.InteractionCreate, interaction)
+
+    await expect.poll(() => greetExecute).toHaveBeenCalledWith('Alice', undefined)
+    await expect.poll(() => interaction.reply).toHaveBeenCalledWith({ content: 'Alice' })
+  })
+
+  it('should auto-defer when deferOnPromise is enabled', async () => {
+    const slowCommand: SlashCommandRuntime = {
+      name: 'slow',
+      description: 'Slow',
+      options: [],
+      path: 'slow.ts',
+      parents: [],
+      subcommands: [],
+      execute: vi.fn(() => new Promise<string>(resolve => setTimeout(resolve, 50, 'done'))),
+    }
+
+    const client = new DiscordClient()
+    client.start({ intents: [], deferOnPromise: true })
+    await expect.poll(() => mockedClient.on)
+      .toHaveBeenCalledWith(Events.InteractionCreate, expect.any(Function))
+
+    client.addSlashCommand(slowCommand)
+
+    const { interaction } = mockChatInputCommandInteraction('slow')
+    mockedClient.emit(Events.InteractionCreate, interaction)
+
+    await expect.poll(() => interaction.deferReply).toHaveBeenCalled()
+    await expect.poll(() => slowCommand.execute).toHaveBeenCalled()
+  })
+
+  it('should dynamically load command via load()', async () => {
+    const lazyCommand: SlashCommandRuntime = {
+      name: 'lazy',
+      description: 'Lazy loaded',
+      options: [],
+      path: 'lazy.ts',
+      parents: [],
+      subcommands: [],
+      load: vi.fn(() => Promise.resolve({
+        execute: () => 'loaded!',
+      })),
+    }
+
+    const client = new DiscordClient()
+    client.start({ intents: [] })
+    await expect.poll(() => mockedClient.on)
+      .toHaveBeenCalledWith(Events.InteractionCreate, expect.any(Function))
+
+    client.addSlashCommand(lazyCommand)
+
+    const { interaction } = mockChatInputCommandInteraction('lazy')
+    mockedClient.emit(Events.InteractionCreate, interaction)
+
+    await expect.poll(() => lazyCommand.load).toHaveBeenCalled()
+    await expect.poll(() => interaction.reply).toHaveBeenCalledWith({ content: 'loaded!' })
+  })
+
+  it('should manage command lifecycle (add, replace, remove, clear)', () => {
+    const client = new DiscordClient()
+    const cmd1: SlashCommandRuntime = { name: 'a', description: '', options: [], path: '', parents: [], subcommands: [] }
+    const cmd2: SlashCommandRuntime = { name: 'b', description: '', options: [], path: '', parents: [], subcommands: [] }
+    const cmd1Updated: SlashCommandRuntime = { name: 'a', description: 'updated', options: [], path: '', parents: [], subcommands: [] }
+
+    client.addSlashCommand(cmd1)
+    client.addSlashCommand(cmd2)
+    expect(client.getSlashCommands()).toHaveLength(2)
+
+    // Replace existing
+    client.addSlashCommand(cmd1Updated)
+    expect(client.getSlashCommands()).toHaveLength(2)
+    expect(client.getSlashCommand('a')?.description).toBe('updated')
+
+    // Remove
+    client.removeSlashCommand('b')
+    expect(client.getSlashCommands()).toHaveLength(1)
+
+    // Clear
+    client.clearSlashCommands()
+    expect(client.getSlashCommands()).toHaveLength(0)
+  })
 
   it('should handle command with generator return', async () => {
     const client = new DiscordClient()

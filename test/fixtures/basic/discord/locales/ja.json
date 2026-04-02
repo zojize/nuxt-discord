@@ -1,0 +1,12 @@
+{
+  "ping": {
+    "name": "ピング",
+    "description": "ポンと返す"
+  },
+  "add": {
+    "description": "足し算",
+    "options": {
+      "a": { "description": "最初の数" }
+    }
+  }
+}

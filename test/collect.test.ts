@@ -420,6 +420,75 @@ export default () => {
       expect(command!.description).toBe('Overridden description')
     })
 
+    it('should parse describeOption macro with constraints', () => {
+      const file = writeCommand(commandsDir, 'add.ts', `
+/**
+ * @description Add numbers
+ * @param a First number
+ * @param b Second number
+ */
+export default (a: number, b: number) => {
+  describeOption(a, { min: -100, max: 100 })
+  describeOption(b, { min: 0, max: 50 })
+  return a + b
+}
+`)
+      const command = processCommandFile(ctx, file)
+      expect(command).toBeDefined()
+      expect(command!.options[0]!).toMatchObject({ name: 'a', min: -100, max: 100 })
+      expect(command!.options[1]!).toMatchObject({ name: 'b', min: 0, max: 50 })
+    })
+
+    it('should parse describeOption with string constraints', () => {
+      const file = writeCommand(commandsDir, 'say.ts', `
+/**
+ * @description Say something
+ * @param msg The message
+ */
+export default (msg: string) => {
+  describeOption(msg, { minLength: 1, maxLength: 200 })
+  return msg
+}
+`)
+      const command = processCommandFile(ctx, file)
+      expect(command).toBeDefined()
+      expect(command!.options[0]!).toMatchObject({ name: 'msg', minLength: 1, maxLength: 200 })
+    })
+
+    it('should detect autocomplete in describeOption', () => {
+      const file = writeCommand(commandsDir, 'search.ts', `
+/**
+ * @description Search
+ * @param query The query
+ */
+export default (query: string) => {
+  describeOption(query, {
+    autocomplete(value) {
+      return [{ name: value, value }]
+    },
+  })
+  return query
+}
+`)
+      const command = processCommandFile(ctx, file)
+      expect(command).toBeDefined()
+      expect(command!.options[0]!.hasAutocomplete).toBe(true)
+    })
+
+    it('should parse defineSlashCommand wrapper', () => {
+      const file = writeCommand(commandsDir, 'wrapped.ts', `
+/**
+ * @description A wrapped command
+ */
+export default defineSlashCommand(() => {
+  return 'wrapped'
+})
+`)
+      const command = processCommandFile(ctx, file)
+      expect(command).toBeDefined()
+      expect(command!.description).toBe('A wrapped command')
+    })
+
     it('should set parents for nested commands', () => {
       const parentFile = writeCommand(commandsDir, 'group.ts', `
 /**
