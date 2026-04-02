@@ -1,6 +1,9 @@
 import type { User } from 'discord.js'
 
-/** Display information about a user */
+/**
+ * Display information about a user
+ * @param user The user to inspect
+ */
 export default (user: User) => {
   return [
     `**${user.displayName}**`,

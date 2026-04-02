@@ -6,15 +6,18 @@ export default {
     'src/runtime/**',
     'playground/**',
     'test/fixtures/**',
+    'docs/**',
   ],
-  // These are used at runtime by Nuxt/Nitro auto-imports or as peer deps
+  // These are used at runtime by Nuxt/Nitro auto-imports, as peer deps,
+  // or resolved by convention (iconify icon data packages)
   ignoreDependencies: [
     '@nuxt/ui',
     '@nuxt/devtools',
     '@nuxt/eslint-config',
     '@nuxt/schema',
-    '@nuxt/test-utils',
     '@vueuse/core',
+    '@iconify-json/lucide',
+    '@iconify-json/simple-icons',
     'simple-icons',
     'tailwindcss',
     'nitropack',

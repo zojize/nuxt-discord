@@ -95,6 +95,17 @@ describe('integration', async () => {
     })
   })
 
+  describe('command execution (test endpoint)', () => {
+    it('should return error for unknown command', async () => {
+      const result = await $fetch<any>('/api/discord/slash-command/test', {
+        method: 'POST',
+        body: { name: 'nonexistent' },
+      })
+      expect(result.ok).toBe(false)
+      expect(result.error).toContain('not found')
+    })
+  })
+
   describe('subcommands', () => {
     it('should nest subcommands under parent', async () => {
       const { commands } = await $fetch<{ commands: any[] }>('/api/discord/slash-command/all')

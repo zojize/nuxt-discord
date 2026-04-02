@@ -715,8 +715,7 @@ function setBasicOptionFields<T extends {
   option: { name: string, required: boolean, description: string, nameLocalizations?: import('discord.js').LocalizationMap, descriptionLocalizations?: import('discord.js').LocalizationMap },
 ): T {
   opt.setName(option.name).setRequired(option.required)
-  if (option.description.length > 0)
-    opt.setDescription(option.description)
+  opt.setDescription(option.description || option.name)
   if (option.nameLocalizations)
     opt.setNameLocalizations(option.nameLocalizations)
   if (option.descriptionLocalizations)

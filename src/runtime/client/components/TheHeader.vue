@@ -23,16 +23,18 @@ function toggleDark() {
       <div class="flex items-center gap-1">
         <button
           class="flex size-8 cursor-pointer items-center justify-center rounded-md text-muted transition-colors hover:bg-elevated hover:text-highlighted"
+          title="Toggle dark mode"
           @click="toggleDark"
         >
-          <Icon :name="isDark ? 'lucide:moon' : 'lucide:sun'" class="size-4" />
+          <Icon :icon="isDark ? 'lucide:moon' : 'lucide:sun'" class="size-4" />
         </button>
         <a
           href="https://github.com/zojize/nuxt-discord"
           target="_blank"
+          title="View on GitHub"
           class="flex size-8 cursor-pointer items-center justify-center rounded-md text-muted transition-colors hover:bg-elevated hover:text-highlighted"
         >
-          <Icon name="simple-icons:github" class="size-4" />
+          <Icon icon="simple-icons:github" class="size-4" />
         </a>
       </div>
     </div>

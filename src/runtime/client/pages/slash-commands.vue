@@ -4,6 +4,7 @@ import type { SlashCommand, SlashCommandOption } from '../../../types'
 import slashCommands from '#build/discord/slashCommands'
 import { computed, ref, useFetch, useRuntimeConfig, useToast, watchEffect } from '#imports'
 import { useWebSocket } from '@vueuse/core'
+import CommandTestBar from '../components/CommandTestBar.vue'
 import TheHeader from '../components/TheHeader.vue'
 
 enum ApplicationCommandOptionType {
@@ -154,7 +155,7 @@ function constraintBadges(option: SlashCommandOption) {
   <div class="bg-default min-h-screen">
     <TheHeader />
 
-    <main class="mx-auto px-6 py-8 max-w-6xl">
+    <main class="mx-auto px-6 py-8 pb-28 max-w-6xl">
       <!-- Title bar -->
       <div class="mb-8 flex items-start justify-between">
         <div>
@@ -287,5 +288,7 @@ function constraintBadges(option: SlashCommandOption) {
         </p>
       </div>
     </main>
+
+    <CommandTestBar :commands="commands" />
   </div>
 </template>
