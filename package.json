@@ -40,6 +40,7 @@
     "dev": "bun run dev:prepare && nuxi dev playground",
     "dev:debug": "bun run dev:prepare && node --inspect ./node_modules/nuxt/bin/nuxt.mjs dev playground --no-fork",
     "dev:build": "nuxi build playground",
+    "dev:docs": "nuxi dev docs --port 4000",
     "dev:prepare": "nuxt-module-build build --stub && nuxt-module-build prepare && nuxi prepare playground",
     "release": "bun run lint && bun run test && bun run prepack && changelogen --release && bun publish && git push --follow-tags",
     "lint": "eslint .",
@@ -87,7 +88,8 @@
     "vue-tsc": "^3.2.6"
   },
   "workspaces": [
-    "playground"
+    "playground",
+    "docs"
   ],
   "resolutions": {
     "nuxt-discord": "link:."
