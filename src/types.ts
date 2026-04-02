@@ -200,8 +200,8 @@ export interface SlashCommand {
   /** Interaction contexts where this command is available (Guild=0, BotDM=1, PrivateChannel=2) */
   contexts?: number[]
   defaultMemberPermissions?: string | null
-  /** Register this command to specific guilds instead of globally */
-  guildOnly?: boolean
+  /** Register to specific guilds instead of globally. `true` = all configured guilds, `string[]` = specific guild IDs */
+  guilds?: true | string[]
   nameLocalizations?: LocalizationMap
   descriptionLocalizations?: LocalizationMap
   path: string

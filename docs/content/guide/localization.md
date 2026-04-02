@@ -4,11 +4,28 @@ title: Localization
 
 # Localization
 
-Discord supports localized command names and descriptions. Nuxt Discord loads translations from JSON files in the `discord/locales/` directory.
+Discord supports localized command names and descriptions. Nuxt Discord provides two ways to add translations: inline JSDoc tags and JSON locale files.
 
-## Locale Files
+## Inline JSDoc Tags
 
-Create JSON files named after Discord's locale codes:
+The simplest approach — add translations directly in the command file:
+
+```ts
+/**
+ * A simple ping command
+ * @name.ja ピング
+ * @description.ja ポンと返すコマンド
+ * @description.fr Renvoie pong
+ * @description.zh-CN 简单的ping命令
+ */
+export default () => 'pong!'
+```
+
+The format is `@name.<locale>` or `@description.<locale>` followed by the translated text.
+
+## JSON Locale Files
+
+For larger projects, create JSON files in `discord/locales/` named after Discord's locale codes:
 
 ```json
 // discord/locales/ja.json
@@ -27,9 +44,7 @@ Create JSON files named after Discord's locale codes:
 }
 ```
 
-## Structure
-
-Each locale file is a flat map of command names to their translations:
+### JSON Structure
 
 ```json
 {
@@ -48,9 +63,13 @@ Each locale file is a flat map of command names to their translations:
 
 All fields are optional — only provide what you want to translate.
 
+## Priority
+
+Inline JSDoc tags take precedence over JSON locale files. Both can coexist — use inline for a few key translations and JSON files for comprehensive coverage.
+
 ## Supported Locales
 
-File names must match Discord's locale codes exactly:
+Locale codes must match Discord's locale identifiers exactly:
 
 | Code | Language |
 | --- | --- |
@@ -83,11 +102,5 @@ File names must match Discord's locale codes exactly:
 | `hi` | Hindi |
 | `tr` | Turkish |
 | `id` | Indonesian |
-| `hr` | Croatian |
-| `lt` | Lithuanian |
 
-Invalid locale file names are skipped with a warning.
-
-## How It Works
-
-During command collection, locale files are loaded and merged into the command metadata as `nameLocalizations` and `descriptionLocalizations`. These are passed directly to Discord's `setNameLocalizations()` and `setDescriptionLocalizations()` builder methods.
+Invalid locale codes are skipped with a warning.

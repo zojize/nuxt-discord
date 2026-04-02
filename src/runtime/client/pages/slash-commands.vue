@@ -215,7 +215,7 @@ function constraintBadges(option: SlashCommandOption) {
                     :label="command.status"
                   />
                   <UBadge v-if="'nsfw' in command && command.nsfw" label="nsfw" color="error" variant="soft" size="xs" />
-                  <UBadge v-if="'guildOnly' in command && command.guildOnly" label="guild" color="warning" variant="soft" size="xs" />
+                  <UBadge v-if="'guilds' in command && command.guilds" :label="command.guilds === true ? 'guild' : `guild: ${Array.isArray(command.guilds) ? command.guilds.length : 1}`" color="warning" variant="soft" size="xs" />
                   <UBadge v-if="'contexts' in command && command.contexts?.length === 1" label="no DM" color="neutral" variant="outline" size="xs" />
                   <UBadge v-if="'defaultMemberPermissions' in command && command.defaultMemberPermissions" label="restricted" color="warning" variant="outline" size="xs" :title="`permissions: ${command.defaultMemberPermissions}`" />
                 </div>

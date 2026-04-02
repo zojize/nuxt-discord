@@ -6,9 +6,11 @@ title: Guild Commands
 
 By default, commands are registered globally. Global commands can take up to 1 hour to propagate across Discord. Guild commands update instantly, making them ideal for development and server-specific features.
 
-## Marking Commands as Guild-Only
+## `@guild` Tag
 
-Add the `@guild` JSDoc tag:
+### All Configured Guilds
+
+A bare `@guild` tag registers the command to all guilds configured in `nuxt.config.ts` or `DISCORD_GUILD_ID`:
 
 ```ts
 /**
@@ -18,16 +20,34 @@ Add the `@guild` JSDoc tag:
 export default () => 'This updates instantly!'
 ```
 
-## Configuring Guild IDs
+### Specific Guild
 
-Guild commands need target guild IDs. Set them via environment variable:
+Pass a guild ID directly in the tag — no global config needed:
 
-```bash
-# .env
-DISCORD_GUILD_ID=123456789012345678
+```ts
+/**
+ * Only for my test server
+ * @guild 123456789012345678
+ */
+export default () => 'test server only'
 ```
 
-Multiple guilds (comma-separated):
+### Multiple Guilds
+
+Use multiple `@guild` tags:
+
+```ts
+/**
+ * For two specific servers
+ * @guild 123456789012345678
+ * @guild 987654321098765432
+ */
+export default () => 'two servers'
+```
+
+## Global Guild Config
+
+For bare `@guild` commands (no ID specified), configure target guilds via environment variable:
 
 ```bash
 DISCORD_GUILD_ID=123456789012345678,987654321098765432
@@ -43,25 +63,13 @@ export default defineNuxtConfig({
 })
 ```
 
-The environment variable takes precedence if no `guilds` are configured in `nuxt.config.ts`.
-
 ## How It Works
 
 When commands are registered:
 
-1. Commands **without** `@guild` are registered globally via `PUT /applications/{id}/commands`
-2. Commands **with** `@guild` are registered to each configured guild via `PUT /applications/{id}/guilds/{guild_id}/commands`
+1. Commands **without** `@guild` are registered globally
+2. Commands with `@guild <id>` are registered to those specific guilds
+3. Commands with bare `@guild` are registered to all configured guilds
+4. Each guild receives only the commands targeting it
 
-If `@guild` commands exist but no guild IDs are configured, a warning is logged.
-
-## Development Workflow
-
-A common pattern is to use `@guild` during development for instant updates, then remove it before publishing:
-
-```ts
-/**
- * My new command (remove @guild before release)
- * @guild
- */
-export default () => 'testing...'
-```
+If bare `@guild` commands exist but no guild IDs are configured, a warning is logged.

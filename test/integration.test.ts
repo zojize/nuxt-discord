@@ -43,10 +43,17 @@ describe('integration', async () => {
       expect(admin.nsfw).toBe(true)
     })
 
-    it('should parse @guild tag', async () => {
+    it('should parse @guild with specific IDs', async () => {
       const { commands } = await $fetch<{ commands: any[] }>('/api/discord/slash-command/all')
       const admin = commands.find((c: any) => c.name === 'admin')
-      expect(admin.guildOnly).toBe(true)
+      expect(admin.guilds).toEqual(['111111111111111111', '222222222222222222'])
+    })
+
+    it('should parse inline @name.ja localization', async () => {
+      const { commands } = await $fetch<{ commands: any[] }>('/api/discord/slash-command/all')
+      const admin = commands.find((c: any) => c.name === 'admin')
+      expect(admin.nameLocalizations.ja).toBe('管理者')
+      expect(admin.descriptionLocalizations.ja).toBe('管理者専用コマンド')
     })
 
     it('should parse @defaultMemberPermissions', async () => {

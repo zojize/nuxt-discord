@@ -630,9 +630,9 @@ export class DiscordClient {
     })
   }
 
-  public async registerSlashCommands(guildIds: string[] = []) {
-    const globalCommands = this.#slashCommands.filter(cmd => !cmd.guildOnly)
-    const guildCommands = this.#slashCommands.filter(cmd => cmd.guildOnly)
+  public async registerSlashCommands(configGuildIds: string[] = []) {
+    const globalCommands = this.#slashCommands.filter(cmd => !cmd.guilds)
+    const guildCommands = this.#slashCommands.filter(cmd => cmd.guilds)
 
     const results: RESTPutAPIApplicationCommandsResult = []
 
@@ -645,18 +645,30 @@ export class DiscordClient {
       results.push(...globalResult)
     }
 
-    // Register guild-specific commands to each configured guild
-    if (guildCommands.length > 0 && guildIds.length > 0) {
-      for (const guildId of guildIds) {
-        const guildResult = await this.#registerCommandsToRoute(
-          Routes.applicationGuildCommands(this.#clientId, guildId),
-          guildCommands,
-        )
-        results.push(...guildResult)
+    // Collect all target guild IDs: per-command specific IDs + config-level IDs for `guilds: true`
+    const guildToCommands = new Map<string, SlashCommandRuntime[]>()
+
+    for (const cmd of guildCommands) {
+      const targetIds = cmd.guilds === true ? configGuildIds : cmd.guilds!
+      for (const id of targetIds) {
+        const list = guildToCommands.get(id)
+        if (list)
+          list.push(cmd)
+        else
+          guildToCommands.set(id, [cmd])
       }
     }
-    else if (guildCommands.length > 0 && guildIds.length === 0) {
-      logger.warn(`${guildCommands.length} guild-only command(s) found but no guild IDs configured. Set discord.guilds in nuxt.config or DISCORD_GUILD_ID env var.`)
+
+    if (guildCommands.length > 0 && guildToCommands.size === 0) {
+      logger.warn(`${guildCommands.length} guild command(s) found but no guild IDs configured. Use @guild <id> or set DISCORD_GUILD_ID env var.`)
+    }
+
+    for (const [guildId, cmds] of guildToCommands) {
+      const guildResult = await this.#registerCommandsToRoute(
+        Routes.applicationGuildCommands(this.#clientId, guildId),
+        cmds,
+      )
+      results.push(...guildResult)
     }
 
     // nullify the cache to force a refresh on next diff

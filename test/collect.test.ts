@@ -196,7 +196,7 @@ export default () => {
       expect(command!.defaultMemberPermissions).toBe('8')
     })
 
-    it('should parse @guild tag', () => {
+    it('should parse bare @guild tag as true', () => {
       const file = writeCommand(commandsDir, 'guildcmd.ts', `
 /**
  * @description Guild-only command
@@ -208,10 +208,37 @@ export default () => {
 `)
       const command = processCommandFile(ctx, file)
       expect(command).toBeDefined()
-      expect(command!.guildOnly).toBe(true)
+      expect(command!.guilds).toBe(true)
     })
 
-    it('should not set guildOnly when @guild tag is absent', () => {
+    it('should parse @guild with specific ID', () => {
+      const file = writeCommand(commandsDir, 'specific.ts', `
+/**
+ * @description Specific guild command
+ * @guild 123456789012345678
+ */
+export default () => 'ok'
+`)
+      const command = processCommandFile(ctx, file)
+      expect(command).toBeDefined()
+      expect(command!.guilds).toEqual(['123456789012345678'])
+    })
+
+    it('should parse multiple @guild tags as array of IDs', () => {
+      const file = writeCommand(commandsDir, 'multi.ts', `
+/**
+ * @description Multi-guild command
+ * @guild 111111111111111111
+ * @guild 222222222222222222
+ */
+export default () => 'ok'
+`)
+      const command = processCommandFile(ctx, file)
+      expect(command).toBeDefined()
+      expect(command!.guilds).toEqual(['111111111111111111', '222222222222222222'])
+    })
+
+    it('should not set guilds when @guild tag is absent', () => {
       const file = writeCommand(commandsDir, 'globalcmd.ts', `
 /**
  * @description Global command
@@ -222,7 +249,36 @@ export default () => {
 `)
       const command = processCommandFile(ctx, file)
       expect(command).toBeDefined()
-      expect(command!.guildOnly).toBeUndefined()
+      expect(command!.guilds).toBeUndefined()
+    })
+
+    it('should parse inline @name.ja localization', () => {
+      const file = writeCommand(commandsDir, 'i18ncmd.ts', `
+/**
+ * A command
+ * @name.ja ピング
+ * @description.ja ポンと返す
+ * @description.fr Renvoie pong
+ */
+export default () => 'pong'
+`)
+      const command = processCommandFile(ctx, file)
+      expect(command).toBeDefined()
+      expect(command!.nameLocalizations).toEqual({ ja: 'ピング' })
+      expect(command!.descriptionLocalizations).toEqual({ ja: 'ポンと返す', fr: 'Renvoie pong' })
+    })
+
+    it('should warn on invalid inline locale', () => {
+      const file = writeCommand(commandsDir, 'badlocale.ts', `
+/**
+ * @description.xx Bad locale
+ */
+export default () => 'ok'
+`)
+      processCommandFile(ctx, file)
+      expect(ctx.logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Unknown locale "xx"'),
+      )
     })
 
     it('should parse string parameters', () => {

@@ -134,33 +134,43 @@ export default () => {
 | Tag | Effect |
 |---|---|
 | `@nsfw` | Mark as age-restricted |
-| `@guild` | Register to guilds only (instant updates) |
+| `@guild` | Register to all configured guilds (instant updates) |
+| `@guild <id>` | Register to a specific guild by ID |
 | `@dm false` | Disable in DMs |
 | `@defaultMemberPermissions <bits>` | Require permissions (e.g. `8` = Administrator) |
+| `@name.<locale> <text>` | Inline localized name (e.g. `@name.ja ピング`) |
+| `@description.<locale> <text>` | Inline localized description |
 
 ### Guild Commands
 
-Commands tagged with `@guild` register to specific guilds instead of globally. Guild commands update instantly (vs up to 1 hour for global).
-
-Configure guild IDs via environment variable:
-
-```bash
-DISCORD_GUILD_ID=123456789,987654321
-```
-
-Or in `nuxt.config.ts`:
-
 ```ts
-export default defineNuxtConfig({
-  discord: {
-    guilds: ['123456789', '987654321'],
-  },
-})
+/** @guild */ // all configured guilds
+/** @guild 123456789012345678 */ // specific guild
+/**
+ * @guild 111111111111111111
+ * @guild 222222222222222222
+ */ // multiple guilds
 ```
+
+For bare `@guild`, configure target guilds via `DISCORD_GUILD_ID` env var or `discord.guilds` in nuxt.config.
 
 ## Localization
 
-Create JSON files in `discord/locales/` named after Discord locale codes:
+### Inline JSDoc
+
+```ts
+/**
+ * A ping command
+ * @name.ja ピング
+ * @description.ja ポンと返すコマンド
+ * @description.fr Renvoie pong
+ */
+export default () => 'pong!'
+```
+
+### JSON Locale Files
+
+Create files in `discord/locales/` named after Discord locale codes:
 
 ```json
 // discord/locales/ja.json
@@ -172,14 +182,13 @@ Create JSON files in `discord/locales/` named after Discord locale codes:
   "add": {
     "description": "2つの数を足す",
     "options": {
-      "a": { "description": "最初の数" },
-      "b": { "description": "2番目の数" }
+      "a": { "description": "最初の数" }
     }
   }
 }
 ```
 
-Valid locale codes: `ja`, `zh-CN`, `zh-TW`, `ko`, `fr`, `de`, `es-ES`, `pt-BR`, `ru`, `uk`, `pl`, `nl`, `it`, `sv-SE`, `no`, `da`, `fi`, `hu`, `cs`, `ro`, `el`, `bg`, `th`, `vi`, `hi`, `tr`, `id`, `en-US`, `en-GB`, and [more](https://discord.com/developers/docs/reference#locales).
+Inline JSDoc tags take precedence over JSON files. Both can coexist.
 
 ## Response Types
 

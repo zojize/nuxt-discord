@@ -11,6 +11,9 @@ function isOptionTypeIdentifier(s: string): s is SlashCommandOptionTypeIdentifie
   return s in typeIdentifierToEnum
 }
 
+const validLocales: Set<string> = new Set(Object.values(Locale))
+const LOCALE_TAG_RE = /^\.([a-z]{2}(?:-[A-Z]{2})?)\s(.+)$/s
+
 const modifiersMap: Record<SlashCommandOptionTypeIdentifier, string[]> = {
   string: ['minLength', 'maxLength', 'choices'],
   number: ['min', 'max', 'choices'],
@@ -52,8 +55,6 @@ function applyLocalizations(ctx: NuxtDiscordContext) {
 
   if (localeFiles.length === 0)
     return
-
-  const validLocales: Set<string> = new Set(Object.values(Locale))
 
   for (const localeFile of localeFiles) {
     const localeName = path.parse(localeFile).name
@@ -136,8 +137,9 @@ export function processCommandFile(ctx: NuxtDiscordContext, file: string): Slash
 
   const jsDocComment = getJSDocComment(commandDefinition)
   const jsDocTags = getJSDocTags(commandDefinition)
-  const nameTag = jsDocTags.find(tag => tag.tagName.escapedText === 'name')
-  const descriptionTag = jsDocTags.find(tag => tag.tagName.escapedText === 'description')
+  const isBaseTag = (tag: ts.JSDocTag) => !tag.comment?.toString().startsWith('.')
+  const nameTag = jsDocTags.find(tag => tag.tagName.escapedText === 'name' && isBaseTag(tag))
+  const descriptionTag = jsDocTags.find(tag => tag.tagName.escapedText === 'description' && isBaseTag(tag))
 
   command.name = nameTag?.comment?.toString() ?? command.name
   // @description tag takes priority, then JSDoc body text
@@ -163,9 +165,36 @@ export function processCommandFile(ctx: NuxtDiscordContext, file: string): Slash
     command.defaultMemberPermissions = permissionsTag.comment.toString().trim()
   }
 
-  const guildTag = jsDocTags.find(tag => tag.tagName.escapedText === 'guild')
-  if (guildTag) {
-    command.guildOnly = true
+  // @guild (all configured guilds) or @guild <id> (specific guild)
+  const guildTags = jsDocTags.filter(tag => tag.tagName.escapedText === 'guild')
+  if (guildTags.length > 0) {
+    const specificIds = guildTags
+      .map(tag => tag.comment?.toString().trim())
+      .filter((id): id is string => !!id && id.length > 0)
+    command.guilds = specificIds.length > 0 ? specificIds : true
+  }
+
+  // Inline localization: @name.ja ピング, @description.fr Ping le bot
+  for (const tag of jsDocTags) {
+    const tagName = tag.tagName.escapedText as string
+    const comment = tag.comment?.toString()
+    if (!comment)
+      continue
+
+    if (tagName === 'name' || tagName === 'description') {
+      // Check if comment starts with a locale code: ".ja text" or ".zh-CN text"
+      const localeMatch = comment.match(LOCALE_TAG_RE)
+      if (localeMatch) {
+        const [, locale, value] = localeMatch
+        if (!validLocales.has(locale!)) {
+          ctx.logger.warn(`Unknown locale "${locale}" in @${tagName}.${locale} for ${file}`)
+          continue
+        }
+        const key = tagName === 'name' ? 'nameLocalizations' : 'descriptionLocalizations'
+        command[key] ??= {}
+        command[key]![locale as Locale] = value!.trim()
+      }
+    }
   }
 
   if (!commandDefinition.body) {
