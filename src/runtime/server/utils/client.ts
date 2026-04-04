@@ -1,9 +1,10 @@
 import type { APIApplicationCommandOption, AutocompleteInteraction, ChatInputCommandInteraction, CommandInteraction, Interaction, RESTGetAPIApplicationCommandsResult, RESTPutAPIApplicationCommandsResult } from 'discord.js'
 import type { EffectScope } from 'vue'
 import type { NuxtDiscordOptions, SlashCommandOption, SlashCommandOptionType, SlashCommandReturnType, SlashCommandRuntime, SlashCommandSubcommandGroupRuntime, SlashCommandSubcommandRuntime } from '../../../types'
+import type { ContextMenuDefinition } from './defineContextMenu'
 import type { ListenerDefinition } from './defineListener'
 import process from 'node:process'
-import { ApplicationCommandOptionType, Events, Client as InternalClient, REST, Routes, SlashCommandBuilder, SlashCommandSubcommandBuilder, SlashCommandSubcommandGroupBuilder } from 'discord.js'
+import { ApplicationCommandOptionType, ApplicationCommandType, ContextMenuCommandBuilder, Events, Client as InternalClient, MessageFlags, REST, Routes, SlashCommandBuilder, SlashCommandSubcommandBuilder, SlashCommandSubcommandGroupBuilder } from 'discord.js'
 import { useNitroApp } from 'nitropack/runtime'
 import { effectScope, isRef } from 'vue'
 import { logger } from '../../logger'
@@ -57,7 +58,8 @@ export class DiscordClient {
   }
 
   #slashCommands: SlashCommandRuntime[] = []
-  #nitro = useNitroApp()
+  #contextMenus: (ContextMenuDefinition & { name: string })[] = []
+  #nitro: { hooks: { callHook: (name: string, ...args: any[]) => Promise<void>, hook: (name: string, fn: (...args: any[]) => any) => void } } = useNitroApp() as any
   #token: string
   #clientId: string
   #rest: REST
@@ -75,7 +77,7 @@ export class DiscordClient {
     this.#clientId = process.env.DISCORD_CLIENT_ID
 
     // default print errors to console
-    this.#nitro.hooks.hook('discord:client:error', (error) => {
+    this.#nitro.hooks.hook('discord:client:error', (error: unknown) => {
       logger.error(error)
     })
   }
@@ -128,8 +130,19 @@ export class DiscordClient {
     }
   }
 
+  public addContextMenus(menus: (ContextMenuDefinition & { name: string })[]) {
+    this.#contextMenus.push(...menus)
+  }
+
+  public getContextMenus() {
+    return this.#contextMenus
+  }
+
   async #handleInteraction(interaction: Interaction) {
-    // TODO: support middleware
+    if (interaction.isUserContextMenuCommand() || interaction.isMessageContextMenuCommand()) {
+      await this.#handleContextMenu(interaction)
+      return
+    }
     if (!interaction.isAutocomplete() && !interaction.isChatInputCommand()) {
       return
     }
@@ -207,6 +220,23 @@ export class DiscordClient {
     }
     else if (interaction.isChatInputCommand()) {
       await this.#handleSlashCommand(interaction, command)
+    }
+  }
+
+  async #handleContextMenu(interaction: import('discord.js').UserContextMenuCommandInteraction | import('discord.js').MessageContextMenuCommandInteraction): Promise<void> {
+    const menu = this.#contextMenus.find(m => m.name === interaction.commandName)
+    if (!menu) {
+      logger.warn(`Unknown context menu command: ${interaction.commandName}`)
+      return
+    }
+    try {
+      await menu.execute(interaction)
+    }
+    catch (error) {
+      logger.error(`Context menu error [${interaction.commandName}]:`, error)
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({ content: 'An error occurred.', flags: MessageFlags.Ephemeral }).catch(() => {})
+      }
     }
   }
 
@@ -564,7 +594,10 @@ export class DiscordClient {
       await this.getRemoteSlashCommands()
     }
 
-    const remoteCommands = this.#cachedRemoteSlashCommands!
+    // Filter out context menu commands — they're managed separately
+    const remoteCommands = this.#cachedRemoteSlashCommands!.filter(
+      cmd => cmd.type === undefined || cmd.type === ApplicationCommandType.ChatInput,
+    )
     const flattenedRemoteCommands = remoteCommands.flatMap((cmd) => {
       const subcommands = cmd.options?.flatMap((option) => {
         const name = `${cmd.name} ${option.name}`
@@ -663,11 +696,20 @@ export class DiscordClient {
 
     const results: RESTPutAPIApplicationCommandsResult = []
 
-    // Register global commands
-    if (globalCommands.length > 0) {
+    // Build context menu JSON for registration
+    const contextMenuJsons = this.#contextMenus.map((menu) => {
+      const builder = new ContextMenuCommandBuilder()
+        .setName(menu.name)
+        .setType(menu.type === 'user' ? ApplicationCommandType.User : ApplicationCommandType.Message)
+      return builder.toJSON()
+    })
+
+    // Register global commands + context menus
+    if (globalCommands.length > 0 || contextMenuJsons.length > 0) {
       const globalResult = await this.#registerCommandsToRoute(
         Routes.applicationCommands(this.#clientId),
         globalCommands,
+        contextMenuJsons,
       )
       results.push(...globalResult)
     }
@@ -704,12 +746,13 @@ export class DiscordClient {
     return results
   }
 
-  async #registerCommandsToRoute(route: `/${string}`, commands: SlashCommandRuntime[]) {
+  async #registerCommandsToRoute(route: `/${string}`, commands: SlashCommandRuntime[], extraPayloads: unknown[] = []) {
     try {
-      const result = await this.#rest.put(
-        route,
-        { body: commands.map(command => this.#getSlashCommandBuilder(command).toJSON()) },
-      ) as RESTPutAPIApplicationCommandsResult
+      const body = [
+        ...commands.map(command => this.#getSlashCommandBuilder(command).toJSON()),
+        ...extraPayloads,
+      ]
+      const result = await this.#rest.put(route, { body }) as RESTPutAPIApplicationCommandsResult
 
       result.forEach((command, i) => {
         const localCommand = commands[i]

@@ -14,6 +14,27 @@ export function prepareTemplates(ctx: NuxtDiscordContext) {
     getContents: () => getSlashCommandTemplateContent(ctx, /* commandRuntime */ false),
   })
 
+  // Context menu template (server-only)
+  addServerTemplate({
+    filename: 'discord/contextMenus',
+    getContents: () => {
+      if (ctx.contextMenus.length === 0) {
+        return 'export default []'
+      }
+      const entries = ctx.contextMenus.map((cm, i) => {
+        const varName = `cm_${i}`
+        return {
+          importLine: `import ${varName} from '${cm.path}'`,
+          entry: `{ ...${varName}, name: ${JSON.stringify(cm.name)}, path: ${JSON.stringify(cm.path)} }`,
+        }
+      })
+      return [
+        ...entries.map(e => e.importLine),
+        `export default [${entries.map(e => e.entry).join(', ')}]`,
+      ].join('\n')
+    },
+  })
+
   // Listener template (server-only)
   addServerTemplate({
     filename: 'discord/listeners',
@@ -44,6 +65,11 @@ declare module 'discord/slashCommands' {
 declare module '#build/discord/slashCommands' {
   declare const slashCommands: import('nuxt-discord').SlashCommand[]
   export default slashCommands
+}
+
+declare module 'discord/contextMenus' {
+  declare const contextMenus: (import('nuxt-discord/types').ContextMenuDefinition & { name: string, path: string })[]
+  export default contextMenus
 }
 
 declare module 'discord/listeners' {

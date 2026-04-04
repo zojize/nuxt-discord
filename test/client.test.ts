@@ -403,6 +403,8 @@ function mockChatInputCommandInteraction(commandName: string, options: Record<st
   const interactionMock = {
     isChatInputCommand: () => true,
     isAutocomplete: () => false,
+    isUserContextMenuCommand: () => false,
+    isMessageContextMenuCommand: () => false,
     commandName,
     options: {
       get: (name: string) => {

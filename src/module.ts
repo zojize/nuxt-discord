@@ -4,6 +4,7 @@ import { GatewayIntentBits } from 'discord.js'
 import { createContext } from './context'
 import { prepareClient } from './utils/client'
 import collectSlashCommands from './utils/collect'
+import collectContextMenus from './utils/collectContextMenus'
 import collectListeners from './utils/collectListeners'
 import { prepareHMR } from './utils/hmr'
 import { prepareRuntimeConfig } from './utils/runtimeConfig'
@@ -52,11 +53,22 @@ export default defineNuxtModule<NuxtDiscordOptions>({
         as: 'defineListener',
         from: ctx.resolve.module('runtime/server/utils/defineListener'),
       },
+      {
+        name: 'defineUserContextMenu',
+        as: 'defineUserContextMenu',
+        from: ctx.resolve.module('runtime/server/utils/defineContextMenu'),
+      },
+      {
+        name: 'defineMessageContextMenu',
+        as: 'defineMessageContextMenu',
+        from: ctx.resolve.module('runtime/server/utils/defineContextMenu'),
+      },
     ])
 
     prepareRuntimeConfig(ctx)
 
     collectSlashCommands(ctx)
+    collectContextMenus(ctx)
     collectListeners(ctx)
 
     prepareTemplates(ctx)

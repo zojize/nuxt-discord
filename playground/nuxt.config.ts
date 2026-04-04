@@ -9,6 +9,9 @@ export default defineNuxtConfig({
   },
   discord: {
     autoStart: true,
+    client: {
+      intents: ['Guilds', 'GuildMessages'],
+    },
     watch: {
       sync: false,
     },

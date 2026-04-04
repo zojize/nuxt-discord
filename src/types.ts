@@ -246,12 +246,26 @@ export interface Listener {
   once?: boolean
 }
 
+export type { ContextMenuDefinition } from './runtime/server/utils/defineContextMenu'
 export type { ListenerDefinition } from './runtime/server/utils/defineListener'
+
+export interface ContextMenu {
+  /** Display name for the context menu */
+  name: string
+  /** 'user' or 'message' */
+  type: 'user' | 'message'
+  /** File path */
+  path: string
+  /** Register to specific guilds */
+  guilds?: true | string[]
+  nameLocalizations?: LocalizationMap
+}
 
 export interface NuxtDiscordContext {
   nuxt: import('nuxt/schema').Nuxt
   options: NuxtDiscordOptions
   slashCommands: SlashCommand[]
+  contextMenus: ContextMenu[]
   listeners: Listener[]
   resolve: {
     root: import('@nuxt/kit').Resolver['resolve']

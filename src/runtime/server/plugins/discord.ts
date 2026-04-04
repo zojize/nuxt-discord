@@ -2,6 +2,7 @@ import type { WatchEvent } from 'nuxt/schema'
 import type { SlashCommand, SlashCommandRuntime } from '../../../types'
 import fs from 'node:fs'
 import process from 'node:process'
+import contextMenus from 'discord/contextMenus'
 import listeners from 'discord/listeners'
 import slashCommands from 'discord/slashCommands'
 import { defineNitroPlugin, useRuntimeConfig } from 'nitropack/runtime'
@@ -23,8 +24,9 @@ export default defineNitroPlugin(async (nitro) => {
   }
   ;(globalThis as any)[Symbol.for('discord-client')] = client
 
-  if ('wsUrl' in (runtimeConfig.public.discord ?? {}) && typeof runtimeConfig.public.discord.wsUrl === 'string') {
-    const socket = new WebSocket(runtimeConfig.public.discord.wsUrl)
+  const publicDiscord = (runtimeConfig.public as any).discord as { wsUrl?: string } | undefined
+  if (publicDiscord?.wsUrl) {
+    const socket = new WebSocket(publicDiscord.wsUrl)
 
     socket.addEventListener('error', (error) => {
       console.error('WebSocket error:', error)
@@ -73,6 +75,7 @@ export default defineNitroPlugin(async (nitro) => {
   }
 
   client.addSlashCommands(slashCommands as SlashCommandRuntime[])
+  client.addContextMenus(contextMenus)
 
   try {
     if (runtimeConfig.discord.sync) {

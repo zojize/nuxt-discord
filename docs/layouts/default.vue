@@ -17,6 +17,8 @@ const navigation = [
       { label: 'Subcommands', to: '/guide/subcommands' },
       { label: 'Guild Commands', to: '/guide/guild-commands' },
       { label: 'Localization', to: '/guide/localization' },
+      { label: 'Event Listeners', to: '/guide/listeners' },
+      { label: 'Context Menus', to: '/guide/context-menus' },
       { label: 'Hooks', to: '/guide/hooks' },
     ],
   },

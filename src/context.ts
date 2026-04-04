@@ -8,6 +8,7 @@ export function createContext(options: NuxtDiscordOptions, nuxt: Nuxt): NuxtDisc
     nuxt,
     options,
     slashCommands: [],
+    contextMenus: [],
     listeners: [],
     resolve: {
       root: createResolver(nuxt.options.rootDir).resolve,

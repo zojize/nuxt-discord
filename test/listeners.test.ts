@@ -10,6 +10,7 @@ function createMockContext(listenersDir: string): NuxtDiscordContext {
     nuxt: {} as any,
     options: { dir: 'discord' } as any,
     slashCommands: [],
+    contextMenus: [],
     listeners: [],
     resolve: {
       root: (...parts: string[]) => path.resolve(listenersDir, '..', '..', ...parts),
