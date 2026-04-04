@@ -4,6 +4,7 @@ import { GatewayIntentBits } from 'discord.js'
 import { createContext } from './context'
 import { prepareClient } from './utils/client'
 import collectSlashCommands from './utils/collect'
+import collectListeners from './utils/collectListeners'
 import { prepareHMR } from './utils/hmr'
 import { prepareRuntimeConfig } from './utils/runtimeConfig'
 import { prepareTemplates } from './utils/templates'
@@ -40,15 +41,23 @@ export default defineNuxtModule<NuxtDiscordOptions>({
 
     addServerScanDir(ctx.resolve.module('runtime/server'))
     // this prevents not found errors in the client
-    addImports([{
-      name: 'defineSlashCommand',
-      as: 'defineSlashCommand',
-      from: ctx.resolve.module('runtime/server/utils/defineSlashCommand'),
-    }])
+    addImports([
+      {
+        name: 'defineSlashCommand',
+        as: 'defineSlashCommand',
+        from: ctx.resolve.module('runtime/server/utils/defineSlashCommand'),
+      },
+      {
+        name: 'defineListener',
+        as: 'defineListener',
+        from: ctx.resolve.module('runtime/server/utils/defineListener'),
+      },
+    ])
 
     prepareRuntimeConfig(ctx)
 
     collectSlashCommands(ctx)
+    collectListeners(ctx)
 
     prepareTemplates(ctx)
 

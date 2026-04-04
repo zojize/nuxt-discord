@@ -1,6 +1,7 @@
 import type { APIApplicationCommandOption, AutocompleteInteraction, ChatInputCommandInteraction, CommandInteraction, Interaction, RESTGetAPIApplicationCommandsResult, RESTPutAPIApplicationCommandsResult } from 'discord.js'
 import type { EffectScope } from 'vue'
 import type { NuxtDiscordOptions, SlashCommandOption, SlashCommandOptionType, SlashCommandReturnType, SlashCommandRuntime, SlashCommandSubcommandGroupRuntime, SlashCommandSubcommandRuntime } from '../../../types'
+import type { ListenerDefinition } from './defineListener'
 import process from 'node:process'
 import { ApplicationCommandOptionType, Events, Client as InternalClient, REST, Routes, SlashCommandBuilder, SlashCommandSubcommandBuilder, SlashCommandSubcommandGroupBuilder } from 'discord.js'
 import { useNitroApp } from 'nitropack/runtime'
@@ -99,6 +100,32 @@ export class DiscordClient {
     await this.#client.login(this.#token)
 
     return promise
+  }
+
+  public registerListeners(listeners: ListenerDefinition[]) {
+    if (!this.#client) {
+      logger.warn('Cannot register listeners before client is started')
+      return
+    }
+    for (const listener of listeners) {
+      const handler = async (...args: unknown[]) => {
+        try {
+          await (listener.execute as (...a: unknown[]) => void | Promise<void>)(...args)
+        }
+        catch (error) {
+          logger.error(`Listener error [${listener.event}]:`, error)
+        }
+      }
+      if (listener.once) {
+        this.#client.once(listener.event, handler)
+      }
+      else {
+        this.#client.on(listener.event, handler)
+      }
+    }
+    if (listeners.length > 0) {
+      logger.log(`Registered ${listeners.length} event listener(s)`)
+    }
   }
 
   async #handleInteraction(interaction: Interaction) {

@@ -14,6 +14,24 @@ export function prepareTemplates(ctx: NuxtDiscordContext) {
     getContents: () => getSlashCommandTemplateContent(ctx, /* commandRuntime */ false),
   })
 
+  // Listener template (server-only)
+  addServerTemplate({
+    filename: 'discord/listeners',
+    getContents: () => {
+      if (ctx.listeners.length === 0) {
+        return 'export default []'
+      }
+      const imports = ctx.listeners.map((l, i) => {
+        const name = `listener_${i}`
+        return { name, code: `import ${name} from '${l.path}'` }
+      })
+      return [
+        ...imports.map(i => i.code),
+        `export default [${imports.map(i => i.name).join(', ')}]`,
+      ].join('\n')
+    },
+  })
+
   const typesTemplateDst = addTypeTemplate({
     filename: 'discord/types.d.ts',
     // proposal-string-dedent when?
@@ -26,6 +44,11 @@ declare module 'discord/slashCommands' {
 declare module '#build/discord/slashCommands' {
   declare const slashCommands: import('nuxt-discord').SlashCommand[]
   export default slashCommands
+}
+
+declare module 'discord/listeners' {
+  declare const listeners: import('nuxt-discord/types').ListenerDefinition[]
+  export default listeners
 }
 
 type integer = import('nuxt-discord').integer

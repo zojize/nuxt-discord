@@ -237,10 +237,22 @@ export interface SlashCommandSubcommandRuntime extends Omit<SlashCommandRuntime,
   subcommands?: []
 }
 
+export interface Listener {
+  /** File path */
+  path: string
+  /** Discord event name (e.g. 'guildMemberAdd') */
+  event: string
+  /** Whether this listener fires only once */
+  once?: boolean
+}
+
+export type { ListenerDefinition } from './runtime/server/utils/defineListener'
+
 export interface NuxtDiscordContext {
   nuxt: import('nuxt/schema').Nuxt
   options: NuxtDiscordOptions
   slashCommands: SlashCommand[]
+  listeners: Listener[]
   resolve: {
     root: import('@nuxt/kit').Resolver['resolve']
     module: import('@nuxt/kit').Resolver['resolve']

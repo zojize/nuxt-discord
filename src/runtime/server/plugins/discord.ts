@@ -2,6 +2,7 @@ import type { WatchEvent } from 'nuxt/schema'
 import type { SlashCommand, SlashCommandRuntime } from '../../../types'
 import fs from 'node:fs'
 import process from 'node:process'
+import listeners from 'discord/listeners'
 import slashCommands from 'discord/slashCommands'
 import { defineNitroPlugin, useRuntimeConfig } from 'nitropack/runtime'
 import { logger } from '../../logger'
@@ -85,6 +86,7 @@ export default defineNitroPlugin(async (nitro) => {
 
     if (runtimeConfig.discord.autoStart) {
       await client.start(runtimeConfig.discord.client)
+      client.registerListeners(listeners)
     }
   }
   catch (error) {

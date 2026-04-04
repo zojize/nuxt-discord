@@ -11,6 +11,7 @@ function createMockContext(commandsDir: string): NuxtDiscordContext {
     nuxt: {} as any,
     options: { dir: 'discord' } as any,
     slashCommands: [],
+    listeners: [],
     resolve: {
       root: (...parts: string[]) => path.resolve(commandsDir, '..', '..', ...parts),
       module: vi.fn() as any,
