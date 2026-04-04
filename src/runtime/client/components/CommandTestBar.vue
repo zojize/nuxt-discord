@@ -324,7 +324,7 @@ watch(rawInput, () => {
     </div>
 
     <!-- Main input area -->
-    <div class="border-t border-default bg-elevated px-0 pb-6 pt-0">
+    <div class="border-t border-default bg-elevated px-0 py-4">
       <div class="mx-auto max-w-6xl px-4">
         <div class="flex min-h-11 items-center rounded-lg bg-accented px-4">
           <!-- Idle: raw text input -->

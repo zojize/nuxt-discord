@@ -222,11 +222,27 @@ async function generateDynamicCommandBuild(file: string, config: RollupConfig, c
         config.plugins,
         {
           name: 'discord:resolve-alias-and-externalize',
-          resolveId: (id) => {
-            // externalize all modules except the command file itself, excluding .ts files
-            if (!id.includes(file) && !id.endsWith('.ts')) {
-              return { id: resolveAlias(id), external: true }
+          resolveId: (id, importer) => {
+            // Let the command file itself through
+            if (id.includes(file)) {
+              return null
             }
+            // Resolve relative imports — if they're local project files, bundle inline
+            if (id.startsWith('.') && importer) {
+              const resolved = path.resolve(path.dirname(importer), id)
+              if (!resolved.includes('node_modules')) {
+                // Try to find the actual file (could be .ts, .js, or extensionless)
+                for (const ext of ['', '.ts', '.js', '.mjs']) {
+                  const candidate = resolved + ext
+                  if (fs.existsSync(candidate)) {
+                    return candidate
+                  }
+                }
+                return null
+              }
+            }
+            // Externalize npm deps, built-in modules, etc.
+            return { id: resolveAlias(id), external: true }
           },
         },
       ],
