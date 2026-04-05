@@ -155,7 +155,7 @@ function constraintBadges(option: SlashCommandOption) {
   <div class="bg-default min-h-screen">
     <TheHeader />
 
-    <main class="mx-auto px-6 py-8 pb-28 max-w-6xl">
+    <main class="mx-auto px-6 py-8 pb-24 max-w-6xl">
       <!-- Title bar -->
       <div class="mb-8 flex items-start justify-between">
         <div>

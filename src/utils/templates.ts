@@ -14,7 +14,7 @@ export function prepareTemplates(ctx: NuxtDiscordContext) {
     getContents: () => getSlashCommandTemplateContent(ctx, /* commandRuntime */ false),
   })
 
-  // Context menu template (server-only)
+  // Context menu template (server — includes handlers)
   addServerTemplate({
     filename: 'discord/contextMenus',
     getContents: () => {
@@ -35,7 +35,19 @@ export function prepareTemplates(ctx: NuxtDiscordContext) {
     },
   })
 
-  // Listener template (server-only)
+  // Context menu template (client — metadata only)
+  addTemplate({
+    filename: 'discord/contextMenus',
+    getContents: () => {
+      return `export default ${JSON.stringify(ctx.contextMenus.map(cm => ({
+        name: cm.name,
+        type: cm.type,
+        path: cm.path,
+      })))}`
+    },
+  })
+
+  // Listener template (server — includes handlers)
   addServerTemplate({
     filename: 'discord/listeners',
     getContents: () => {
@@ -53,6 +65,18 @@ export function prepareTemplates(ctx: NuxtDiscordContext) {
     },
   })
 
+  // Listener template (client — metadata only)
+  addTemplate({
+    filename: 'discord/listeners',
+    getContents: () => {
+      return `export default ${JSON.stringify(ctx.listeners.map(l => ({
+        event: l.event,
+        once: l.once ?? false,
+        path: l.path,
+      })))}`
+    },
+  })
+
   const typesTemplateDst = addTypeTemplate({
     filename: 'discord/types.d.ts',
     // proposal-string-dedent when?
@@ -65,6 +89,16 @@ declare module 'discord/slashCommands' {
 declare module '#build/discord/slashCommands' {
   declare const slashCommands: import('nuxt-discord').SlashCommand[]
   export default slashCommands
+}
+
+declare module '#build/discord/contextMenus' {
+  declare const contextMenus: import('nuxt-discord').ContextMenu[]
+  export default contextMenus
+}
+
+declare module '#build/discord/listeners' {
+  declare const listeners: import('nuxt-discord').Listener[]
+  export default listeners
 }
 
 declare module 'discord/contextMenus' {
