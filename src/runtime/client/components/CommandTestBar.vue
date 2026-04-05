@@ -18,6 +18,7 @@ const optionInputRefs = ref<Record<string, HTMLInputElement>>({})
 const responses = ref<{ command: string, ok: boolean, text: string, time: number }[]>([])
 const showChoices = ref(false)
 const choiceIndex = ref(0)
+const fillingEl = ref<HTMLDivElement>()
 
 const allCommands = computed(() => {
   const result: typeof props.commands = []
@@ -74,15 +75,18 @@ function selectCommand(cmd: typeof allCommands.value[number]) {
   phase.value = 'filling'
   rawInput.value = ''
   showChoices.value = false
-  if (cmd.options.length > 0) {
-    nextTick(() => {
+  nextTick(() => {
+    if (cmd.options.length > 0) {
       const first = cmd.options[0]
       if (first) {
         optionInputRefs.value[first.name]?.focus()
         showChoices.value = !!first.choices?.length
       }
-    })
-  }
+    }
+    else {
+      fillingEl.value?.focus()
+    }
+  })
 }
 
 function cancelCommand() {
@@ -260,10 +264,10 @@ watch(rawInput, () => {
 </script>
 
 <template>
-  <div class="fixed inset-x-0 bottom-0 z-40" style="font-family: 'gg sans', 'Noto Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;">
-    <!-- Response log -->
-    <div v-if="responses.length > 0" class="mx-auto max-w-6xl px-4">
-      <div class="mb-2 max-h-56 overflow-y-auto rounded-lg border border-default bg-elevated shadow-xl">
+  <div class="fixed inset-x-0 bottom-0 z-40 pb-5 pointer-events-none">
+    <div class="mx-auto max-w-3xl px-6 pointer-events-auto">
+      <!-- Response log -->
+      <div v-if="responses.length > 0" class="mb-2 max-h-48 overflow-y-auto rounded-lg border border-default bg-default shadow-lg">
         <div class="flex items-center justify-between border-b border-default px-4 py-1.5">
           <span class="text-xs font-medium text-muted">Test Output</span>
           <button class="cursor-pointer text-xs text-muted hover:text-highlighted" @click="responses = []">
@@ -280,18 +284,16 @@ watch(rawInput, () => {
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Description bar / Choice autocomplete -->
-    <div v-if="phase === 'filling' && (focusedOption || showChoices)" class="border-t border-default bg-elevated">
-      <div class="mx-auto max-w-6xl px-4">
+      <!-- Choice autocomplete / option description (above input) -->
+      <div v-if="phase === 'filling' && (focusedOption || showChoices)" class="mb-1 rounded-lg border border-default bg-default shadow-lg">
         <!-- Choices dropdown -->
-        <div v-if="showChoices && filteredChoices.length > 0" class="py-1">
+        <div v-if="showChoices && filteredChoices.length > 0" class="py-1 px-1">
           <button
             v-for="(c, i) in filteredChoices"
             :key="String(c.value)"
-            class="flex w-full cursor-pointer items-center rounded px-3 py-1 text-left text-sm transition-colors"
-            :class="i === choiceIndex ? 'bg-accented text-highlighted' : 'text-muted hover:bg-muted'"
+            class="flex w-full cursor-pointer items-center rounded-md px-3 py-1.5 text-left text-sm transition-colors"
+            :class="i === choiceIndex ? 'bg-elevated text-highlighted' : 'text-muted hover:bg-elevated/50'"
             @mousedown.prevent="selectChoice(String(c.value))"
             @mouseenter="choiceIndex = i"
           >
@@ -299,99 +301,108 @@ watch(rawInput, () => {
           </button>
         </div>
         <!-- Option description -->
-        <div v-else-if="focusedOption" class="flex items-center gap-2 py-2">
+        <div v-else-if="focusedOption" class="flex items-center gap-2 px-4 py-2">
           <span class="text-sm font-semibold text-highlighted">{{ focusedOption.name }}</span>
           <span class="text-xs text-muted">{{ focusedOption.description || `Enter a ${typeLabels[focusedOption.type] ?? 'value'}` }}</span>
         </div>
       </div>
-    </div>
 
-    <!-- Autocomplete popup -->
-    <div v-if="phase === 'suggesting' && suggestions.length > 0" class="rounded-t-lg border-t border-default bg-elevated shadow-xl">
-      <div class="mx-auto max-w-6xl px-4 py-1">
-        <button
-          v-for="(s, i) in suggestions"
-          :key="s.name"
-          class="flex w-full cursor-pointer items-center gap-3 rounded px-3 py-1.5 text-left transition-colors"
-          :class="i === selectedIndex ? 'bg-accented' : 'hover:bg-muted'"
-          @mousedown.prevent="selectCommand(s)"
-          @mouseenter="selectedIndex = i"
-        >
-          <code class="text-sm font-semibold text-highlighted">/{{ s.name }}</code>
-          <span class="truncate text-xs text-muted">{{ s.description }}</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Main input area -->
-    <div class="border-t border-default bg-elevated px-0 py-4">
-      <div class="mx-auto max-w-6xl px-4">
-        <div class="flex min-h-11 items-center rounded-lg bg-accented px-4">
-          <!-- Idle: raw text input -->
-          <div v-if="phase !== 'filling'" class="flex flex-1 items-center gap-1 py-1.5">
-            <span class="select-none text-base font-semibold text-muted">/</span>
-            <input
-              ref="inputEl"
-              v-model="rawInput"
-              type="text"
-              class="flex-1 border-none bg-transparent text-base text-highlighted outline-none placeholder:text-dimmed"
-              placeholder="Type a command..."
-              autocomplete="off"
-              @input="onRawInput"
-              @keydown="onRawKeydown"
-              @focus="onRawInput"
-              @blur="onRawBlur"
-            >
-          </div>
-
-          <!-- Filling: inline pills -->
-          <div
-            v-else
-            class="flex flex-1 cursor-text flex-wrap items-center gap-1 py-1.5"
-            @click="() => { const o = activeCommand?.options[focusedOptionIndex]; if (o) { optionInputRefs[o.name]?.focus() } }"
+      <!-- Autocomplete popup (above input) -->
+      <div v-if="phase === 'suggesting' && suggestions.length > 0" class="mb-1 rounded-lg border border-default bg-default shadow-lg">
+        <div class="py-1 px-1">
+          <button
+            v-for="(s, i) in suggestions"
+            :key="s.name"
+            class="flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-1.5 text-left transition-colors"
+            :class="i === selectedIndex ? 'bg-elevated' : 'hover:bg-elevated/50'"
+            @mousedown.prevent="selectCommand(s)"
+            @mouseenter="selectedIndex = i"
           >
-            <span class="text-base font-semibold text-highlighted">/{{ activeCommand!.name }}</span>
-
-            <template v-for="(opt, idx) in activeCommand!.options" :key="opt.name">
-              <span
-                class="inline-flex h-6 items-stretch overflow-hidden rounded"
-                :class="focusedOptionIndex === idx
-                  ? 'ring-1 ring-primary'
-                  : ''"
-                style="background: var(--ui-bg-muted);"
-              >
-                <span
-                  class="flex select-none items-center px-2 text-xs"
-                  :class="focusedOptionIndex === idx ? 'text-primary font-medium' : 'text-muted'"
-                  style="background: var(--ui-bg-elevated);"
-                >{{ opt.name }}</span>
-                <input
-                  :ref="(el) => setOptionRef(opt.name, el)"
-                  :value="optionValues[opt.name] ?? ''"
-                  type="text"
-                  class="h-full min-w-0 border-none bg-transparent px-1.5 text-xs text-highlighted outline-none placeholder:text-dimmed"
-                  :placeholder="typeLabels[opt.type] ?? 'value'"
-                  :style="{ width: `${Math.max(4, (optionValues[opt.name]?.length ?? typeLabels[opt.type]?.length ?? 4) + 1)}ch` }"
-                  @input="(e) => onOptionInput(opt.name, e)"
-                  @focus="() => { focusedOptionIndex = idx; showChoices = !!(opt.choices?.length); choiceIndex = 0 }"
-                  @keydown="(e) => onOptionKeydown(e, idx)"
-                >
-              </span>
-            </template>
-
-            <span v-if="activeCommand!.options.length === 0" class="text-sm text-dimmed">
-              press Enter to run
-            </span>
-          </div>
-
-          <!-- Enter key hint -->
-          <div v-if="phase === 'filling'" class="ml-2 flex shrink-0 items-center gap-1">
-            <UKbd value="escape" size="sm" />
-            <UKbd size="sm" class="cursor-pointer" @click="executeCommand">
-              Enter ↵
-            </UKbd>
-          </div>
+            <code class="text-sm font-semibold text-highlighted">/{{ s.name }}</code>
+            <span class="truncate text-xs text-muted">{{ s.description }}</span>
+          </button>
         </div>
+      </div>
+
+      <!-- Main input -->
+      <div
+        class="flex min-h-11 items-center rounded-lg border bg-default px-4 shadow-sm transition-colors"
+        :class="phase !== 'idle' ? 'border-highlighted' : 'border-default focus-within:border-highlighted'"
+      >
+        <!-- Idle: raw text input -->
+        <div v-if="phase !== 'filling'" class="flex flex-1 items-center gap-1 py-2">
+          <span class="select-none text-base font-semibold text-muted">/</span>
+          <input
+            ref="inputEl"
+            v-model="rawInput"
+            type="text"
+            class="flex-1 border-none bg-transparent text-base text-highlighted outline-none placeholder:text-dimmed"
+            placeholder="Type a command..."
+            autocomplete="off"
+            @input="onRawInput"
+            @keydown="onRawKeydown"
+            @focus="onRawInput"
+            @blur="onRawBlur"
+          >
+        </div>
+
+        <!-- Filling: inline pills -->
+        <div
+          v-else
+          ref="fillingEl"
+          tabindex="0"
+          class="flex flex-1 cursor-text flex-wrap items-center gap-1 py-2 outline-none"
+          @click="() => { const o = activeCommand?.options[focusedOptionIndex]; if (o) { optionInputRefs[o.name]?.focus() } }"
+          @keydown.enter.prevent="executeCommand"
+          @keydown.escape="cancelCommand"
+        >
+          <span class="text-base font-semibold text-highlighted">/{{ activeCommand!.name }}</span>
+
+          <template v-for="(opt, idx) in activeCommand!.options" :key="opt.name">
+            <span
+              class="inline-flex h-6 items-stretch overflow-hidden rounded"
+              :class="focusedOptionIndex === idx
+                ? 'ring-1 ring-primary'
+                : ''"
+              style="background: var(--ui-bg-muted);"
+            >
+              <span
+                class="flex select-none items-center px-2 text-xs"
+                :class="focusedOptionIndex === idx ? 'text-primary font-medium' : 'text-muted'"
+                style="background: var(--ui-bg-elevated);"
+              >{{ opt.name }}</span>
+              <input
+                :ref="(el) => setOptionRef(opt.name, el)"
+                :value="optionValues[opt.name] ?? ''"
+                type="text"
+                class="h-full min-w-0 border-none bg-transparent px-1.5 text-xs text-highlighted outline-none placeholder:text-dimmed"
+                :placeholder="typeLabels[opt.type] ?? 'value'"
+                :style="{ width: `${Math.max(4, (optionValues[opt.name]?.length ?? typeLabels[opt.type]?.length ?? 4) + 1)}ch` }"
+                @input="(e) => onOptionInput(opt.name, e)"
+                @focus="() => { focusedOptionIndex = idx; showChoices = !!(opt.choices?.length); choiceIndex = 0 }"
+                @keydown="(e) => onOptionKeydown(e, idx)"
+              >
+            </span>
+          </template>
+
+          <span v-if="activeCommand!.options.length === 0" class="text-sm text-dimmed">
+            press Enter to run
+          </span>
+        </div>
+
+        <!-- Send button -->
+        <button
+          v-if="phase === 'filling'"
+          class="ml-2 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md transition-colors"
+          :class="pending ? 'text-dimmed' : 'text-muted hover:text-highlighted hover:bg-elevated'"
+          :disabled="pending"
+          title="Run command"
+          @click="executeCommand"
+        >
+          <svg class="size-4" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+          </svg>
+        </button>
       </div>
     </div>
   </div>
