@@ -28,6 +28,14 @@ export default defineNitroPlugin(async (nitro) => {
   if (publicDiscord?.wsUrl) {
     const socket = new WebSocket(publicDiscord.wsUrl)
 
+    // Broadcast activity log entries to dashboard clients
+    client.onActivity((entry) => {
+      try {
+        socket.send(JSON.stringify({ event: 'activity', entry }))
+      }
+      catch { /* ignore */ }
+    })
+
     socket.addEventListener('error', (error) => {
       console.error('WebSocket error:', error)
     })

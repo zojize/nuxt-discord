@@ -26,6 +26,18 @@ export async function prepareClient(ctx: NuxtDiscordContext) {
         file: ctx.resolve.module('./runtime/client/pages/context-menus.vue'),
         mode: 'client',
       },
+      {
+        name: 'discord-listeners',
+        path: '/discord/listeners',
+        file: ctx.resolve.module('./runtime/client/pages/listeners.vue'),
+        mode: 'client',
+      },
+      {
+        name: 'discord-activity',
+        path: '/discord/activity',
+        file: ctx.resolve.module('./runtime/client/pages/activity.vue'),
+        mode: 'client',
+      },
     )
   })
 }

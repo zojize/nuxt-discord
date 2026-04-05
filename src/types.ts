@@ -246,6 +246,7 @@ export interface Listener {
   once?: boolean
 }
 
+export type { ActivityLogEntry } from './runtime/server/utils/client'
 export type { ContextMenuDefinition } from './runtime/server/utils/defineContextMenu'
 export type { ListenerDefinition } from './runtime/server/utils/defineListener'
 

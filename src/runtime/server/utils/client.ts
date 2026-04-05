@@ -46,6 +46,21 @@ export type DiscordClientError
     | SlashCommandExecutionError
     | SlashCommandRegistrationError
 
+export interface ActivityLogEntry {
+  id: number
+  timestamp: number
+  type: 'command' | 'context-menu' | 'autocomplete' | 'error' | 'listener'
+  name: string
+  userId?: string
+  userName?: string
+  guildId?: string
+  guildName?: string
+  channelId?: string
+  duration?: number
+  status: 'ok' | 'error'
+  detail?: string
+}
+
 let currentInteraction: ChatInputCommandInteraction | null = null
 export function useInteraction(): ChatInputCommandInteraction | null {
   return currentInteraction
@@ -59,6 +74,9 @@ export class DiscordClient {
 
   #slashCommands: SlashCommandRuntime[] = []
   #contextMenus: (ContextMenuDefinition & { name: string })[] = []
+  #activityLog: ActivityLogEntry[] = []
+  #activityId = 0
+  #onActivity?: (entry: ActivityLogEntry) => void
   #nitro: { hooks: { callHook: (name: string, ...args: any[]) => Promise<void>, hook: (name: string, fn: (...args: any[]) => any) => void } } = useNitroApp() as any
   #token: string
   #clientId: string
@@ -147,6 +165,8 @@ export class DiscordClient {
       return
     }
 
+    const activityStart = Date.now()
+
     const commandName = interaction.commandName
     let command: SlashCommandRuntime | SlashCommandSubcommandRuntime | undefined
       = this.#slashCommands.find(cmd => cmd.name === commandName)
@@ -220,14 +240,35 @@ export class DiscordClient {
     }
     else if (interaction.isChatInputCommand()) {
       await this.#handleSlashCommand(interaction, command)
+      this.#logActivity({
+        type: 'command',
+        name: `/${commandName}`,
+        status: 'ok',
+        duration: Date.now() - activityStart,
+        userId: interaction.user?.id,
+        userName: interaction.user?.displayName,
+        guildId: interaction.guildId ?? undefined,
+        guildName: interaction.guild?.name,
+        channelId: interaction.channelId,
+      })
     }
   }
 
   async #handleContextMenu(interaction: import('discord.js').UserContextMenuCommandInteraction | import('discord.js').MessageContextMenuCommandInteraction): Promise<void> {
+    const start = Date.now()
     const menu = this.#contextMenus.find(m => m.name === interaction.commandName)
     if (!menu) {
       logger.warn(`Unknown context menu command: ${interaction.commandName}`)
       return
+    }
+    const activityBase = {
+      type: 'context-menu' as const,
+      name: interaction.commandName,
+      userId: interaction.user?.id,
+      userName: interaction.user?.displayName,
+      guildId: interaction.guildId ?? undefined,
+      guildName: interaction.guild?.name,
+      channelId: interaction.channelId,
     }
     try {
       const result: unknown = menu.type === 'user' && interaction.isUserContextMenuCommand()
@@ -242,13 +283,32 @@ export class DiscordClient {
       else if (typeof result === 'string') {
         await (reply(result) as (...args: unknown[]) => unknown)(interaction, this)
       }
+      this.#logActivity({ ...activityBase, status: 'ok', duration: Date.now() - start })
     }
     catch (error) {
       logger.error(`Context menu error [${interaction.commandName}]:`, error)
+      this.#logActivity({ ...activityBase, status: 'error', duration: Date.now() - start, detail: String(error) })
       if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({ content: 'An error occurred.', flags: MessageFlags.Ephemeral }).catch(() => {})
       }
     }
+  }
+
+  #logActivity(entry: Omit<ActivityLogEntry, 'id' | 'timestamp'>): ActivityLogEntry {
+    const full: ActivityLogEntry = { ...entry, id: ++this.#activityId, timestamp: Date.now() }
+    this.#activityLog.push(full)
+    if (this.#activityLog.length > 200)
+      this.#activityLog.shift()
+    this.#onActivity?.(full)
+    return full
+  }
+
+  public onActivity(callback: (entry: ActivityLogEntry) => void) {
+    this.#onActivity = callback
+  }
+
+  public getActivityLog(): ActivityLogEntry[] {
+    return this.#activityLog
   }
 
   public async stop(): Promise<void> {

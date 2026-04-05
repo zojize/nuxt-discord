@@ -105,6 +105,11 @@ export function prepareHMR(ctx: NuxtDiscordContext) {
           catch {
           }
         })
+
+        // Relay activity events from server plugin to all browser clients
+        websocket.on('activity', (_client, message) => {
+          websocket.broadcast(message)
+        })
       })
     }
 

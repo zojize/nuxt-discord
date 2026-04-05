@@ -15,6 +15,8 @@ const nav = [
   { label: 'Overview', to: '/discord' },
   { label: 'Commands', to: '/discord/slash-commands' },
   { label: 'Context Menus', to: '/discord/context-menus' },
+  { label: 'Listeners', to: '/discord/listeners' },
+  { label: 'Activity', to: '/discord/activity' },
 ]
 </script>
 
