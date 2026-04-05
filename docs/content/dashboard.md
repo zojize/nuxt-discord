@@ -4,18 +4,29 @@ title: Web Dashboard
 
 # Web Dashboard
 
-Nuxt Discord includes a built-in web dashboard for managing slash commands. Access it at `/discord/slash-commands` in your application.
+Nuxt Discord includes a built-in web dashboard for managing your bot. Access it at `/discord` in your application.
 
-## Features
+## Pages
 
-The dashboard shows all registered commands with:
+### Overview (`/discord`)
 
-- **Command name and description** — Displayed with monospace formatting
+A dashboard home page showing at a glance:
+
+- **Stat cards** — Counts for slash commands, context menus, and event listeners with sync status
+- **Quick lists** — Commands (top 8), context menus by type, and listeners with event names
+
+### Slash Commands (`/discord/slash-commands`)
+
+Detailed command management with:
+
 - **Option badges** — Type labels (`str`, `num`, `int`, `bool`, `user`, `role`, `@`, `file`), constraints, and autocomplete indicators
 - **Metadata badges** — `nsfw`, `guild`, `no DM`, `restricted` tags
-- **Sync status** — Whether each command matches Discord's registry (synced, added, changed, removed, conflict)
-- **Registration status** — Whether a command has been registered with a Discord ID
-- **File path** — Source file location for quick navigation
+- **Sync status** — Whether each command matches Discord's registry
+- **Command test bar** — A floating input to test commands directly from the browser
+
+### Context Menus (`/discord/context-menus`)
+
+Lists all user and message context menus, grouped by type.
 
 ## Sync Status
 
@@ -37,4 +48,4 @@ During development with HMR enabled, the dashboard updates in real-time as you e
 
 ## Client-Only Rendering
 
-The dashboard page is rendered client-side only (`ssr: false`) to avoid server-side rendering issues with the Nuxt UI components used in the interface.
+All dashboard pages are rendered client-side only (`ssr: false`) to avoid server-side rendering issues with the Nuxt UI components used in the interface.

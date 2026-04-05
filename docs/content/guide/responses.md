@@ -109,11 +109,13 @@ reply.button(label, handler, {
 Return a function for full control over the interaction:
 
 ```ts
+import { MessageFlags } from 'discord.js'
+
 export default () => {
   return function (interaction, client) {
     interaction.reply({
       content: 'Custom response',
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     })
   }
 }
