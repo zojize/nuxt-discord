@@ -1,38 +1,61 @@
 import type { MessageContextMenuCommandInteraction, UserContextMenuCommandInteraction } from 'discord.js'
 
-export interface ContextMenuDefinition {
-  type: 'user' | 'message'
-  execute: (interaction: UserContextMenuCommandInteraction | MessageContextMenuCommandInteraction) => void | Promise<void>
+export type ContextMenuDefinition = {
+  type: 'user'
+  name?: string
+  execute: (interaction: UserContextMenuCommandInteraction) => unknown
+} | {
+  type: 'message'
+  name?: string
+  execute: (interaction: MessageContextMenuCommandInteraction) => unknown
 }
 
 /**
  * Define a user context menu command (right-click on a user).
  *
  * @example
- * // discord/context-menus/userinfo.user.ts
+ * // Name from first argument
+ * export default defineUserContextMenu('User Info', async (interaction) => {
+ *   await interaction.reply(interaction.targetUser.tag)
+ * })
+ *
+ * @example
+ * // Name from @name JSDoc tag or filename
  * export default defineUserContextMenu(async (interaction) => {
- *   const user = interaction.targetUser
- *   await interaction.reply(`User: ${user.tag}`)
+ *   await interaction.reply(interaction.targetUser.tag)
  * })
  */
 export function defineUserContextMenu(
-  execute: (interaction: UserContextMenuCommandInteraction) => void | Promise<void>,
+  nameOrExecute: string | ((interaction: UserContextMenuCommandInteraction) => unknown),
+  execute?: (interaction: UserContextMenuCommandInteraction) => unknown,
 ): ContextMenuDefinition {
-  return { type: 'user', execute: execute as ContextMenuDefinition['execute'] }
+  if (typeof nameOrExecute === 'string') {
+    return { type: 'user', name: nameOrExecute, execute: execute! }
+  }
+  return { type: 'user', execute: nameOrExecute }
 }
 
 /**
  * Define a message context menu command (right-click on a message).
  *
  * @example
- * // discord/context-menus/bookmark.message.ts
+ * // Name from first argument
+ * export default defineMessageContextMenu('Bookmark', async (interaction) => {
+ *   await interaction.reply(interaction.targetMessage.url)
+ * })
+ *
+ * @example
+ * // Name from @name JSDoc tag or filename
  * export default defineMessageContextMenu(async (interaction) => {
- *   const message = interaction.targetMessage
- *   await interaction.reply({ content: `Bookmarked: ${message.url}`, flags: MessageFlags.Ephemeral })
+ *   await interaction.reply(interaction.targetMessage.url)
  * })
  */
 export function defineMessageContextMenu(
-  execute: (interaction: MessageContextMenuCommandInteraction) => void | Promise<void>,
+  nameOrExecute: string | ((interaction: MessageContextMenuCommandInteraction) => unknown),
+  execute?: (interaction: MessageContextMenuCommandInteraction) => unknown,
 ): ContextMenuDefinition {
-  return { type: 'message', execute: execute as ContextMenuDefinition['execute'] }
+  if (typeof nameOrExecute === 'string') {
+    return { type: 'message', name: nameOrExecute, execute: execute! }
+  }
+  return { type: 'message', execute: nameOrExecute }
 }

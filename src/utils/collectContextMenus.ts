@@ -1,10 +1,7 @@
 import type { ContextMenu, NuxtDiscordContext } from '../types'
-import { globSync } from 'node:fs'
+import { globSync, readFileSync } from 'node:fs'
 import path from 'node:path'
-
-const USER_MENU_RE = /\.user\.ts$/
-const MESSAGE_MENU_RE = /\.message\.ts$/
-const CONTEXT_MENU_EXT_RE = /\.(?:user|message)\.ts$/
+import ts from 'typescript'
 
 export default function collectContextMenus(ctx: NuxtDiscordContext) {
   const contextMenuDir = ctx.resolve.root(ctx.options.dir, 'context-menus')
@@ -13,22 +10,92 @@ export default function collectContextMenus(ctx: NuxtDiscordContext) {
   ctx.contextMenus = []
 
   for (const file of allFiles) {
-    if (USER_MENU_RE.test(file)) {
-      ctx.contextMenus.push(parseContextMenuFile(file, 'user'))
-    }
-    else if (MESSAGE_MENU_RE.test(file)) {
-      ctx.contextMenus.push(parseContextMenuFile(file, 'message'))
+    const menu = processContextMenuFile(ctx, file)
+    if (menu) {
+      ctx.contextMenus.push(menu)
     }
   }
 }
 
-function parseContextMenuFile(file: string, type: 'user' | 'message'): ContextMenu {
-  const basename = path.basename(file)
-  const name = basename.replace(CONTEXT_MENU_EXT_RE, '')
+export function processContextMenuFile(ctx: NuxtDiscordContext, file: string): ContextMenu | undefined {
+  const source = readFileSync(file, 'utf-8')
+  const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true)
 
-  return {
-    name,
-    type,
-    path: file,
+  let type: 'user' | 'message' | undefined
+  let nameFromDefine: string | undefined
+
+  // Find defineUserContextMenu or defineMessageContextMenu call
+  ts.forEachChild(sourceFile, (node) => {
+    if (ts.isExportAssignment(node) && ts.isCallExpression(node.expression)) {
+      const call = node.expression
+      if (ts.isIdentifier(call.expression)) {
+        const fnName = call.expression.escapedText as string
+        if (fnName === 'defineUserContextMenu') {
+          type = 'user'
+        }
+        else if (fnName === 'defineMessageContextMenu') {
+          type = 'message'
+        }
+
+        // Check if first arg is a string literal (the name)
+        if (type && call.arguments.length > 0) {
+          const firstArg = call.arguments[0]!
+          if (ts.isStringLiteral(firstArg)) {
+            nameFromDefine = firstArg.text
+          }
+        }
+      }
+    }
+  })
+
+  if (!type) {
+    ctx.logger.warn(`No defineUserContextMenu or defineMessageContextMenu call found in ${file}`)
+    return
   }
+
+  // Name priority: define('Name') > @name JSDoc > filename
+  let name = nameFromDefine
+
+  if (!name) {
+    // Check JSDoc @name tag
+    const jsDocName = getJSDocTag(sourceFile, 'name')
+    if (jsDocName) {
+      name = jsDocName
+    }
+  }
+
+  if (!name) {
+    // Fallback to filename (strip .ts)
+    name = path.basename(file, '.ts')
+  }
+
+  return { name, type, path: file }
+}
+
+function getJSDocTag(sourceFile: ts.SourceFile, tagName: string): string | undefined {
+  let result: string | undefined
+  ts.forEachChild(sourceFile, (node) => {
+    if (ts.isExportAssignment(node)) {
+      const tags = ts.getJSDocTags(node)
+      for (const tag of tags) {
+        if (tag.tagName.escapedText === tagName && tag.comment) {
+          result = tag.comment.toString().trim()
+        }
+      }
+      // Also check parent for JSDoc on arrow functions
+      if (!result) {
+        const comments = ts.getJSDocCommentsAndTags(node)
+        for (const doc of comments) {
+          if (ts.isJSDoc(doc) && doc.tags) {
+            for (const tag of doc.tags) {
+              if (tag.tagName.escapedText === tagName && tag.comment) {
+                result = tag.comment.toString().trim()
+              }
+            }
+          }
+        }
+      }
+    }
+  })
+  return result
 }

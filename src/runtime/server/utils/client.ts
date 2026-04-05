@@ -230,7 +230,18 @@ export class DiscordClient {
       return
     }
     try {
-      await menu.execute(interaction)
+      const result: unknown = menu.type === 'user' && interaction.isUserContextMenuCommand()
+        ? await menu.execute(interaction)
+        : menu.type === 'message' && interaction.isMessageContextMenuCommand()
+          ? await menu.execute(interaction)
+          : undefined
+      // Support reply builder pattern: if execute returns a function, call it with the interaction
+      if (typeof result === 'function') {
+        await (result as (...args: unknown[]) => unknown)(interaction, this)
+      }
+      else if (typeof result === 'string') {
+        await (reply(result) as (...args: unknown[]) => unknown)(interaction, this)
+      }
     }
     catch (error) {
       logger.error(`Context menu error [${interaction.commandName}]:`, error)
