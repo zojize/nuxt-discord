@@ -156,35 +156,37 @@ const uniqueEvents = computed(() => {
         </NuxtLink>
 
         <!-- Event Listeners -->
-        <UCard variant="outline">
-          <div class="flex items-start justify-between">
-            <div>
-              <p class="text-muted text-xs font-medium uppercase tracking-wider">
-                Event Listeners
-              </p>
-              <p class="text-3xl font-bold mt-1.5 text-highlighted">
-                {{ eventListeners.length }}
-              </p>
+        <NuxtLink to="/discord/listeners" class="group">
+          <UCard variant="outline" class="transition-colors group-hover:border-amber-500/60">
+            <div class="flex items-start justify-between">
+              <div>
+                <p class="text-muted text-xs font-medium uppercase tracking-wider">
+                  Event Listeners
+                </p>
+                <p class="text-3xl font-bold mt-1.5 text-highlighted">
+                  {{ eventListeners.length }}
+                </p>
+              </div>
+              <div class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
+                <svg class="size-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" />
+                </svg>
+              </div>
             </div>
-            <div class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
-              <svg class="size-5" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" />
-              </svg>
+            <div class="mt-3 flex flex-wrap gap-1.5">
+              <UBadge v-if="uniqueEvents" color="warning" variant="subtle" size="xs">
+                {{ uniqueEvents }} event{{ uniqueEvents === 1 ? '' : 's' }}
+              </UBadge>
+              <UBadge
+                v-if="eventListeners.some(l => l.once)"
+                color="neutral" variant="subtle" size="xs"
+              >
+                {{ eventListeners.filter(l => l.once).length }} once
+              </UBadge>
+              <span v-if="eventListeners.length === 0" class="text-dimmed text-xs">none defined</span>
             </div>
-          </div>
-          <div class="mt-3 flex flex-wrap gap-1.5">
-            <UBadge v-if="uniqueEvents" color="warning" variant="subtle" size="xs">
-              {{ uniqueEvents }} event{{ uniqueEvents === 1 ? '' : 's' }}
-            </UBadge>
-            <UBadge
-              v-if="eventListeners.some(l => l.once)"
-              color="neutral" variant="subtle" size="xs"
-            >
-              {{ eventListeners.filter(l => l.once).length }} once
-            </UBadge>
-            <span v-if="eventListeners.length === 0" class="text-dimmed text-xs">none defined</span>
-          </div>
-        </UCard>
+          </UCard>
+        </NuxtLink>
       </div>
 
       <USeparator class="mb-8" />
@@ -197,7 +199,7 @@ const uniqueEvents = computed(() => {
             <h2 class="text-sm font-semibold uppercase tracking-wider text-muted">
               Commands
             </h2>
-            <NuxtLink to="/discord/slash-commands" class="text-xs text-[color:var(--ui-primary)] hover:underline">
+            <NuxtLink to="/discord/slash-commands" class="text-xs text-primary hover:underline">
               View all
             </NuxtLink>
           </div>
@@ -229,7 +231,7 @@ const uniqueEvents = computed(() => {
                 </div>
               </div>
               <div v-if="commands.length > 8" class="px-4 py-2 text-center">
-                <NuxtLink to="/discord/slash-commands" class="text-xs text-[color:var(--ui-primary)] hover:underline">
+                <NuxtLink to="/discord/slash-commands" class="text-xs text-primary hover:underline">
                   +{{ commands.length - 8 }} more
                 </NuxtLink>
               </div>
@@ -245,7 +247,7 @@ const uniqueEvents = computed(() => {
               <h2 class="text-sm font-semibold uppercase tracking-wider text-muted">
                 Context Menus
               </h2>
-              <NuxtLink to="/discord/context-menus" class="text-xs text-[color:var(--ui-primary)] hover:underline">
+              <NuxtLink to="/discord/context-menus" class="text-xs text-primary hover:underline">
                 View all
               </NuxtLink>
             </div>
@@ -272,9 +274,14 @@ const uniqueEvents = computed(() => {
 
           <!-- Listeners -->
           <div>
-            <h2 class="text-sm font-semibold uppercase tracking-wider text-muted mb-3">
-              Event Listeners
-            </h2>
+            <div class="flex items-center justify-between mb-3">
+              <h2 class="text-sm font-semibold uppercase tracking-wider text-muted">
+                Event Listeners
+              </h2>
+              <NuxtLink to="/discord/listeners" class="text-xs text-primary hover:underline">
+                View all
+              </NuxtLink>
+            </div>
             <UCard variant="outline" :ui="{ body: 'p-0!' }">
               <div v-if="eventListeners.length === 0" class="p-6 text-center text-dimmed text-sm">
                 No listeners defined

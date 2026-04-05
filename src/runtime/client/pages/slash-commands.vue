@@ -268,7 +268,7 @@ function constraintBadges(option: SlashCommandOption) {
 
           <template #footer>
             <div class="text-dimmed text-xs flex items-center justify-between">
-              <span class="font-mono truncate">{{ command.path.split('/discord/commands/').pop() }}</span>
+              <a :href="`vscode://file${command.path}`" class="font-mono truncate hover:text-highlighted transition-colors">{{ command.path.split('/discord/commands/').pop() }}</a>
               <span v-if="getRemoteId(command)" class="font-mono shrink-0">{{ getRemoteId(command) }}</span>
             </div>
           </template>

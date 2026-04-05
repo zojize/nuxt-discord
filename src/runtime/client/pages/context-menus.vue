@@ -64,7 +64,7 @@ const messageMenus = computed(() => menus.value.filter(m => m.type === 'message'
               </div>
             </template>
             <template #footer>
-              <span class="text-dimmed text-xs font-mono truncate">{{ menu.path.split('/discord/context-menus/').pop() }}</span>
+              <a :href="`vscode://file${menu.path}`" class="text-dimmed text-xs font-mono truncate hover:text-highlighted transition-colors">{{ menu.path.split('/discord/context-menus/').pop() }}</a>
             </template>
           </UCard>
         </div>
@@ -97,7 +97,7 @@ const messageMenus = computed(() => menus.value.filter(m => m.type === 'message'
               </div>
             </template>
             <template #footer>
-              <span class="text-dimmed text-xs font-mono truncate">{{ menu.path.split('/discord/context-menus/').pop() }}</span>
+              <a :href="`vscode://file${menu.path}`" class="text-dimmed text-xs font-mono truncate hover:text-highlighted transition-colors">{{ menu.path.split('/discord/context-menus/').pop() }}</a>
             </template>
           </UCard>
         </div>

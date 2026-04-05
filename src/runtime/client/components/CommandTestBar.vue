@@ -360,24 +360,24 @@ watch(rawInput, () => {
 
           <template v-for="(opt, idx) in activeCommand!.options" :key="opt.name">
             <span
-              class="inline-flex h-6 items-stretch overflow-hidden rounded"
+              class="inline-flex items-center gap-0.5 rounded-md border px-2 py-0.5 text-xs transition-colors"
               :class="focusedOptionIndex === idx
-                ? 'ring-1 ring-primary'
-                : ''"
-              style="background: var(--ui-bg-muted);"
+                ? 'border-primary bg-(--ui-primary)/5'
+                : optionValues[opt.name]
+                  ? 'border-default bg-elevated'
+                  : 'border-dashed border-default'"
             >
               <span
-                class="flex select-none items-center px-2 text-xs"
-                :class="focusedOptionIndex === idx ? 'text-primary font-medium' : 'text-muted'"
-                style="background: var(--ui-bg-elevated);"
-              >{{ opt.name }}</span>
+                class="select-none"
+                :class="focusedOptionIndex === idx ? 'text-primary' : 'text-dimmed'"
+              >{{ opt.name }}:</span>
               <input
                 :ref="(el) => setOptionRef(opt.name, el)"
                 :value="optionValues[opt.name] ?? ''"
                 type="text"
-                class="h-full min-w-0 border-none bg-transparent px-1.5 text-xs text-highlighted outline-none placeholder:text-dimmed"
+                class="min-w-0 border-none bg-transparent text-xs text-highlighted outline-none placeholder:text-dimmed"
                 :placeholder="typeLabels[opt.type] ?? 'value'"
-                :style="{ width: `${Math.max(4, (optionValues[opt.name]?.length ?? typeLabels[opt.type]?.length ?? 4) + 1)}ch` }"
+                :style="{ width: `${Math.max(3, (optionValues[opt.name]?.length ?? typeLabels[opt.type]?.length ?? 3) + 1)}ch` }"
                 @input="(e) => onOptionInput(opt.name, e)"
                 @focus="() => { focusedOptionIndex = idx; showChoices = !!(opt.choices?.length); choiceIndex = 0 }"
                 @keydown="(e) => onOptionKeydown(e, idx)"
