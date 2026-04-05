@@ -28,6 +28,23 @@ Detailed command management with:
 
 Lists all user and message context menus, grouped by type.
 
+### Listeners (`/discord/listeners`)
+
+Lists all event listeners with their event names and `once` flags.
+
+### Activity Log (`/discord/activity`)
+
+Live interaction history with:
+
+- **Real-time streaming** — Events appear as they happen via WebSocket
+- **Stats** — Total interactions, commands, context menus, errors, average duration
+- **Filtering** — Filter by type (commands, context menus, errors)
+- **Pause/Resume** — Pause the stream to inspect entries
+
+## File Links
+
+File paths on the slash commands, context menus, and listeners pages link directly to your editor via `vscode://file` URLs.
+
 ## Sync Status
 
 Commands are compared against Discord's remote command registry:
