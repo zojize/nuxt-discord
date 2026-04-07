@@ -134,3 +134,21 @@ export default () => {
     .send('Here are the logs')
 }
 ```
+
+## Modal
+
+Open a modal form and handle the submission:
+
+```ts
+export default () => {
+  return reply.modal('Submit Feedback', {
+    subject: { style: 'short', placeholder: 'What is this about?' },
+    details: { style: 'paragraph', placeholder: 'Tell us more...', required: false },
+    rating: { style: 'short', placeholder: '1-5', maxLength: 1 },
+  }, (values) => {
+    return reply.ephemeral(`Subject: ${values.subject}\nRating: ${values.rating}`)
+  })
+}
+```
+
+Each field can be a shorthand string (`'short'` or `'paragraph'`) or an options object with `style`, `label`, `placeholder`, `required`, `value`, `minLength`, and `maxLength`. The timeout defaults to 5 minutes.
