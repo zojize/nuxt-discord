@@ -2,7 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 
 const props = defineProps<{
-  commands: { name: string, description: string, options: { name: string, description: string, type: number, required: boolean, choices?: { name: string, value: string | number }[] }[] }[]
+  commands: { name: string, description: string, options: { name: string, description: string, type: number, required: boolean, hasAutocomplete: boolean, choices?: { name: string, value: string | number }[] }[] }[]
 }>()
 
 type Phase = 'idle' | 'suggesting' | 'filling'
@@ -19,6 +19,8 @@ const responses = ref<{ command: string, ok: boolean, text: string, time: number
 const showChoices = ref(false)
 const choiceIndex = ref(0)
 const fillingEl = ref<HTMLDivElement>()
+const autocompleteSuggestions = ref<{ name: string, value: string | number }[]>([])
+let autocompleteTimer: ReturnType<typeof setTimeout> | undefined
 
 const allCommands = computed(() => {
   const result: typeof props.commands = []
@@ -39,15 +41,20 @@ const allCommands = computed(() => {
 })
 
 const suggestions = computed(() => {
-  const q = rawInput.value.startsWith('/') ? rawInput.value.slice(1) : rawInput.value
-  if (!q)
+  const raw = rawInput.value
+  if (raw === '/')
     return allCommands.value.slice(0, 10)
+  if (!raw)
+    return []
+  const q = raw.startsWith('/') ? raw.slice(1) : raw
   return allCommands.value.filter(c => c.name.startsWith(q)).slice(0, 8)
 })
 
 const focusedOption = computed(() => activeCommand.value?.options[focusedOptionIndex.value] ?? null)
 
 const filteredChoices = computed(() => {
+  if (autocompleteSuggestions.value.length > 0)
+    return autocompleteSuggestions.value
   if (!focusedOption.value?.choices)
     return []
   const val = (optionValues.value[focusedOption.value.name] ?? '').toLowerCase()
@@ -95,6 +102,8 @@ function cancelCommand() {
   optionValues.value = {}
   rawInput.value = ''
   showChoices.value = false
+  autocompleteSuggestions.value = []
+  clearTimeout(autocompleteTimer)
   nextTick(() => inputEl.value?.focus())
 }
 
@@ -129,6 +138,7 @@ function selectChoice(value: string) {
     return
   optionValues.value[focusedOption.value.name] = value
   showChoices.value = false
+  autocompleteSuggestions.value = []
   // Move to next option
   const opts = activeCommand.value?.options ?? []
   const next = focusedOptionIndex.value + 1
@@ -145,8 +155,6 @@ function selectChoice(value: string) {
 }
 
 function onRawKeydown(e: KeyboardEvent) {
-  if (rawInput.value.length > 0)
-    phase.value = 'suggesting'
   if (phase.value === 'suggesting' && suggestions.value.length > 0) {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
@@ -234,16 +242,54 @@ function onOptionKeydown(e: KeyboardEvent, idx: number) {
   }
 }
 
+async function fetchAutocomplete(commandName: string, optionName: string, value: string) {
+  try {
+    const results = await $fetch<{ name: string, value: string | number }[]>('/api/discord/slash-command/autocomplete', {
+      method: 'POST',
+      body: { command: commandName, option: optionName, value },
+    })
+    autocompleteSuggestions.value = results
+    showChoices.value = results.length > 0
+    choiceIndex.value = 0
+  }
+  catch {
+    autocompleteSuggestions.value = []
+  }
+}
+
 function onOptionInput(name: string, e: Event) {
   optionValues.value[name] = (e.target as HTMLInputElement).value
   const opt = activeCommand.value?.options.find(o => o.name === name)
-  showChoices.value = !!(opt?.choices?.length)
-  choiceIndex.value = 0
+
+  // Static choices take priority
+  if (opt?.choices?.length) {
+    autocompleteSuggestions.value = []
+    showChoices.value = true
+    choiceIndex.value = 0
+    return
+  }
+
+  // Autocomplete: debounced fetch
+  if (opt?.hasAutocomplete && activeCommand.value) {
+    clearTimeout(autocompleteTimer)
+    autocompleteTimer = setTimeout(() => {
+      fetchAutocomplete(activeCommand.value!.name, name, optionValues.value[name] ?? '')
+    }, 150)
+    return
+  }
+
+  showChoices.value = false
+  autocompleteSuggestions.value = []
 }
 
 function onRawInput() {
   phase.value = rawInput.value.length > 0 ? 'suggesting' : 'idle'
   selectedIndex.value = 0
+}
+
+function onRawFocus() {
+  if (rawInput.value.length > 0)
+    phase.value = 'suggesting'
 }
 
 function onRawBlur() {
@@ -330,18 +376,17 @@ watch(rawInput, () => {
         :class="phase !== 'idle' ? 'border-highlighted' : 'border-default focus-within:border-highlighted'"
       >
         <!-- Idle: raw text input -->
-        <div v-if="phase !== 'filling'" class="flex flex-1 items-center gap-1 py-2">
-          <span class="select-none text-base font-semibold text-muted">/</span>
+        <div v-if="phase !== 'filling'" class="flex flex-1 items-center py-2">
           <input
             ref="inputEl"
             v-model="rawInput"
             type="text"
             class="flex-1 border-none bg-transparent text-base text-highlighted outline-none placeholder:text-dimmed"
-            placeholder="Type a command..."
+            placeholder="Type a command or / to browse..."
             autocomplete="off"
             @input="onRawInput"
             @keydown="onRawKeydown"
-            @focus="onRawInput"
+            @focus="onRawFocus"
             @blur="onRawBlur"
           >
         </div>
@@ -379,7 +424,7 @@ watch(rawInput, () => {
                 :placeholder="typeLabels[opt.type] ?? 'value'"
                 :style="{ width: `${Math.max(3, (optionValues[opt.name]?.length ?? typeLabels[opt.type]?.length ?? 3) + 1)}ch` }"
                 @input="(e) => onOptionInput(opt.name, e)"
-                @focus="() => { focusedOptionIndex = idx; showChoices = !!(opt.choices?.length); choiceIndex = 0 }"
+                @focus="() => { focusedOptionIndex = idx; autocompleteSuggestions = []; showChoices = !!(opt.choices?.length); choiceIndex = 0; if (opt.hasAutocomplete && !opt.choices?.length) fetchAutocomplete(activeCommand!.name, opt.name, optionValues[opt.name] ?? '') }"
                 @keydown="(e) => onOptionKeydown(e, idx)"
               >
             </span>
