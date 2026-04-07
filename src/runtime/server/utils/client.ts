@@ -5,7 +5,7 @@ import type { ContextMenuDefinition } from './defineContextMenu'
 import type { ListenerDefinition } from './defineListener'
 import process from 'node:process'
 import { ApplicationCommandOptionType, ApplicationCommandType, ContextMenuCommandBuilder, Events, Client as InternalClient, MessageFlags, REST, Routes, SlashCommandBuilder, SlashCommandSubcommandBuilder, SlashCommandSubcommandGroupBuilder } from 'discord.js'
-import { useNitroApp } from 'nitropack/runtime'
+import { useNitroApp, useRuntimeConfig } from 'nitropack/runtime'
 import { effectScope, isRef } from 'vue'
 import { logger } from '../../logger'
 import { reply } from './reply'
@@ -93,6 +93,8 @@ export class DiscordClient {
       throw new Error('DISCORD_CLIENT_ID environment variable is not set')
     }
     this.#clientId = process.env.DISCORD_CLIENT_ID
+
+    this.#interactionTimeout = useRuntimeConfig().discord?.interactionTimeout
 
     // default print errors to console
     this.#nitro.hooks.hook('discord:client:error', (error: unknown) => {
@@ -374,6 +376,8 @@ export class DiscordClient {
   }
 
   #interactionScopes: WeakMap<ChatInputCommandInteraction, EffectScope> = new WeakMap()
+  #interactionTimeout?: number
+  static DISCORD_TOKEN_LIFETIME = 15 * 60 * 1000 // 15 minutes
   #commandFinalizationRegistry = new FinalizationRegistry((scope: EffectScope) => scope.stop())
   async #handleSlashCommand(interaction: ChatInputCommandInteraction, command: SlashCommandRuntime | SlashCommandSubcommandRuntime): Promise<void> {
     // discord.js option getters may return API types (e.g. APIRole) alongside class types,
@@ -426,7 +430,7 @@ export class DiscordClient {
 
     try {
       let result!: SlashCommandReturnType
-      scope.run (() => {
+      scope.run(() => {
         currentInteraction = interaction
         result = command.execute!(...args)
         currentInteraction = null
@@ -446,6 +450,16 @@ export class DiscordClient {
         command,
         error,
       })
+    }
+
+    // Schedule scope disposal based on remaining interaction token lifetime
+    if (this.#interactionTimeout !== 0) {
+      const timeout = this.#interactionTimeout
+        ?? Math.max(0, DiscordClient.DISCORD_TOKEN_LIFETIME - (Date.now() - interaction.createdTimestamp))
+      setTimeout(() => {
+        scope.stop()
+        this.#interactionScopes.delete(interaction)
+      }, timeout)
     }
   }
 

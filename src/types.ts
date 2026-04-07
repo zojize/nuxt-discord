@@ -39,6 +39,14 @@ export interface NuxtDiscordOptions {
   autoStart: boolean
 
   /**
+   * Timeout in milliseconds before an interaction's reactive scope is disposed.
+   * This cleans up watchers (reactive replies) and component collectors (buttons).
+   * Defaults to Discord's interaction token lifetime (15 minutes).
+   * Set to `0` to disable automatic cleanup.
+   */
+  interactionTimeout?: number
+
+  /**
    * Guild IDs to register guild-specific commands to.
    * Commands tagged with `@guild` will be registered to these guilds
    * instead of globally. Useful for development (instant updates)
@@ -84,6 +92,7 @@ export interface DiscordRuntimeConfig {
   dir: string
   buildDir: string
   rootDir: string
+  interactionTimeout?: number
 }
 
 export const slashCommandOptionTypeIdentifiers = [

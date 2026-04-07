@@ -30,14 +30,24 @@ vi.mock('discord.js', async (importOriginal) => {
     }),
   }
 })
-vi.mock('nitropack/runtime')
+const mockedNitroApp = {
+  hooks: {
+    callHook: vi.fn(),
+    hook: vi.fn(),
+  },
+}
+vi.mock('nitropack/runtime', () => ({
+  useNitroApp: vi.fn(() => mockedNitroApp),
+  useRuntimeConfig: vi.fn(() => ({
+    discord: { interactionTimeout: 0 },
+  })),
+}))
 
 vi.stubEnv('DISCORD_TOKEN', 'test-token')
 vi.stubEnv('DISCORD_CLIENT_ID', 'test-client-id')
 
 describe('client', () => {
   const mockedClient = new Client<true>({ intents: [] })
-  const mockedNitroApp = useNitroApp()
 
   beforeEach(() => {
     vi.clearAllMocks()
