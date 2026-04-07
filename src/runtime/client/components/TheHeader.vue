@@ -1,14 +1,14 @@
 <script lang="ts" setup>
-import { ref, useRoute } from '#imports'
+import { computed, useRoute } from '#imports'
 import { Icon } from '@iconify/vue'
+import { useColorMode } from '@vueuse/core'
 
 const route = useRoute()
-
-const isDark = ref(false)
+const mode = useColorMode({ emitAuto: true })
+const isDark = computed(() => mode.value === 'dark')
 
 function toggleDark() {
-  isDark.value = !isDark.value
-  document.documentElement.classList.toggle('dark', isDark.value)
+  mode.value = isDark.value ? 'light' : 'dark'
 }
 
 const nav = [
