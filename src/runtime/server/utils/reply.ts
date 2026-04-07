@@ -10,10 +10,11 @@ import type {
   InteractionResponse,
   Message,
   MessageCollectorOptionsParams,
+  ModalSubmitInteraction,
 } from 'discord.js'
 import type { MaybeRef } from 'vue'
 import type { SlashCommandCustomReturnHandler } from '../../../types'
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType, MessageFlags } from 'discord.js'
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType, MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js'
 import { computed, isProxy, isReactive, isRef, reactive, toRaw, toValue, watch } from 'vue'
 import { logger } from '../../logger'
 
@@ -65,6 +66,22 @@ type ReplyFunction = SlashCommandCustomReturnHandler & {
     // TODO: support reply.button.link/primary like interface
   }
   send: ReplyFunction
+  modal: (
+    title: string,
+    fields: Record<string, ModalFieldOptions | 'short' | 'paragraph'>,
+    onSubmit: (values: Record<string, string>, interaction: ModalSubmitInteraction) => unknown,
+    options?: { timeout?: number },
+  ) => SlashCommandCustomReturnHandler
+}
+
+export interface ModalFieldOptions {
+  style?: 'short' | 'paragraph'
+  label?: string
+  placeholder?: string
+  required?: boolean
+  value?: string
+  minLength?: number
+  maxLength?: number
 }
 
 function createReplyFunction(
@@ -257,6 +274,9 @@ function createReplyFunction(
         })
       },
     },
+    modal: {
+      value: createModalHandler,
+    },
   })
 
   return reply
@@ -309,6 +329,73 @@ function getButtonComponent(buttons: Parameters<ReplyFunction['button']>[]): Non
     rows.pop()
 
   return rows
+}
+
+function createModalHandler(
+  title: string,
+  fields: Record<string, ModalFieldOptions | 'short' | 'paragraph'>,
+  onSubmit: (values: Record<string, string>, interaction: ModalSubmitInteraction) => unknown,
+  options?: { timeout?: number },
+): SlashCommandCustomReturnHandler {
+  const customId = `modal-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+  const timeout = options?.timeout ?? 300_000 // 5 minutes default
+
+  const rows = Object.entries(fields).map(([key, field]) => {
+    const opts: ModalFieldOptions = typeof field === 'string' ? { style: field } : field
+    const input = new TextInputBuilder({
+      custom_id: key,
+      label: opts.label ?? key.charAt(0).toUpperCase() + key.slice(1),
+      style: opts.style === 'paragraph' ? TextInputStyle.Paragraph : TextInputStyle.Short,
+      required: opts.required ?? true,
+      placeholder: opts.placeholder,
+      value: opts.value,
+      min_length: opts.minLength,
+      max_length: opts.maxLength,
+    })
+
+    return new ActionRowBuilder<TextInputBuilder>({ components: [input] })
+  })
+
+  const modal = new ModalBuilder({
+    custom_id: customId,
+    title,
+    components: rows.map(r => r.toJSON()),
+  })
+
+  return async function (interaction) {
+    await interaction.showModal(modal)
+
+    try {
+      const submission = await interaction.awaitModalSubmit({
+        filter: i => i.customId === customId,
+        time: timeout,
+      })
+
+      const values: Record<string, string> = {}
+      for (const key of Object.keys(fields)) {
+        values[key] = submission.fields.getTextInputValue(key)
+      }
+
+      const result = await onSubmit(values, submission)
+
+      // Handle the callback return — string or reply handler
+      if (typeof result === 'function') {
+        await (result as any)(submission, this)
+      }
+      else if (typeof result === 'string') {
+        if (!submission.replied && !submission.deferred) {
+          await submission.reply({ content: result })
+        }
+      }
+      else if (!submission.replied && !submission.deferred) {
+        await submission.deferUpdate().catch(() => {})
+      }
+    }
+    catch (error) {
+      // Timeout or other error — user didn't submit
+      logger.error('Modal submission error:', error)
+    }
+  }
 }
 
 // https://github.com/vuejs/core/issues/5303#issuecomment-1543596383
