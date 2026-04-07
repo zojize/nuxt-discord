@@ -115,4 +115,201 @@ describe('reply', () => {
       files: ['updated-file.txt'],
     })
   })
+
+  describe('modal', () => {
+    function mockModalInteraction() {
+      const mock = {
+        showModal: vi.fn(() => Promise.resolve()),
+        awaitModalSubmit: vi.fn(() => new Promise(() => {})), // never resolves by default
+        replied: false,
+        deferred: false,
+      }
+      return {
+        interaction: mock as unknown as ChatInputCommandInteraction,
+        mock,
+      }
+    }
+
+    function getModal(mock: ReturnType<typeof mockModalInteraction>['mock']): any {
+      const builder = (mock.showModal as any).mock.calls[0]![0]
+      return builder.toJSON()
+    }
+
+    function getField(mock: ReturnType<typeof mockModalInteraction>['mock'], index = 0): any {
+      return getModal(mock).components[index].components[0]
+    }
+
+    it('should return a handler function', () => {
+      const handler = reply.modal('Test', { name: 'short' }, () => {})
+      expect(handler).toBeInstanceOf(Function)
+    })
+
+    it('should call showModal with correct title and fields', () => {
+      const handler = reply.modal('My Form', {
+        name: { style: 'short', placeholder: 'Enter name' },
+        bio: { style: 'paragraph', required: false },
+      }, () => {})
+
+      const { interaction, mock } = mockModalInteraction()
+      const client = new MockClient()
+      handler.call(client, interaction, client)
+
+      expect(mock.showModal).toHaveBeenCalledOnce()
+      const modal = getModal(mock)
+      expect(modal.title).toBe('My Form')
+      expect(modal.components).toHaveLength(2)
+    })
+
+    it('should handle shorthand field syntax', () => {
+      const handler = reply.modal('Quick', { name: 'short', bio: 'paragraph' }, () => {})
+
+      const { interaction, mock } = mockModalInteraction()
+      const client = new MockClient()
+      handler.call(client, interaction, client)
+
+      expect(getField(mock, 0).style).toBe(1) // TextInputStyle.Short
+      expect(getField(mock, 1).style).toBe(2) // TextInputStyle.Paragraph
+    })
+
+    it('should auto-capitalize field labels from keys', () => {
+      const handler = reply.modal('Test', { username: 'short' }, () => {})
+
+      const { interaction, mock } = mockModalInteraction()
+      const client = new MockClient()
+      handler.call(client, interaction, client)
+
+      expect(getField(mock).label).toBe('Username')
+    })
+
+    it('should use custom label when provided', () => {
+      const handler = reply.modal('Test', {
+        name: { label: 'Full Name', style: 'short' },
+      }, () => {})
+
+      const { interaction, mock } = mockModalInteraction()
+      const client = new MockClient()
+      handler.call(client, interaction, client)
+
+      expect(getField(mock).label).toBe('Full Name')
+    })
+
+    it('should set placeholder and constraints', () => {
+      const handler = reply.modal('Test', {
+        name: { style: 'short', placeholder: 'Enter here', minLength: 2, maxLength: 50 },
+      }, () => {})
+
+      const { interaction, mock } = mockModalInteraction()
+      const client = new MockClient()
+      handler.call(client, interaction, client)
+
+      const field = getField(mock)
+      expect(field.placeholder).toBe('Enter here')
+      expect(field.min_length).toBe(2)
+      expect(field.max_length).toBe(50)
+    })
+
+    it('should set pre-filled value', () => {
+      const handler = reply.modal('Test', {
+        name: { style: 'short', value: 'Default' },
+      }, () => {})
+
+      const { interaction, mock } = mockModalInteraction()
+      const client = new MockClient()
+      handler.call(client, interaction, client)
+
+      expect(getField(mock).value).toBe('Default')
+    })
+
+    it('should default required to true', () => {
+      const handler = reply.modal('Test', { name: 'short' }, () => {})
+
+      const { interaction, mock } = mockModalInteraction()
+      const client = new MockClient()
+      handler.call(client, interaction, client)
+
+      expect(getField(mock).required).toBe(true)
+    })
+
+    it('should respect required: false', () => {
+      const handler = reply.modal('Test', {
+        name: { style: 'short', required: false },
+      }, () => {})
+
+      const { interaction, mock } = mockModalInteraction()
+      const client = new MockClient()
+      handler.call(client, interaction, client)
+
+      expect(getField(mock).required).toBe(false)
+    })
+
+    it('should generate unique custom IDs per invocation', () => {
+      const handler1 = reply.modal('A', { x: 'short' }, () => {})
+      const handler2 = reply.modal('B', { y: 'short' }, () => {})
+
+      const { interaction: i1, mock: m1 } = mockModalInteraction()
+      const { interaction: i2, mock: m2 } = mockModalInteraction()
+      const client = new MockClient()
+
+      handler1.call(client, i1, client)
+      handler2.call(client, i2, client)
+
+      expect(getModal(m1).custom_id).not.toBe(getModal(m2).custom_id)
+    })
+
+    it('should pass field values to onSubmit and handle string return', async () => {
+      const onSubmit = vi.fn(() => 'Thanks!')
+      const submissionMock = {
+        customId: '',
+        replied: false,
+        deferred: false,
+        fields: {
+          getTextInputValue: vi.fn((key: string) => {
+            const values: Record<string, string> = { name: 'Alice' }
+            return values[key] ?? ''
+          }),
+        },
+        reply: vi.fn(() => Promise.resolve()),
+        deferUpdate: vi.fn(() => Promise.resolve()),
+      }
+
+      const mock = {
+        showModal: vi.fn(() => Promise.resolve()),
+        awaitModalSubmit: vi.fn(() => Promise.resolve(submissionMock)),
+        replied: false,
+        deferred: false,
+      }
+
+      const handler = reply.modal('Test', { name: 'short' }, onSubmit)
+      const client = new MockClient()
+      await handler.call(client, mock as any, client)
+
+      expect(onSubmit).toHaveBeenCalledWith({ name: 'Alice' }, submissionMock)
+      expect(submissionMock.reply).toHaveBeenCalledWith({ content: 'Thanks!' })
+    })
+
+    it('should call deferUpdate when onSubmit returns nothing', async () => {
+      const onSubmit = vi.fn()
+      const submissionMock = {
+        customId: '',
+        replied: false,
+        deferred: false,
+        fields: { getTextInputValue: vi.fn(() => '') },
+        reply: vi.fn(() => Promise.resolve()),
+        deferUpdate: vi.fn(() => Promise.resolve()),
+      }
+
+      const mock = {
+        showModal: vi.fn(() => Promise.resolve()),
+        awaitModalSubmit: vi.fn(() => Promise.resolve(submissionMock)),
+        replied: false,
+        deferred: false,
+      }
+
+      const handler = reply.modal('Test', { name: 'short' }, onSubmit)
+      const client = new MockClient()
+      await handler.call(client, mock as any, client)
+
+      expect(submissionMock.deferUpdate).toHaveBeenCalledOnce()
+    })
+  })
 })
