@@ -81,6 +81,11 @@ export const macros = {
       (option[key] as typeof value) = value
     }
   },
+  useMiddleware(_ctx, _node, command) {
+    command.middleware ??= []
+    // The actual middleware references are preserved in the transform step.
+    // Here we just record the presence for metadata purposes.
+  },
 } satisfies Record<string, (ctx: NuxtDiscordContext, node: ts.CallExpression, command: Partial<SlashCommand>) => void>
 
 function parseLiteral<T = unknown>(node: ts.Node): T

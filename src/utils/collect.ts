@@ -174,6 +174,14 @@ export function processCommandFile(ctx: NuxtDiscordContext, file: string): Slash
     command.guilds = specificIds.length > 0 ? specificIds : true
   }
 
+  // @middleware tags
+  const middlewareTags = jsDocTags.filter(tag => tag.tagName.escapedText === 'middleware')
+  if (middlewareTags.length > 0) {
+    command.middleware = middlewareTags
+      .map(tag => tag.comment?.toString().trim())
+      .filter((name): name is string => !!name && name.length > 0)
+  }
+
   // Inline localization: @name.ja ピング, @description.fr Ping le bot
   for (const tag of jsDocTags) {
     const tagName = tag.tagName.escapedText as string

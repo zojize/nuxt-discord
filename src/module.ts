@@ -63,6 +63,46 @@ export default defineNuxtModule<NuxtDiscordOptions>({
         as: 'defineMessageContextMenu',
         from: ctx.resolve.module('runtime/server/utils/defineContextMenu'),
       },
+      {
+        name: 'defineMiddleware',
+        as: 'defineMiddleware',
+        from: ctx.resolve.module('runtime/server/utils/defineMiddleware'),
+      },
+      {
+        name: 'MiddlewareError',
+        as: 'MiddlewareError',
+        from: ctx.resolve.module('runtime/server/utils/defineMiddleware'),
+      },
+      {
+        name: 'useMiddleware',
+        as: 'useMiddleware',
+        from: ctx.resolve.module('runtime/server/utils/defineMiddleware'),
+      },
+      {
+        name: 'useMiddlewareContext',
+        as: 'useMiddlewareContext',
+        from: ctx.resolve.module('runtime/server/utils/defineMiddleware'),
+      },
+      {
+        name: 'guildOnly',
+        as: 'guildOnly',
+        from: ctx.resolve.module('runtime/server/utils/middleware/guildOnly'),
+      },
+      {
+        name: 'ownerOnly',
+        as: 'ownerOnly',
+        from: ctx.resolve.module('runtime/server/utils/middleware/ownerOnly'),
+      },
+      {
+        name: 'cooldown',
+        as: 'cooldown',
+        from: ctx.resolve.module('runtime/server/utils/middleware/cooldown'),
+      },
+      {
+        name: 'requireRole',
+        as: 'requireRole',
+        from: ctx.resolve.module('runtime/server/utils/middleware/requireRole'),
+      },
     ])
 
     prepareRuntimeConfig(ctx)

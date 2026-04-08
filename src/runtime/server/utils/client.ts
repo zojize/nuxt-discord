@@ -1,13 +1,15 @@
 import type { APIApplicationCommandOption, AutocompleteInteraction, ChatInputCommandInteraction, CommandInteraction, Interaction, RESTGetAPIApplicationCommandsResult, RESTPutAPIApplicationCommandsResult } from 'discord.js'
 import type { EffectScope } from 'vue'
-import type { NuxtDiscordOptions, SlashCommandOption, SlashCommandOptionType, SlashCommandReturnType, SlashCommandRuntime, SlashCommandSubcommandGroupRuntime, SlashCommandSubcommandRuntime } from '../../../types'
+import type { MiddlewareEntry, NuxtDiscordOptions, SlashCommandOption, SlashCommandOptionType, SlashCommandReturnType, SlashCommandRuntime, SlashCommandSubcommandGroupRuntime, SlashCommandSubcommandRuntime } from '../../../types'
 import type { ContextMenuDefinition } from './defineContextMenu'
 import type { ListenerDefinition } from './defineListener'
+import type { MiddlewareOpts } from './defineMiddleware'
 import process from 'node:process'
 import { ApplicationCommandOptionType, ApplicationCommandType, ContextMenuCommandBuilder, Events, Client as InternalClient, MessageFlags, REST, Routes, SlashCommandBuilder, SlashCommandSubcommandBuilder, SlashCommandSubcommandGroupBuilder } from 'discord.js'
 import { useNitroApp, useRuntimeConfig } from 'nitropack/runtime'
 import { effectScope, isRef } from 'vue'
 import { logger } from '../../logger'
+import { MiddlewareError, setMiddlewareContext } from './defineMiddleware'
 import { reply } from './reply'
 
 export interface DiscordClientErrorBase {
@@ -40,11 +42,20 @@ export interface SlashCommandRegistrationError extends DiscordClientErrorBase {
   command?: SlashCommandRuntime
 }
 
+export interface MiddlewareDeniedError extends DiscordClientErrorBase {
+  type: 'MiddlewareDeniedError'
+  interaction: Interaction
+  middleware: string
+  reason: string
+  identifier?: string
+}
+
 export type DiscordClientError
   = | UnknownSlashCommandError
     | MissingRequiredOptionError
     | SlashCommandExecutionError
     | SlashCommandRegistrationError
+    | MiddlewareDeniedError
 
 export interface ActivityLogEntry {
   id: number
@@ -73,7 +84,7 @@ export class DiscordClient {
   }
 
   #slashCommands: SlashCommandRuntime[] = []
-  #contextMenus: (ContextMenuDefinition & { name: string })[] = []
+  #contextMenus: (ContextMenuDefinition & { name: string, middlewareEntries?: MiddlewareEntry[] })[] = []
   #activityLog: ActivityLogEntry[] = []
   #activityId = 0
   #onActivity?: (entry: ActivityLogEntry) => void
@@ -263,6 +274,31 @@ export class DiscordClient {
       logger.warn(`Unknown context menu command: ${interaction.commandName}`)
       return
     }
+    // Run middleware
+    const middlewareEntries = menu.middlewareEntries ?? []
+    if (middlewareEntries.length > 0) {
+      try {
+        await this.#runMiddleware(middlewareEntries, interaction, undefined, 'context-menu')
+      }
+      catch (error) {
+        if (error instanceof MiddlewareError) {
+          this.#nitro.hooks.callHook('discord:client:error', {
+            type: 'MiddlewareDeniedError',
+            client: this,
+            interaction,
+            middleware: error.identifier ?? 'unknown',
+            reason: error.reason,
+            identifier: error.identifier,
+          })
+          if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({ content: error.reason, flags: MessageFlags.Ephemeral }).catch(() => {})
+          }
+          return
+        }
+        throw error
+      }
+    }
+
     const activityBase = {
       type: 'context-menu' as const,
       name: interaction.commandName,
@@ -311,6 +347,34 @@ export class DiscordClient {
 
   public getActivityLog(): ActivityLogEntry[] {
     return this.#activityLog
+  }
+
+  async #runMiddleware(
+    entries: MiddlewareEntry[],
+    interaction: Interaction,
+    command: SlashCommandRuntime | SlashCommandSubcommandRuntime | undefined,
+    type: MiddlewareOpts['type'],
+  ): Promise<Record<string, unknown>> {
+    const context: Record<string, unknown> = {}
+
+    const runChain = async (index: number): Promise<void> => {
+      if (index >= entries.length)
+        return
+      const entry = entries[index]!
+      await entry.fn({
+        interaction,
+        command,
+        type,
+        next: async (ctx) => {
+          if (ctx)
+            Object.assign(context, ctx)
+          await runChain(index + 1)
+        },
+      }, entry.options)
+    }
+
+    await runChain(0)
+    return context
   }
 
   public async stop(): Promise<void> {
@@ -415,6 +479,32 @@ export class DiscordClient {
       }
     }
 
+    // Run middleware before execution
+    const middlewareEntries = command.middlewareEntries ?? []
+    let middlewareContext: Record<string, unknown> = {}
+    if (middlewareEntries.length > 0) {
+      try {
+        middlewareContext = await this.#runMiddleware(middlewareEntries, interaction, command, 'command')
+      }
+      catch (error) {
+        if (error instanceof MiddlewareError) {
+          this.#nitro.hooks.callHook('discord:client:error', {
+            type: 'MiddlewareDeniedError',
+            client: this,
+            interaction,
+            middleware: error.identifier ?? 'unknown',
+            reason: error.reason,
+            identifier: error.identifier,
+          })
+          if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({ content: error.reason, flags: MessageFlags.Ephemeral }).catch(() => {})
+          }
+          return
+        }
+        throw error
+      }
+    }
+
     let scope!: EffectScope
     if (this.#scope) {
       // this scope should be a child of the client scope
@@ -432,8 +522,10 @@ export class DiscordClient {
       let result!: SlashCommandReturnType
       scope.run(() => {
         currentInteraction = interaction
+        setMiddlewareContext(middlewareContext)
         result = command.execute!(...args)
         currentInteraction = null
+        setMiddlewareContext(null)
       })
 
       if (this.#clientOptions?.deferOnPromise && isPromise(result)) {
@@ -443,6 +535,7 @@ export class DiscordClient {
       await this.#handleSlashCommandReturn(result, interaction, command)
     }
     catch (error) {
+      setMiddlewareContext(null)
       this.#nitro.hooks.callHook('discord:client:error', {
         type: 'SlashCommandExecutionError',
         client: this,

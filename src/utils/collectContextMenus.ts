@@ -69,7 +69,33 @@ export function processContextMenuFile(ctx: NuxtDiscordContext, file: string): C
     name = path.basename(file, '.ts')
   }
 
-  return { name, type, path: file }
+  // Parse @middleware JSDoc tags
+  const middleware = getJSDocTags(sourceFile, 'middleware')
+
+  return { name, type, path: file, ...(middleware.length > 0 ? { middleware } : {}) }
+}
+
+function getJSDocTags(sourceFile: ts.SourceFile, tagName: string): string[] {
+  const results: string[] = []
+  ts.forEachChild(sourceFile, (node) => {
+    if (ts.isExportAssignment(node)) {
+      for (const tag of ts.getJSDocTags(node)) {
+        if (tag.tagName.escapedText === tagName && tag.comment)
+          results.push(tag.comment.toString().trim())
+      }
+      if (results.length === 0) {
+        for (const doc of ts.getJSDocCommentsAndTags(node)) {
+          if (ts.isJSDoc(doc) && doc.tags) {
+            for (const tag of doc.tags) {
+              if (tag.tagName.escapedText === tagName && tag.comment)
+                results.push(tag.comment.toString().trim())
+            }
+          }
+        }
+      }
+    }
+  })
+  return results
 }
 
 function getJSDocTag(sourceFile: ts.SourceFile, tagName: string): string | undefined {

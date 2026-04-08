@@ -202,10 +202,18 @@ export type SlashCommandReturnType
     | Generator<SlashCommandReturnType>
     | AsyncGenerator<SlashCommandReturnType>
 
+export interface MiddlewareEntry {
+  name: string
+  fn: import('./runtime/server/utils/defineMiddleware').MiddlewareFn
+  options?: Record<string, unknown>
+}
+
 export interface SlashCommand {
   name: string
   description: string
   nsfw?: boolean
+  /** Middleware names from @middleware JSDoc tags */
+  middleware?: string[]
   /** Interaction contexts where this command is available (Guild=0, BotDM=1, PrivateChannel=2) */
   contexts?: number[]
   defaultMemberPermissions?: string | null
@@ -230,10 +238,11 @@ export interface SlashCommandSubcommand extends Omit<SlashCommand, 'subcommands'
 
 export interface SlashCommandRuntime extends Omit<SlashCommand, 'subcommands'> {
   /** if execute is not defined load must be defined */
-  load?: () => Promise<Pick<SlashCommandRuntime, 'execute' | 'optionMacros'>>
+  load?: () => Promise<Pick<SlashCommandRuntime, 'execute' | 'optionMacros' | 'middlewareEntries'>>
   execute?: (...args: (SlashCommandOptionType | undefined)[]) => SlashCommandReturnType
   id?: string
   optionMacros?: Record<string, DescribeOptionOptions>
+  middlewareEntries?: MiddlewareEntry[]
   subcommands?: (SlashCommandSubcommandRuntime | SlashCommandSubcommandGroupRuntime)[]
 }
 
@@ -258,6 +267,8 @@ export interface Listener {
 export type { ActivityLogEntry } from './runtime/server/utils/client'
 export type { ContextMenuDefinition } from './runtime/server/utils/defineContextMenu'
 export type { ListenerDefinition } from './runtime/server/utils/defineListener'
+export type { MiddlewareDefinition, MiddlewareFn, MiddlewareOpts } from './runtime/server/utils/defineMiddleware'
+export { MiddlewareError } from './runtime/server/utils/defineMiddleware'
 
 export interface ContextMenu {
   /** Display name for the context menu */
@@ -268,6 +279,8 @@ export interface ContextMenu {
   path: string
   /** Register to specific guilds */
   guilds?: true | string[]
+  /** Middleware names from @middleware JSDoc tags */
+  middleware?: string[]
   nameLocalizations?: LocalizationMap
 }
 

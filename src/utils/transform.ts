@@ -76,6 +76,23 @@ export default (ctx: NuxtDiscordContext): InputPluginOption => {
                   }
                 }
 
+                // Build middlewareEntries from useMiddleware calls:
+                // useMiddleware(ref) → { name: ref.name, fn: ref.fn }
+                // useMiddleware(ref, opts) → { name: ref.name, fn: ref.fn, options: opts }
+                const middlewareCalls = macroCalls
+                  .filter(m => m.expression.escapedText === 'useMiddleware' && m.arguments.length >= 1)
+                const middlewareEntries = middlewareCalls.map((m) => {
+                  const ref = m.arguments[0]!
+                  const props: ts.PropertyAssignment[] = [
+                    ts.factory.createPropertyAssignment('name', ts.factory.createPropertyAccessExpression(ref, 'name')),
+                    ts.factory.createPropertyAssignment('fn', ts.factory.createPropertyAccessExpression(ref, 'fn')),
+                  ]
+                  if (m.arguments.length > 1) {
+                    props.push(ts.factory.createPropertyAssignment('options', m.arguments[1]!))
+                  }
+                  return ts.factory.createObjectLiteralExpression(props)
+                })
+
                 return ts.factory.createExportAssignment(
                   [],
                   false,
@@ -89,6 +106,12 @@ export default (ctx: NuxtDiscordContext): InputPluginOption => {
                           .map(m => ts.factory.createPropertyAssignment((m.arguments[0] as ts.Identifier).escapedText!, m.arguments[1]!)),
                       ),
                     ),
+                    ...(middlewareEntries.length > 0
+                      ? [ts.factory.createPropertyAssignment(
+                          'middlewareEntries',
+                          ts.factory.createArrayLiteralExpression(middlewareEntries),
+                        )]
+                      : []),
                   ]),
                 )
               }

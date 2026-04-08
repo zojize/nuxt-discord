@@ -119,6 +119,9 @@ declare global {
       'discord:client:config': (options: import('nuxt-discord').NuxtDiscordOptions['client']) => void
       'discord:client:ready': (client: DiscordClient) => void
       'discord:client:error': (error: DiscordClientError) => void
+      'discord:interaction:before': (ctx: { interaction: import('discord.js').Interaction, type: 'command' | 'context-menu' }) => void
+      'discord:interaction:after': (ctx: { interaction: import('discord.js').Interaction, type: 'command' | 'context-menu' }) => void
+      'discord:interaction:denied': (ctx: { interaction: import('discord.js').Interaction, type: 'command' | 'context-menu', reason: string, middleware: string }) => void
     }
   }
 
