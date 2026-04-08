@@ -63,6 +63,19 @@ Whether to automatically connect the bot on server startup. Set to `false` if yo
 
 Guild IDs for registering `@guild`-tagged commands. Can also be set via the `DISCORD_GUILD_ID` environment variable (comma-separated).
 
+### `interactionTimeout`
+
+- **Type:** `number`
+- **Default:** Remaining Discord token lifetime (15 minutes minus elapsed time)
+
+Timeout in milliseconds before an interaction's reactive scope is disposed. This cleans up Vue watchers (reactive replies) and button collectors. Set to `0` to disable automatic cleanup.
+
+```ts
+discord: {
+  interactionTimeout: 5 * 60 * 1000 // 5 minutes
+}
+```
+
 ### `watch`
 
 HMR and sync options for development.
@@ -83,3 +96,4 @@ Set `sync` to `false` to disable auto-sync entirely.
 | `DISCORD_TOKEN` | Yes | Bot token from Discord Developer Portal |
 | `DISCORD_CLIENT_ID` | Yes | Application ID from Discord Developer Portal |
 | `DISCORD_GUILD_ID` | No | Comma-separated guild IDs for guild commands |
+| `DISCORD_OWNER_ID` | No | User ID for the `ownerOnly` middleware |

@@ -9,13 +9,18 @@ A Nuxt module for building Discord bots with slash commands, featuring hot modul
 ## Features
 
 - **Slash Commands** - Type-safe definitions with automatic registration
+- **Context Menus** - User and message context menus via `defineUserContextMenu` / `defineMessageContextMenu`
+- **Event Listeners** - File-based listeners via `defineListener`
+- **Middleware** - tRPC-inspired `next()` chain with `defineMiddleware`, `useMiddleware` macro, and `@middleware` JSDoc tags
+- **Modals** - Interactive forms via `reply.modal(title, fields, onSubmit)`
 - **File-based Routing** - Directory structure maps to subcommand hierarchy
 - **All Option Types** - String, Number, Integer, Boolean, User, Role, Mentionable, Attachment
-- **JSDoc Metadata** - `@nsfw`, `@guild`, `@dm`, `@defaultMemberPermissions` tags
-- **Localization** - i18n via `discord/locales/*.json` files
+- **JSDoc Metadata** - `@nsfw`, `@guild`, `@dm`, `@defaultMemberPermissions`, `@middleware` tags
+- **Localization** - i18n via inline JSDoc or `discord/locales/*.json` files
 - **Guild Commands** - Register commands per-guild for instant updates
 - **HMR** - Hot reload commands during development
-- **Web Dashboard** - View commands, sync status, and register with one click
+- **Web Dashboard** - Overview, commands, context menus, listeners, and live activity log
+- **Built-in Middleware** - `guildOnly`, `ownerOnly`, `cooldown`, `requireRole`
 
 ## Quick Setup
 
@@ -226,14 +231,40 @@ export default () => {
 }
 ```
 
+## Middleware
+
+```ts
+// discord/commands/admin.ts
+
+/** @middleware guildOnly */
+export default () => {
+  useMiddleware(cooldown, { seconds: 10 })
+  return reply.ephemeral('Admin action executed!')
+}
+```
+
+Built-in middleware: `guildOnly`, `ownerOnly`, `cooldown`, `requireRole`. Create your own with `defineMiddleware`:
+
+```ts
+export const withUser = defineMiddleware('withUser', async ({ interaction, next }) => {
+  const user = await db.getUser(interaction.user.id)
+  if (!user)
+    throw new MiddlewareError('Please register first.')
+  return next({ user }) // pass data to the command
+})
+```
+
 ## Web Dashboard
 
-Access `/discord/slash-commands` to view:
+Access `/discord` to view:
 
-- All registered commands with option types and constraints
-- Sync status (synced, added, changed, removed, conflict)
-- Command metadata (nsfw, guild-only, permissions)
-- One-click sync to Discord
+- **Overview** - Stat cards for commands, context menus, listeners
+- **Slash Commands** - Option types, sync status, one-click sync, command test bar with parameter autocomplete
+- **Context Menus** - User and message menus grouped by type
+- **Listeners** - Event names and once flags
+- **Activity Log** - Real-time interaction history with filtering and stats
+
+File paths link to your editor via `vscode://file` URLs.
 
 ## Runtime Hooks
 
@@ -279,6 +310,7 @@ export default defineNuxtConfig({
     dir: 'discord',
     autoStart: true,
     guilds: [], // Guild IDs for @guild commands
+    interactionTimeout: 15 * 60 * 1000, // scope cleanup (default: 15 min)
     watch: {
       enabled: true,
       port: 5720,

@@ -7,7 +7,7 @@
 ## Phase 2: Code Quality & Stability — DONE
 
 - [x] Dead code removal, error toast, TS 6 strict null fixes
-- [x] 95 unit tests + knip
+- [x] 118 unit tests + knip
 
 ## Phase 3: Slash Command Features — DONE
 
@@ -20,12 +20,12 @@
 - [x] Command test API + Discord-style input bar
 - [x] Web dashboard with Nuxt UI 4
 
-## Phase 4: Interaction Parity with Sapphire — DONE
+## Phase 4: Interaction Parity — DONE
 
-- [x] Event listeners: `discord/listeners/`, `defineListener(event, handler, { once })`, all discord.js Events
-- [x] Context menu commands: `discord/context-menus/`, `defineUserContextMenu` / `defineMessageContextMenu`
+- [x] Event listeners: `discord/listeners/`, `defineListener(event, handler, { once })`
+- [x] Context menus: `discord/context-menus/`, `defineUserContextMenu` / `defineMessageContextMenu`
 - [x] Context menu name inference: define function arg > JSDoc @name > filename
-- [x] Context menu reply composable support (discriminated union types)
+- [x] Reply composable support for context menus (discriminated union types)
 - [x] Auto-registration alongside slash commands
 
 ## Phase 5: Web Dashboard — DONE
@@ -39,56 +39,30 @@
 - [x] Dark mode toggle via @vueuse/core useColorMode
 - [x] `vscode://file` links on all file paths
 - [x] Command test bar: floating input, parameter autocomplete, `/` to browse
-- [x] Nuxt green + Discord blurple dual-brand aesthetic
+
+## Phase 6: Message Components — PARTIAL
+
+- [x] `reply.modal(title, fields, onSubmit)` builder with text inputs (short/paragraph)
+- [x] Modal submit handler (inline callback with reply composable support)
+- [x] Tests (12 modal builder tests)
+- [ ] Select menus (`reply.selectMenu()`)
+- [ ] Persistent component handlers via composables
+
+## Phase 7: Middleware — DONE
+
+- [x] `defineMiddleware(name, fn)` with tRPC-inspired `next()` chain
+- [x] `useMiddleware()` compiler macro (build-time extracted, runtime returns context)
+- [x] `useMiddlewareContext()` for typed context access in commands
+- [x] `MiddlewareError` for denial with ephemeral reply
+- [x] `@middleware` JSDoc tags on commands and context menus
+- [x] Built-in: `guildOnly`, `ownerOnly`, `cooldown`, `requireRole`
+- [x] `interactionTimeout` config for scope cleanup
+- [x] Nitro hooks: `discord:interaction:before/after/denied`
+- [x] Tests (11 middleware tests)
 
 ---
 
-## Phase 6: Message Components & Advanced Interactions — NEXT
-
-Goal: support modals, select menus, and persistent component handlers.
-
-### 6.1 Modal Support
-- [ ] `reply.modal(title, fields)` builder API
-- [ ] Modal submit handler (inline callback or file-based)
-- [ ] Text input fields with validation (short, paragraph, required, placeholder, min/max length)
-- [ ] Tests
-
-### 6.2 Select Menus
-- [ ] `reply.selectMenu(options)` builder for string select
-- [ ] User/Role/Channel/Mentionable select variants
-- [ ] Multi-select support with min/max values
-- [ ] Select interaction handler
-- [ ] Tests
-
-### 6.3 Persistent Component Handlers
-- [ ] `discord/components/` directory for file-based component handlers
-- [ ] `defineButton(customId, handler)` / `defineSelectMenu(customId, handler)` API
-- [ ] Custom ID pattern matching (e.g. `ticket-{id}`)
-- [ ] Collector timeout management
-- [ ] Tests
-
----
-
-## Phase 7: Preconditions & Error Handling
-
-### 7.1 Preconditions / Guards
-- [ ] `definePrecondition(name, check)` API
-- [ ] File-based preconditions in `discord/preconditions/`
-- [ ] Built-in: cooldown, permissions, channel type
-- [ ] Composable: `@precondition cooldown:5s` JSDoc tag
-- [ ] Apply to commands, context menus, and component handlers
-- [ ] Tests
-
-### 7.2 Structured Error Handling
-- [ ] Per-interaction error events (commandSuccess, commandDenied, commandError)
-- [ ] `UserError` class with identifier, message, and context
-- [ ] Nitro hooks: `discord:command:success`, `discord:command:error`, `discord:command:denied`
-- [ ] Dashboard: error entries in activity log with stack traces
-- [ ] Tests
-
----
-
-## Phase 8: Polish & Ecosystem
+## Phase 8: Polish & Ecosystem — NEXT
 
 ### 8.1 HMR Integration Tests
 - [ ] Separate vitest.config.e2e.ts with @nuxt/test-utils dev mode
@@ -97,11 +71,11 @@ Goal: support modals, select menus, and persistent component handlers.
 
 ### 8.2 Nuxt DevTools Integration
 - [ ] Custom DevTools tab for bot status, commands, listeners
-- [ ] DevTools → dashboard deep links
+- [ ] DevTools -> dashboard deep links
 
 ### 8.3 Documentation Site
-- [ ] Getting started guide
-- [ ] API reference for all define* functions and composables
+- [x] Getting started guide
+- [x] API docs for define* functions, reply composable, middleware
 - [ ] Migration guide from Sapphire / discord.js handler
 - [ ] Deploy docs site
 
