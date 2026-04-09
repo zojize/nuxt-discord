@@ -4,6 +4,11 @@ export default defineNuxtConfig({
     '@nuxt/ui',
   ],
 
+  app: {
+    // eslint-disable-next-line node/prefer-global/process
+    baseURL: process.env.NUXT_APP_BASE_URL ?? '/',
+  },
+
   content: {
     build: {
       markdown: {
@@ -16,6 +21,13 @@ export default defineNuxtConfig({
 
   routeRules: {
     '/': { redirect: '/getting-started' },
+  },
+
+  nitro: {
+    prerender: {
+      crawlLinks: true,
+      routes: ['/getting-started', '/guide/middleware'],
+    },
   },
 
   css: ['~/assets/css/main.css'],
