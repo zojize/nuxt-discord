@@ -20,7 +20,8 @@ export default defineNuxtConfig({
   },
 
   routeRules: {
-    '/': { redirect: '/getting-started' },
+    // eslint-disable-next-line node/prefer-global/process
+    '/': { redirect: `${process.env.NUXT_APP_BASE_URL ?? '/'}getting-started` },
   },
 
   nitro: {
