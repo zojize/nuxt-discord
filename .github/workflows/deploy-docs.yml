@@ -33,8 +33,8 @@ jobs:
         env:
           SKIP_INSTALL_SIMPLE_GIT_HOOKS: 1
 
-      - name: Prepare docs
-        run: cd docs && bunx nuxi prepare
+      - name: Prepare
+        run: bun run dev:prepare
 
       - name: Generate static docs
         run: cd docs && bunx nuxi generate
