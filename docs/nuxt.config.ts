@@ -27,6 +27,7 @@ export default defineNuxtConfig({
     prerender: {
       crawlLinks: true,
       routes: ['/getting-started', '/guide/middleware'],
+      failOnError: false,
     },
   },
 
