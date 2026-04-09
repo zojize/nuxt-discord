@@ -23,12 +23,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - uses: oven-sh/setup-bun@v2
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
         env:
           SKIP_INSTALL_SIMPLE_GIT_HOOKS: 1
+
+      - name: Prepare docs
+        run: cd docs && bunx nuxi prepare
 
       - name: Generate static docs
         run: cd docs && bunx nuxi generate
