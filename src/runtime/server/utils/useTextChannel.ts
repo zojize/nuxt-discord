@@ -1,8 +1,19 @@
-import type { TextBasedChannel } from 'discord.js'
-import type { Ref } from 'vue'
+import type { MessageCreateOptions, TextBasedChannel } from 'discord.js'
+import type { MaybeRef, Ref } from 'vue'
+import type { File, SentMessage } from './messageSender'
 import { Events } from 'discord.js'
-import { getCurrentScope, onScopeDispose, ref, shallowRef } from 'vue'
+import { getCurrentScope, onScopeDispose, ref, shallowRef, toValue } from 'vue'
 import { getCurrentChannel } from './client'
+import { sendReactiveMessage } from './messageSender'
+
+export interface SendHandle {
+  /** The promise resolving to the sent message */
+  message: Promise<SentMessage>
+  /** Edit the sent message with new content */
+  edit: (content: MaybeRef<string>) => Promise<void>
+  /** Delete the sent message */
+  delete: () => Promise<void>
+}
 
 export interface UseTextChannelReturn {
   /** The channel ID */
@@ -26,6 +37,12 @@ export interface UseTextChannelReturn {
   members: Ref<Map<string, unknown>>
   /** Reactive: most recent message in this channel. Updates on Events.MessageCreate. */
   lastMessage: Ref<unknown>
+
+  /**
+   * Send a message to the channel. Reactive content auto-edits the sent message.
+   * Returns a handle with `message` (promise), `edit`, and `delete`.
+   */
+  send: (content: MaybeRef<string>, options?: { files?: MaybeRef<File>[] }) => SendHandle
 
   /** The underlying discord.js channel — escape hatch for advanced usage */
   raw: TextBasedChannel
@@ -134,6 +151,34 @@ export function useTextChannel(idOrInstance?: string | TextBasedChannel): UseTex
     }
   }
 
+  function send(content: MaybeRef<string>, options?: { files?: MaybeRef<File>[] }): SendHandle {
+    const message = sendReactiveMessage(
+      {
+        send: opts => (channel as { send: (opts: MessageCreateOptions) => Promise<SentMessage> }).send(opts),
+        edit: async (msg, opts) => {
+          const target = ('edit' in msg ? msg : (msg as { resource?: { message?: unknown } }).resource?.message) as { edit: (opts: MessageCreateOptions) => Promise<SentMessage> }
+          return target.edit(opts)
+        },
+      },
+      content,
+      { files: options?.files },
+    )
+
+    return {
+      message,
+      edit: async (newContent: MaybeRef<string>) => {
+        const msg = await message
+        const target = ('edit' in msg ? msg : (msg as { resource?: { message?: unknown } }).resource?.message) as { edit: (opts: MessageCreateOptions) => Promise<unknown> }
+        await target.edit({ content: toValue(newContent) })
+      },
+      delete: async () => {
+        const msg = await message
+        const target = ('delete' in msg ? msg : (msg as { resource?: { message?: unknown } }).resource?.message) as { delete: () => Promise<unknown> }
+        await target.delete()
+      },
+    }
+  }
+
   return {
     id: ch.id,
     type: ch.type ?? 0,
@@ -145,6 +190,7 @@ export function useTextChannel(idOrInstance?: string | TextBasedChannel): UseTex
     parent,
     members,
     lastMessage,
+    send,
     raw: channel,
   }
 }

@@ -1,7 +1,7 @@
 import type { TextBasedChannel } from 'discord.js'
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { effectScope } from 'vue'
+import { effectScope, ref } from 'vue'
 
 const mockedNitroApp = {
   hooks: {
@@ -241,6 +241,70 @@ describe('useTextChannel', () => {
       expect(emitter.listenerCount('channelUpdate')).toBeGreaterThan(0)
       scope.stop()
       expect(emitter.listenerCount('channelUpdate')).toBe(0)
+    })
+  })
+
+  describe('send', () => {
+    function mockTextChannelWithClient(overrides: Record<string, any> = {}) {
+      const client = mockClient()
+      const channel = mockTextChannel({ ...overrides, client })
+      return { channel, client: (channel as any).client as EventEmitter }
+    }
+
+    it('sends a string message to the channel and returns a handle', async () => {
+      const scope = effectScope()
+      await scope.run(async () => {
+        const { channel } = mockTextChannelWithClient()
+        const ch = useTextChannel(channel)
+        const handle = ch.send('hello channel')
+        expect((channel as any).send).toHaveBeenCalledWith(expect.objectContaining({ content: 'hello channel' }))
+        const msg = await handle.message
+        expect(msg).toBeDefined()
+      })
+      scope.stop()
+    })
+
+    it('edits the message when a reactive ref changes', async () => {
+      const scope = effectScope()
+      await scope.run(async () => {
+        const fakeMessage = { id: 'msg-1', edit: vi.fn(() => Promise.resolve({ id: 'msg-1' })) }
+        const { channel } = mockTextChannelWithClient()
+        ;(channel as any).send.mockReturnValue(Promise.resolve(fakeMessage))
+
+        const ch = useTextChannel(channel)
+        const text = ref('initial')
+        const handle = ch.send(text)
+        await handle.message
+
+        text.value = 'updated'
+        await new Promise(r => setTimeout(r, 10))
+        expect(fakeMessage.edit).toHaveBeenCalledWith(expect.objectContaining({ content: 'updated' }))
+      })
+      scope.stop()
+    })
+
+    it('exposes edit and delete methods on the handle', async () => {
+      const scope = effectScope()
+      await scope.run(async () => {
+        const fakeMessage = {
+          id: 'msg-1',
+          edit: vi.fn(() => Promise.resolve({ id: 'msg-1' })),
+          delete: vi.fn(() => Promise.resolve()),
+        }
+        const { channel } = mockTextChannelWithClient()
+        ;(channel as any).send.mockReturnValue(Promise.resolve(fakeMessage))
+
+        const ch = useTextChannel(channel)
+        const handle = ch.send('first')
+        await handle.message
+
+        await handle.edit('second')
+        expect(fakeMessage.edit).toHaveBeenCalledWith(expect.objectContaining({ content: 'second' }))
+
+        await handle.delete()
+        expect(fakeMessage.delete).toHaveBeenCalled()
+      })
+      scope.stop()
     })
   })
 })
