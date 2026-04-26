@@ -269,6 +269,7 @@ export type { ContextMenuDefinition } from './runtime/server/utils/defineContext
 export type { ListenerDefinition } from './runtime/server/utils/defineListener'
 export type { MiddlewareDefinition, MiddlewareFn, MiddlewareOpts } from './runtime/server/utils/defineMiddleware'
 export { MiddlewareError } from './runtime/server/utils/defineMiddleware'
+export type { SendHandle, UseTextChannelReturn } from './runtime/server/utils/useTextChannel'
 
 export interface ContextMenu {
   /** Display name for the context menu */
