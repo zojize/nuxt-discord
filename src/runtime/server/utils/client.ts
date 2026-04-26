@@ -77,6 +77,16 @@ export function useInteraction(): ChatInputCommandInteraction | null {
   return currentInteraction
 }
 
+let currentChannel: import('discord.js').TextBasedChannel | null = null
+
+export function setCurrentChannel(ch: import('discord.js').TextBasedChannel | null) {
+  currentChannel = ch
+}
+
+export function getCurrentChannel(): import('discord.js').TextBasedChannel | null {
+  return currentChannel
+}
+
 export class DiscordClient {
   #client: InternalClient | null = null
   public get internalClient() {
