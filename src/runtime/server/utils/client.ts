@@ -1,4 +1,4 @@
-import type { APIApplicationCommandOption, AutocompleteInteraction, ChatInputCommandInteraction, CommandInteraction, Interaction, RESTGetAPIApplicationCommandsResult, RESTPutAPIApplicationCommandsResult } from 'discord.js'
+import type { APIApplicationCommandOption, AutocompleteInteraction, ChatInputCommandInteraction, CommandInteraction, Interaction, Message, MessageReaction, RESTGetAPIApplicationCommandsResult, RESTPutAPIApplicationCommandsResult, TextBasedChannel, ThreadChannel, Typing, VoiceState } from 'discord.js'
 import type { EffectScope } from 'vue'
 import type { MiddlewareEntry, NuxtDiscordOptions, SlashCommandOption, SlashCommandOptionType, SlashCommandReturnType, SlashCommandRuntime, SlashCommandSubcommandGroupRuntime, SlashCommandSubcommandRuntime } from '../../../types'
 import type { ContextMenuDefinition } from './defineContextMenu'
@@ -87,6 +87,28 @@ export function getCurrentChannel(): import('discord.js').TextBasedChannel | nul
   return currentChannel
 }
 
+/**
+ * Map of Discord event names to a function that extracts the relevant TextBasedChannel
+ * from the event's args. Used by registerListeners to set currentChannel before invoking
+ * the user handler so useTextChannel() works inside listeners.
+ */
+const LISTENER_CHANNEL_ACCESSORS: Record<string, (...args: any[]) => TextBasedChannel | null> = {
+  messageCreate: (msg: Message) => msg.channel ?? null,
+  messageUpdate: (_old: Message, newMsg: Message) => newMsg?.channel ?? null,
+  messageDelete: (msg: Message) => msg.channel ?? null,
+  messageReactionAdd: (reaction: MessageReaction) => reaction?.message?.channel ?? null,
+  messageReactionRemove: (reaction: MessageReaction) => reaction?.message?.channel ?? null,
+  typingStart: (typing: Typing) => (typing?.channel as TextBasedChannel) ?? null,
+  channelCreate: (ch: any) => (ch && 'send' in ch ? ch as TextBasedChannel : null),
+  channelUpdate: (_old: any, newCh: any) => (newCh && 'send' in newCh ? newCh as TextBasedChannel : null),
+  channelDelete: (ch: any) => (ch && 'send' in ch ? ch as TextBasedChannel : null),
+  threadCreate: (thread: ThreadChannel) => thread as unknown as TextBasedChannel,
+  threadUpdate: (_old: ThreadChannel, newThread: ThreadChannel) => newThread as unknown as TextBasedChannel,
+  threadDelete: (thread: ThreadChannel) => thread as unknown as TextBasedChannel,
+  voiceStateUpdate: (_old: VoiceState, newState: VoiceState) =>
+    (newState?.channel && 'send' in newState.channel ? newState.channel as TextBasedChannel : null),
+}
+
 export class DiscordClient {
   #client: InternalClient | null = null
   public get internalClient() {
@@ -151,12 +173,25 @@ export class DiscordClient {
       return
     }
     for (const listener of listeners) {
+      const accessor = LISTENER_CHANNEL_ACCESSORS[listener.event]
       const handler = async (...args: unknown[]) => {
+        const previousChannel = currentChannel
+        if (accessor) {
+          try {
+            currentChannel = accessor(...args) ?? null
+          }
+          catch {
+            currentChannel = null
+          }
+        }
         try {
           await (listener.execute as (...a: unknown[]) => void | Promise<void>)(...args)
         }
         catch (error) {
           logger.error(`Listener error [${listener.event}]:`, error)
+        }
+        finally {
+          currentChannel = previousChannel
         }
       }
       if (listener.once) {
@@ -319,6 +354,7 @@ export class DiscordClient {
       channelId: interaction.channelId,
     }
     try {
+      currentChannel = (interaction.channel as TextBasedChannel) ?? null
       const result: unknown = menu.type === 'user' && interaction.isUserContextMenuCommand()
         ? await menu.execute(interaction)
         : menu.type === 'message' && interaction.isMessageContextMenuCommand()
@@ -339,6 +375,9 @@ export class DiscordClient {
       if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({ content: 'An error occurred.', flags: MessageFlags.Ephemeral }).catch(() => {})
       }
+    }
+    finally {
+      currentChannel = null
     }
   }
 
@@ -532,9 +571,11 @@ export class DiscordClient {
       let result!: SlashCommandReturnType
       scope.run(() => {
         currentInteraction = interaction
+        currentChannel = (interaction.channel as TextBasedChannel) ?? null
         setMiddlewareContext(middlewareContext)
         result = command.execute!(...args)
         currentInteraction = null
+        currentChannel = null
         setMiddlewareContext(null)
       })
 
