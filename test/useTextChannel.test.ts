@@ -204,6 +204,32 @@ describe('useTextChannel', () => {
       scope.stop()
     })
 
+    it('exposes lastMessage as a reactive ref that updates on MessageCreate', () => {
+      const scope = effectScope()
+      scope.run(() => {
+        const { channel, client } = mockTextChannelWithClient({ id: 'ch-1', lastMessage: null })
+        const ch = useTextChannel(channel)
+        expect(ch.lastMessage.value).toBe(null)
+
+        const newMsg = { id: 'msg-1', content: 'hi', channelId: 'ch-1', channel: { id: 'ch-1' } }
+        client.emit('messageCreate', newMsg)
+
+        expect(ch.lastMessage.value).toBe(newMsg)
+      })
+      scope.stop()
+    })
+
+    it('does not update lastMessage on MessageCreate for a different channel', () => {
+      const scope = effectScope()
+      scope.run(() => {
+        const { channel, client } = mockTextChannelWithClient({ id: 'ch-1', lastMessage: null })
+        const ch = useTextChannel(channel)
+        client.emit('messageCreate', { id: 'msg-x', channelId: 'ch-2', channel: { id: 'ch-2' } })
+        expect(ch.lastMessage.value).toBe(null)
+      })
+      scope.stop()
+    })
+
     it('removes channelUpdate listener when scope is disposed', () => {
       const scope = effectScope()
       let emitter!: EventEmitter
