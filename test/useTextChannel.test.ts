@@ -1,6 +1,7 @@
 import type { TextBasedChannel } from 'discord.js'
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { effectScope } from 'vue'
 
 const mockedNitroApp = {
   hooks: {
@@ -93,6 +94,88 @@ describe('useTextChannel', () => {
       expect(result.guildId).toBe('guild-x')
       expect(result.createdAt).toEqual(new Date(123))
       expect(result.raw).toBe(ch)
+    })
+  })
+
+  describe('reactive properties', () => {
+    function mockTextChannelWithClient(overrides: Record<string, any> = {}) {
+      const client = mockClient()
+      const channel = mockTextChannel({ ...overrides, client })
+      return { channel, client: (channel as any).client as EventEmitter }
+    }
+
+    it('exposes name as a reactive ref that updates on ChannelUpdate', () => {
+      const scope = effectScope()
+      scope.run(() => {
+        const { channel, client } = mockTextChannelWithClient({ id: 'ch-1', name: 'old-name' })
+        const ch = useTextChannel(channel)
+        expect(ch.name.value).toBe('old-name')
+
+        const updated = { ...channel, id: 'ch-1', name: 'new-name' }
+        client.emit('channelUpdate', channel, updated)
+
+        expect(ch.name.value).toBe('new-name')
+      })
+      scope.stop()
+    })
+
+    it('does not update name when ChannelUpdate fires for a different channel', () => {
+      const scope = effectScope()
+      scope.run(() => {
+        const { channel, client } = mockTextChannelWithClient({ id: 'ch-1', name: 'one' })
+        const ch = useTextChannel(channel)
+        const otherChannel = { id: 'ch-2', name: 'two' }
+        client.emit('channelUpdate', otherChannel, { ...otherChannel, name: 'two-renamed' })
+        expect(ch.name.value).toBe('one')
+      })
+      scope.stop()
+    })
+
+    it('exposes topic, nsfw, parent as reactive refs initialised from the channel', () => {
+      const scope = effectScope()
+      scope.run(() => {
+        const { channel } = mockTextChannelWithClient({
+          topic: 'old topic',
+          nsfw: false,
+          parent: null,
+        })
+        const ch = useTextChannel(channel)
+        expect(ch.topic.value).toBe('old topic')
+        expect(ch.nsfw.value).toBe(false)
+        expect(ch.parent.value).toBe(null)
+      })
+      scope.stop()
+    })
+
+    it('updates topic, nsfw, parent on ChannelUpdate', () => {
+      const scope = effectScope()
+      scope.run(() => {
+        const { channel, client } = mockTextChannelWithClient({
+          id: 'ch-1',
+          topic: 'before',
+          nsfw: false,
+        })
+        const ch = useTextChannel(channel)
+        const updated = { id: 'ch-1', topic: 'after', nsfw: true, name: 'general', parent: { id: 'cat-1' } }
+        client.emit('channelUpdate', channel, updated)
+        expect(ch.topic.value).toBe('after')
+        expect(ch.nsfw.value).toBe(true)
+        expect(ch.parent.value).toEqual({ id: 'cat-1' })
+      })
+      scope.stop()
+    })
+
+    it('removes channelUpdate listener when scope is disposed', () => {
+      const scope = effectScope()
+      let emitter!: EventEmitter
+      scope.run(() => {
+        const { channel, client } = mockTextChannelWithClient({ name: 'before' })
+        emitter = client
+        useTextChannel(channel)
+      })
+      expect(emitter.listenerCount('channelUpdate')).toBeGreaterThan(0)
+      scope.stop()
+      expect(emitter.listenerCount('channelUpdate')).toBe(0)
     })
   })
 })

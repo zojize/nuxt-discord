@@ -1,4 +1,7 @@
 import type { TextBasedChannel } from 'discord.js'
+import type { Ref } from 'vue'
+import { Events } from 'discord.js'
+import { getCurrentScope, onScopeDispose, ref } from 'vue'
 import { getCurrentChannel } from './client'
 
 export interface UseTextChannelReturn {
@@ -10,8 +13,23 @@ export interface UseTextChannelReturn {
   guildId: string | null
   /** When the channel was created */
   createdAt: Date | null
+
+  /** Reactive: channel name. Updates on Events.ChannelUpdate. */
+  name: Ref<string>
+  /** Reactive: channel topic. Updates on Events.ChannelUpdate. */
+  topic: Ref<string | null>
+  /** Reactive: NSFW flag. Updates on Events.ChannelUpdate. */
+  nsfw: Ref<boolean>
+  /** Reactive: parent category. Updates on Events.ChannelUpdate. */
+  parent: Ref<unknown>
+
   /** The underlying discord.js channel — escape hatch for advanced usage */
   raw: TextBasedChannel
+}
+
+interface DiscordEventClient {
+  on: (event: string, listener: (...args: unknown[]) => void) => unknown
+  off: (event: string, listener: (...args: unknown[]) => void) => unknown
 }
 
 /**
@@ -19,6 +37,11 @@ export interface UseTextChannelReturn {
  * 1. An explicit TextBasedChannel instance (first arg)
  * 2. A string channel ID (not yet implemented — pass an instance instead)
  * 3. The ambient `currentChannel` set by the framework before invoking handlers
+ *
+ * Returns reactive refs for channel properties that update when the Discord
+ * client emits the relevant events. Listeners auto-clean via the current
+ * Vue effect scope (disposed by `interactionTimeout` in commands, or after
+ * the listener handler returns).
  *
  * Throws if no channel can be resolved or the resolved channel is not text-based.
  */
@@ -48,6 +71,36 @@ export function useTextChannel(idOrInstance?: string | TextBasedChannel): UseTex
     type: number
     guildId: string | null
     createdAt: Date | null
+    name: string
+    topic: string | null
+    nsfw: boolean
+    parent: unknown
+    client?: DiscordEventClient
+  }
+
+  const name = ref<string>(ch.name ?? '')
+  const topic = ref<string | null>(ch.topic ?? null)
+  const nsfw = ref<boolean>(ch.nsfw ?? false)
+  const parent = ref<unknown>(ch.parent ?? null)
+
+  const client = ch.client
+  if (client) {
+    const onUpdate = (...args: unknown[]) => {
+      const newCh = args[1] as { id?: string, name?: string, topic?: string | null, nsfw?: boolean, parent?: unknown } | undefined
+      if (!newCh || newCh.id !== ch.id)
+        return
+      name.value = newCh.name ?? name.value
+      topic.value = newCh.topic ?? null
+      nsfw.value = newCh.nsfw ?? false
+      parent.value = newCh.parent ?? null
+    }
+    client.on(Events.ChannelUpdate, onUpdate)
+
+    if (getCurrentScope()) {
+      onScopeDispose(() => {
+        client.off(Events.ChannelUpdate, onUpdate)
+      })
+    }
   }
 
   return {
@@ -55,6 +108,10 @@ export function useTextChannel(idOrInstance?: string | TextBasedChannel): UseTex
     type: ch.type ?? 0,
     guildId: ch.guildId ?? null,
     createdAt: ch.createdAt ?? null,
+    name,
+    topic,
+    nsfw,
+    parent,
     raw: channel,
   }
 }
