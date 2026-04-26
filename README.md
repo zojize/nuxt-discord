@@ -13,6 +13,7 @@ A Nuxt module for building Discord bots with slash commands, featuring hot modul
 - **Event Listeners** - File-based listeners via `defineListener`
 - **Middleware** - tRPC-inspired `next()` chain with `defineMiddleware`, `useMiddleware` macro, and `@middleware` JSDoc tags
 - **Modals** - Interactive forms via `reply.modal(title, fields, onSubmit)`
+- **Channel Composable** - `useTextChannel` exposes a Discord text channel as a reactive proxy with event-driven refs and a `send()` method
 - **File-based Routing** - Directory structure maps to subcommand hierarchy
 - **All Option Types** - String, Number, Integer, Boolean, User, Role, Mentionable, Attachment
 - **JSDoc Metadata** - `@nsfw`, `@guild`, `@dm`, `@defaultMemberPermissions`, `@middleware` tags
