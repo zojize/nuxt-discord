@@ -60,9 +60,19 @@
 - [x] Nitro hooks: `discord:interaction:before/after/denied`
 - [x] Tests (11 middleware tests)
 
+## Phase 8: Channel Composable — DONE
+
+- [x] `useTextChannel(idOrInstance?)` composable
+- [x] Reactive refs: `name`, `topic`, `nsfw`, `parent`, `members`, `lastMessage`
+- [x] Static props: `id`, `type`, `guildId`, `createdAt`, `raw`
+- [x] `send()` method mirroring reply's API (reactive content, files, edit/delete handle)
+- [x] Ambient channel context (`currentChannel`) set in slash commands, context menus, and channel-bearing event listeners
+- [x] Shared `messageSender` helper extracted (used by useTextChannel; reply.ts deferred)
+- [x] Tests (18 useTextChannel tests) + playground example
+
 ---
 
-## Phase 8: Polish & Ecosystem — NEXT
+## Phase 9: Polish & Ecosystem — NEXT
 
 ### 8.1 HMR Integration Tests
 - [ ] Separate vitest.config.e2e.ts with @nuxt/test-utils dev mode

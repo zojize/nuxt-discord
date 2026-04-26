@@ -6,6 +6,8 @@ title: Responses
 
 Commands can return different types to control how Discord displays the response.
 
+> Need to send a non-interaction message to a channel (no 15-minute lifetime, no ephemeral, persistent)? See [useTextChannel](./use-text-channel).
+
 ## String
 
 The simplest response — a public message:
