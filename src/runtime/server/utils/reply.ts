@@ -399,7 +399,7 @@ function createModalHandler(
 }
 
 // https://github.com/vuejs/core/issues/5303#issuecomment-1543596383
-export function deepToRaw<T extends Record<string, any>>(sourceObj: T): T {
+function deepToRaw<T extends Record<string, any>>(sourceObj: T): T {
   const cycleDetector = new WeakSet()
   const objectIterator = (input: any): any => {
     if (cycleDetector.has(input)) {
