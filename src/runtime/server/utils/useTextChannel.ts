@@ -1,7 +1,7 @@
 import type { TextBasedChannel } from 'discord.js'
 import type { Ref } from 'vue'
 import { Events } from 'discord.js'
-import { getCurrentScope, onScopeDispose, ref } from 'vue'
+import { getCurrentScope, onScopeDispose, ref, shallowRef } from 'vue'
 import { getCurrentChannel } from './client'
 
 export interface UseTextChannelReturn {
@@ -87,9 +87,9 @@ export function useTextChannel(idOrInstance?: string | TextBasedChannel): UseTex
   const name = ref<string>(ch.name ?? '')
   const topic = ref<string | null>(ch.topic ?? null)
   const nsfw = ref<boolean>(ch.nsfw ?? false)
-  const parent = ref<unknown>(ch.parent ?? null)
-  const members = ref<Map<string, unknown>>(new Map(ch.members ?? []))
-  const lastMessage = ref<unknown>(ch.lastMessage ?? null)
+  const parent = shallowRef<unknown>(ch.parent ?? null)
+  const members = shallowRef<Map<string, unknown>>(new Map(ch.members ?? []))
+  const lastMessage = shallowRef<unknown>(ch.lastMessage ?? null)
 
   const refreshMembers = () => {
     members.value = new Map(ch.members ?? [])
