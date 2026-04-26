@@ -22,6 +22,8 @@ export interface UseTextChannelReturn {
   nsfw: Ref<boolean>
   /** Reactive: parent category. Updates on Events.ChannelUpdate. */
   parent: Ref<unknown>
+  /** Reactive: snapshot of members visible in this channel. Updates on guild member events and ChannelUpdate (perm overrides). */
+  members: Ref<Map<string, unknown>>
 
   /** The underlying discord.js channel — escape hatch for advanced usage */
   raw: TextBasedChannel
@@ -75,6 +77,7 @@ export function useTextChannel(idOrInstance?: string | TextBasedChannel): UseTex
     topic: string | null
     nsfw: boolean
     parent: unknown
+    members?: Iterable<readonly [string, unknown]>
     client?: DiscordEventClient
   }
 
@@ -82,6 +85,11 @@ export function useTextChannel(idOrInstance?: string | TextBasedChannel): UseTex
   const topic = ref<string | null>(ch.topic ?? null)
   const nsfw = ref<boolean>(ch.nsfw ?? false)
   const parent = ref<unknown>(ch.parent ?? null)
+  const members = ref<Map<string, unknown>>(new Map(ch.members ?? []))
+
+  const refreshMembers = () => {
+    members.value = new Map(ch.members ?? [])
+  }
 
   const client = ch.client
   if (client) {
@@ -93,12 +101,24 @@ export function useTextChannel(idOrInstance?: string | TextBasedChannel): UseTex
       topic.value = newCh.topic ?? null
       nsfw.value = newCh.nsfw ?? false
       parent.value = newCh.parent ?? null
+      refreshMembers()
+    }
+    const onMemberChange = (...args: unknown[]) => {
+      const member = args.at(-1) as { guild?: { id?: string } } | undefined
+      if (member?.guild?.id === ch.guildId)
+        refreshMembers()
     }
     client.on(Events.ChannelUpdate, onUpdate)
+    client.on(Events.GuildMemberAdd, onMemberChange)
+    client.on(Events.GuildMemberRemove, onMemberChange)
+    client.on(Events.GuildMemberUpdate, onMemberChange)
 
     if (getCurrentScope()) {
       onScopeDispose(() => {
         client.off(Events.ChannelUpdate, onUpdate)
+        client.off(Events.GuildMemberAdd, onMemberChange)
+        client.off(Events.GuildMemberRemove, onMemberChange)
+        client.off(Events.GuildMemberUpdate, onMemberChange)
       })
     }
   }
@@ -112,6 +132,7 @@ export function useTextChannel(idOrInstance?: string | TextBasedChannel): UseTex
     topic,
     nsfw,
     parent,
+    members,
     raw: channel,
   }
 }
