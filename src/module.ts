@@ -103,6 +103,11 @@ export default defineNuxtModule<NuxtDiscordOptions>({
         as: 'requireRole',
         from: ctx.resolve.module('runtime/server/utils/middleware/requireRole'),
       },
+      {
+        name: 'useTextChannel',
+        as: 'useTextChannel',
+        from: ctx.resolve.module('runtime/server/utils/useTextChannel'),
+      },
     ])
 
     prepareRuntimeConfig(ctx)
