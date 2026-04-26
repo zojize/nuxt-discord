@@ -165,6 +165,45 @@ describe('useTextChannel', () => {
       scope.stop()
     })
 
+    it('exposes members as a reactive ref that updates on member events', () => {
+      const scope = effectScope()
+      scope.run(() => {
+        const initialMembers = new Map([['user-1', { id: 'user-1' }]])
+        const { channel, client } = mockTextChannelWithClient({
+          guildId: 'guild-1',
+          members: initialMembers,
+        })
+        const ch = useTextChannel(channel)
+        expect(ch.members.value.size).toBe(1)
+
+        const updatedMembers = new Map([
+          ['user-1', { id: 'user-1' }],
+          ['user-2', { id: 'user-2' }],
+        ])
+        ;(channel as any).members = updatedMembers
+        client.emit('guildMemberAdd', { guild: { id: 'guild-1' }, id: 'user-2' })
+
+        expect(ch.members.value.size).toBe(2)
+      })
+      scope.stop()
+    })
+
+    it('does not refresh members for a different guild', () => {
+      const scope = effectScope()
+      scope.run(() => {
+        const initialMembers = new Map([['user-1', { id: 'user-1' }]])
+        const { channel, client } = mockTextChannelWithClient({
+          guildId: 'guild-1',
+          members: initialMembers,
+        })
+        const ch = useTextChannel(channel)
+        ;(channel as any).members = new Map([['user-1', { id: 'user-1' }], ['user-x', { id: 'user-x' }]])
+        client.emit('guildMemberAdd', { guild: { id: 'guild-2' }, id: 'user-x' })
+        expect(ch.members.value.size).toBe(1)
+      })
+      scope.stop()
+    })
+
     it('removes channelUpdate listener when scope is disposed', () => {
       const scope = effectScope()
       let emitter!: EventEmitter
