@@ -3,20 +3,22 @@ import type {
   ButtonComponentData,
   ButtonInteraction,
   CommandInteraction,
+  ComponentType,
   InteractionCallbackResponse,
-  InteractionCollector,
   InteractionEditReplyOptions,
   InteractionReplyOptions,
   InteractionResponse,
   Message,
   MessageCollectorOptionsParams,
+  MessageCreateOptions,
   ModalSubmitInteraction,
 } from 'discord.js'
 import type { MaybeRef } from 'vue'
 import type { SlashCommandCustomReturnHandler } from '../../../types'
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType, MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js'
-import { computed, isProxy, isReactive, isRef, reactive, toRaw, toValue, watch } from 'vue'
+import { ActionRowBuilder, MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js'
+import { isRef } from 'vue'
 import { logger } from '../../logger'
+import { sendReactiveMessage } from './messageSender'
 
 type OmitPreservingCallSignature<T, K extends keyof T = keyof T>
   = Omit<T, K> & (T extends (...args: infer R) => infer S ? (...args: R) => S : unknown)
@@ -93,66 +95,35 @@ function createReplyFunction(
 
   const reply = ((...args) => {
     const { buttons, ...restOptions } = defaultOptions
-    const buttonComponents = computed(() => getButtonComponent(buttons ?? []))
-    let buttonInteractionCollectors: InteractionCollector<ButtonInteraction>[] = []
-    function registerButtonCollectors(msg: Msg) {
-      for (const collector of buttonInteractionCollectors) {
-        collector.stop()
-      }
-      buttonInteractionCollectors = []
 
-      for (const [_, buttonHandler, options] of buttons ?? []) {
-        let collectorOptions: ButtonCollectorOptions | undefined
-        if (options && 'collector' in options && options.collector) {
-          collectorOptions = options.collector
-        }
-        if ('resource' in msg) {
-          buttonInteractionCollectors.push(msg.resource!.message!.createMessageComponentCollector({
-            componentType: ComponentType.Button,
-            ...collectorOptions,
-          }))
-        }
-        else {
-          buttonInteractionCollectors.push(msg.createMessageComponentCollector({
-            componentType: ComponentType.Button,
-            ...collectorOptions,
-          }))
-        }
-        buttonInteractionCollectors.at(-1)!
-          .on('collect', async (buttonInteraction) => {
-            if (options?.defer ?? true)
-              buttonInteraction.deferUpdate()
-            await buttonHandler(buttonInteraction)
-          })
-      }
-    }
-
-    if (typeof args[0] === 'string' || typeof args[0] === 'undefined' || isRef(args[0])) {
-      const [text, options] = args
-      let message: Promise<Msg>
-
-      // deepToRaw below handles unwrapping nested refs/reactives (workaround for vuejs/core#5303)
-      const replyOptions = reactive({
-        content: text,
-        ...buttonComponents.value.length > 0 ? { components: buttonComponents } : {},
-        ...restOptions,
-        ...options,
-      }) as InteractionReplyOptions
-
-      const handler = (interaction: CommandInteraction) => {
+    const interactionConfig = (interaction: CommandInteraction) => ({
+      send: (opts: MessageCreateOptions) => {
         const method = interaction.replied
           ? 'followUp'
           : interaction.deferred ? 'editReply' : 'reply'
-        const opts = deepToRaw(replyOptions) as InteractionReplyOptions & InteractionEditReplyOptions
-        message = interaction[method](opts)
-          .then((msg: Msg) => {
-            registerButtonCollectors(msg)
-            return msg
-          })
-          .catch((err) => {
-            logger.error(err)
-            return err
-          })
+        return interaction[method](opts as InteractionReplyOptions & InteractionEditReplyOptions) as Promise<Msg>
+      },
+      edit: async (msg: Msg, opts: MessageCreateOptions) => {
+        const target = ('resource' in msg ? msg.resource!.message! : msg) as Message
+        return target.edit(opts as InteractionEditReplyOptions) as Promise<Msg>
+      },
+    })
+
+    if (typeof args[0] === 'string' || typeof args[0] === 'undefined' || isRef(args[0])) {
+      const [text, options] = args
+      let message: Promise<Msg> | undefined
+
+      const handler = (interaction: CommandInteraction) => {
+        message = sendReactiveMessage(
+          interactionConfig(interaction),
+          text,
+          {
+            buttons: buttons ?? [],
+            flags: restOptions.flags as MessageCreateOptions['flags'],
+            files: restOptions.files as MessageCreateOptions['files'],
+            ...(options ?? {}),
+          } as Parameters<typeof sendReactiveMessage>[2],
+        ) as Promise<Msg>
         return message
       }
 
@@ -160,65 +131,29 @@ function createReplyFunction(
         value: () => ({
           next: () => (
             message !== undefined
-              ? {
-                  done: true,
-                  value: message,
-                }
-              : {
-                  done: false,
-                  value: handler,
-                }
+              ? { done: true, value: message }
+              : { done: false, value: handler }
           ),
         }),
       })
 
-      watch(replyOptions, async (options) => {
-        let msg = await message
-        if ('resource' in msg)
-          msg = await msg.resource!.message!.edit(deepToRaw(options) as InteractionEditReplyOptions)
-        else
-          msg = await msg.edit(deepToRaw(options) as InteractionEditReplyOptions)
-        registerButtonCollectors(msg)
-      }, { deep: true, flush: 'sync' })
-
       return handler
     }
     else {
-      const interaction = args[0]
-      const method = interaction.replied
-        ? 'followUp'
-        : interaction.deferred ? 'editReply' : 'reply'
-      const options = reactive({
-        ...buttonComponents.value.length > 0 ? { components: buttonComponents } : {},
-        ...restOptions,
-      }) as InteractionReplyOptions
-      const messagePromise: Promise<Msg> = interaction[method](deepToRaw(options) as InteractionReplyOptions & InteractionEditReplyOptions)
-        .then((msg: Msg) => {
-          registerButtonCollectors(msg)
-          return msg
-        })
-        .catch((err) => {
-          logger.error(err)
-          return err
-        })
-
-      watch(options, async (opts) => {
-        let msg = await messagePromise
-        if ('resource' in msg)
-          msg = await msg.resource!.message!.edit(deepToRaw(opts) as InteractionEditReplyOptions)
-        else
-          msg = await msg.edit(deepToRaw(opts) as InteractionEditReplyOptions)
-        registerButtonCollectors(msg)
-      }, { deep: true, flush: 'sync' })
+      const interaction = args[0] as CommandInteraction
+      const messagePromise = sendReactiveMessage(
+        interactionConfig(interaction),
+        undefined,
+        {
+          buttons: buttons ?? [],
+          flags: restOptions.flags as MessageCreateOptions['flags'],
+          files: restOptions.files as MessageCreateOptions['files'],
+        } as Parameters<typeof sendReactiveMessage>[2],
+      ) as Promise<Msg>
 
       return {
         [Symbol.iterator]: () => ({
-          next: () => (
-            {
-              done: true,
-              value: messagePromise,
-            }
-          ),
+          next: () => ({ done: true, value: messagePromise }),
         }),
       }
     }
@@ -283,53 +218,6 @@ function createReplyFunction(
 }
 
 export const reply: ReplyFunction = createReplyFunction()
-
-function getButtonComponent(buttons: Parameters<ReplyFunction['button']>[]): NonNullable<BaseMessageOptions['components']> {
-  if (buttons.length === 0)
-    return []
-
-  let row = new ActionRowBuilder<ButtonBuilder>()
-  const rows = [row]
-
-  const it = Iterator.from(buttons)
-    .filter(([, , options]) => !(toValue(options?.hide ?? false)))
-    .map(([label, , options]) => {
-      options ??= {} as NonNullable<typeof options>
-
-      if (toValue(options.style) == null) {
-        options.style = ButtonStyle.Primary
-      }
-      if (options.style === ButtonStyle.Primary) {
-        if (!('customId' in options) || options.customId == null) {
-          (options as any).customId = `button-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
-        }
-      }
-
-      return new ButtonBuilder(
-        Object.fromEntries(
-          Object.entries({
-            label,
-            ...options,
-            type: ComponentType.Button,
-          }).map(([key, value]) => [key, toValue(value)]),
-        ),
-      )
-    })
-
-  for (let i = 0; i < 5; i++) {
-    row.addComponents(...it.take(5))
-
-    if (row.components.length >= 5) {
-      row = new ActionRowBuilder()
-      rows.push(row)
-    }
-  }
-
-  if (row.components.length === 0)
-    rows.pop()
-
-  return rows
-}
 
 function createModalHandler(
   title: string,
@@ -396,35 +284,4 @@ function createModalHandler(
       logger.error('Modal submission error:', error)
     }
   }
-}
-
-// https://github.com/vuejs/core/issues/5303#issuecomment-1543596383
-function deepToRaw<T extends Record<string, any>>(sourceObj: T): T {
-  const cycleDetector = new WeakSet()
-  const objectIterator = (input: any): any => {
-    if (cycleDetector.has(input)) {
-      return input
-    }
-    if (Array.isArray(input)) {
-      cycleDetector.add(input)
-      return input.map(item => objectIterator(item))
-    }
-    if (isRef(input) || isReactive(input) || isProxy(input)) {
-      cycleDetector.add(input)
-      return objectIterator(isRef(input) ? toValue(input) : toRaw(input))
-    }
-    if (input && typeof input === 'object') {
-      cycleDetector.add(input)
-      const copy = Object.fromEntries(
-        Object.entries(input)
-          .map(([key, value]) => [key, objectIterator(value)]),
-      )
-      // Preserve the prototype chain
-      Object.setPrototypeOf(copy, Object.getPrototypeOf(input))
-      return copy
-    }
-    return input
-  }
-
-  return objectIterator(sourceObj)
 }
