@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { useDocumentVisibility, useElementVisibility, useFocusWithin, usePreferredReducedMotion } from '@vueuse/core'
 import { ref, watchEffect } from 'vue'
-import addSource from '../../playground/discord/commands/add.ts?raw'
-import pingSource from '../../playground/discord/commands/ping.ts?raw'
-import reverseSource from '../../playground/discord/commands/reverse.ts?raw'
+import addCode from '../../playground/discord/commands/add.ts?command-excerpt'
+import pingCode from '../../playground/discord/commands/ping.ts?command-excerpt'
+import reverseCode from '../../playground/discord/commands/reverse.ts?command-excerpt'
 
-const cards: { name: string, source: string, options: Record<string, string> }[] = [
-  { name: 'ping', source: pingSource, options: {} },
-  { name: 'add', source: addSource, options: { a: '2', b: '3' } },
-  { name: 'reverse', source: reverseSource, options: { input: 'hello' } },
+const cards: { name: string, highlightedCode: string, options: Record<string, string> }[] = [
+  { name: 'ping', highlightedCode: pingCode, options: {} },
+  { name: 'add', highlightedCode: addCode, options: { a: '2', b: '3' } },
+  { name: 'reverse', highlightedCode: reverseCode, options: { input: 'hello' } },
 ]
 const deck = ref<HTMLElement>()
 const front = ref(0)
@@ -39,7 +39,7 @@ watchEffect((cleanup) => {
   <figure ref="deck" aria-label="Example bot command deck" class="isolate min-w-0">
     <div class="stack" :class="{ shuffled: hasShuffled }">
       <CommandDeckCard
-        v-for="(card, i) in cards" :key="card.name" :name="card.name" :source="card.source" :options="card.options"
+        v-for="(card, i) in cards" :key="card.name" :name="card.name" :highlighted-code="card.highlightedCode" :options="card.options"
         class="card" :data-depth="depth(i)" :inert="i !== front" :aria-hidden="i !== front ? true : undefined"
       />
     </div>

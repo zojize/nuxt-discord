@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import AppearanceSelect from '../../src/runtime/client/components/AppearanceSelect.vue'
+import { appearanceSelect } from '../../src/runtime/client/components/appearance-select'
 </script>
 
 <template>
@@ -16,7 +16,7 @@ import AppearanceSelect from '../../src/runtime/client/components/AppearanceSele
         </NuxtLink>
 
         <div class="flex items-center gap-1">
-          <AppearanceSelect />
+          <UColorModeSelect v-bind="appearanceSelect" />
           <UButton
             to="https://github.com/zojize/nuxt-discord"
             target="_blank"

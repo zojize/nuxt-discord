@@ -3,15 +3,7 @@ import { computed } from 'vue'
 import CommandTranscript from '../../src/runtime/client/components/CommandTranscript.vue'
 import { runDemo } from '../utils/demo-commands'
 
-const props = defineProps<{ name: string, source: string, options: Record<string, string> }>()
-const excerpt = computed(() => {
-  const lines = props.source.trimEnd().split('\n')
-  return {
-    declaration: lines.find(line => line.startsWith('export default')),
-    result: lines.find(line => line.trimStart().startsWith('return ')),
-    close: lines.at(-1),
-  }
-})
+const props = defineProps<{ name: string, highlightedCode: string, options: Record<string, string> }>()
 const entry = computed(() => {
   const invocation = { name: props.name, options: props.options }
   const result = runDemo(invocation)
@@ -24,7 +16,8 @@ const entry = computed(() => {
     <div class="card-header flex items-center gap-2 rounded-t-xl border-b px-4 py-3 font-mono text-xs">
       <UIcon name="i-lucide-file-code-2" class="size-4 shrink-0" />discord/commands/{{ name }}.ts
     </div>
-    <pre class="m-0 flex min-h-36 items-center px-4 py-4 font-mono text-[.79rem] leading-relaxed wrap-anywhere whitespace-pre-wrap sm:px-5"><code class="flex min-w-0 flex-col"><span class="text-(--code-declaration)">{{ excerpt.declaration }}</span><span class="text-(--code-result)">{{ excerpt.result }}</span><span>{{ excerpt.close }}</span></code></pre>
+    <!-- Shiki escapes the example source and generates this markup at build time. -->
+    <div class="excerpt flex min-h-36 items-center px-4 py-4 font-mono text-[.79rem] leading-relaxed sm:px-5" v-html="highlightedCode" />
     <div class="min-h-32 rounded-b-xl border-t border-chat-line bg-chat-canvas pt-px pb-3 font-chat text-base leading-[1.375] text-chat-text [font-size-adjust:0.478]">
       <CommandTranscript :entries="[entry]" :channel="false" />
     </div>
@@ -41,4 +34,6 @@ const entry = computed(() => {
 .example-card[data-command="add"] { --edge: #84799e; --paper: var(--card-purple); }
 .example-card[data-command="reverse"] { --edge: #978769; --paper: var(--card-gold); }
 .card-header { background: var(--paper); border-color: var(--edge); color: var(--code-text); }
+.excerpt :deep(pre) { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.excerpt :deep(span[style]) { color: light-dark(var(--shiki-light), var(--shiki-dark)); }
 </style>

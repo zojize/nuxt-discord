@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import AppearanceSelect from '../../src/runtime/client/components/AppearanceSelect.vue'
+import { appearanceSelect } from '../../src/runtime/client/components/appearance-select'
 
 definePageMeta({ layout: false })
 useHead({ htmlAttrs: { class: 'landing-page' } })
@@ -30,7 +30,7 @@ const guides = [
           <span class="max-[23rem]:hidden">GitHub ↗</span>
           <UIcon name="i-simple-icons-github" class="hidden size-5 max-[23rem]:inline-block" />
         </ULink>
-        <AppearanceSelect />
+        <UColorModeSelect v-bind="appearanceSelect" />
       </nav>
     </header>
 

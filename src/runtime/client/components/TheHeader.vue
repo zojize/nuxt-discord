@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { Icon } from '@iconify/vue'
 import { useRoute } from '#imports'
-import AppearanceSelect from './AppearanceSelect.vue'
+import { appearanceSelect } from './appearance-select'
 
 const route = useRoute()
 
@@ -42,7 +42,7 @@ const nav = [
       </div>
 
       <div class="flex items-center gap-1">
-        <AppearanceSelect />
+        <UColorModeSelect v-bind="appearanceSelect" />
         <a
           href="https://github.com/zojize/nuxt-discord"
           target="_blank"
