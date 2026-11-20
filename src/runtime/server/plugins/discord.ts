@@ -1,15 +1,13 @@
-import type { WatchEvent } from 'nuxt/schema'
-import type { SlashCommand, SlashCommandRuntime } from '../../../types'
-import fs from 'node:fs'
+import type { SlashCommandRuntime } from '../../../types'
+import { join } from 'node:path'
 import process from 'node:process'
+import { pathToFileURL } from 'node:url'
 import contextMenus from 'discord/contextMenus'
 import listeners from 'discord/listeners'
 import slashCommands from 'discord/slashCommands'
 import { defineNitroPlugin, useRuntimeConfig } from 'nitropack/runtime'
 import { logger } from '../../logger'
 import { DiscordClient } from '../utils/client'
-
-const TS_EXT_RE = /\.ts$/
 
 export default defineNitroPlugin(async (nitro) => {
   const runtimeConfig = useRuntimeConfig()
@@ -40,45 +38,23 @@ export default defineNitroPlugin(async (nitro) => {
       console.error('WebSocket error:', error)
     })
 
+    let requested = 0
+    socket.addEventListener('open', () => socket.send(JSON.stringify({ event: 'command-revision' })))
     socket.addEventListener('message', async (event) => {
-      const data = JSON.parse(event.data) as
-        | { event: WatchEvent, path: string, command: SlashCommand | null }
-        | { event: 'full-update', commands: SlashCommand[] }
-      if (data.event === 'full-update') {
-        const commands: SlashCommand[] = []
-        for (const cmd of data.commands) {
-          const runtimeCommand = cmd as SlashCommandRuntime
-          const buildPath = cmd.path
-            .replace(runtimeConfig.discord.rootDir, runtimeConfig.discord.buildDir)
-            .replace(TS_EXT_RE, '.mjs')
-          const existingCommand = client.getSlashCommands().find(c => c.path === cmd.path)
-
-          if (fs.existsSync(buildPath)) {
-            // get the last modified time of the file
-            const lastModified = fs.statSync(buildPath).mtimeMs
-            // workaround to force dynamic import to reload the module
-            runtimeCommand.load = () => import(`${buildPath}?${lastModified}`).then(m => m.default)
-          }
-          else if (existingCommand) {
-            runtimeCommand.execute = existingCommand.execute
-            runtimeCommand.middlewareEntries = existingCommand.middlewareEntries
-            runtimeCommand.optionMacros = existingCommand.optionMacros
-            runtimeCommand.subcommands = existingCommand.subcommands
-          }
-          else {
-            logger.error(`Unable to dynamically load slash command at ${cmd.path}`)
-            continue
-          }
-
-          commands.push(runtimeCommand as SlashCommand)
+      const data = JSON.parse(event.data)
+      if (data.event !== 'command-revision' || !Number.isSafeInteger(data.revision) || data.revision <= requested)
+        return
+      const revision = requested = data.revision
+      const url = pathToFileURL(join(runtimeConfig.discord.buildDir, 'discord/hmr', String(revision), 'commands.mjs'))
+      try {
+        const { default: commands } = await import(url.href)
+        if (revision === requested) {
+          client.clearSlashCommands()
+          client.addSlashCommands(commands)
         }
-        client.clearSlashCommands()
-        client.addSlashCommands(commands)
-        // TODO: sync if enabled
       }
-      else {
-        // alway request a full update on any change
-        socket.send(JSON.stringify({ event: 'full-update' }))
+      catch (error) {
+        logger.error('Could not load updated slash commands:', error)
       }
     })
 
