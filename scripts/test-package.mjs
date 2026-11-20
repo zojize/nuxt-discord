@@ -37,7 +37,7 @@ try {
   writeFileSync(join(app, 'nuxt.config.ts'), `export default defineNuxtConfig({
     modules: ['nuxt-discord'],
     ui: { fonts: false },
-    discord: { autoStart: false, interactionTimeout: 1, watch: { enabled: false, sync: false } },
+    discord: { autoStart: false, watch: { enabled: false, sync: false } },
   })`)
   writeFileSync(join(app, 'app.vue'), '<template><main>Consumer app</main></template>')
   run('bun', ['install'], app)

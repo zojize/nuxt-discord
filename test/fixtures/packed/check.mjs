@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import process from 'node:process'
+import { setTimeout as delay } from 'node:timers/promises'
 
 // Use the same discord.js instance that Nitro deployed with the application.
 const require = createRequire(new URL('./.output/server/index.mjs', import.meta.url))
@@ -15,7 +16,7 @@ async function check() {
   const bot = globalThis[Symbol.for('discord-client')]
   assert.ok(bot, 'Nitro initialized the packed module')
   await bot.start({ intents: [] })
-  async function dispatch(name, userId = 'member', userMenu = false) {
+  async function dispatch(name, userId = 'member', userMenu = false, onReply) {
     let response
     const handlers = bot.internalClient.listeners(Events.InteractionCreate)
     assert.equal(handlers.length, 1)
@@ -31,7 +32,7 @@ async function check() {
       isChatInputCommand: () => true,
       async reply(payload) {
         response = payload
-        return {}
+        return onReply?.(payload) ?? {}
       },
     })
     return response
@@ -44,6 +45,34 @@ async function check() {
     assert.equal(globalThis.ownerExecutions, 1)
     assert.equal((await dispatch('User Info', 'member', true))?.flags, 64)
     assert.equal(await dispatch('User Info', 'owner', true), 'fixture user')
+    const edits = []
+    let click
+    let stopped = false
+    const initial = await dispatch('gacha', 'member', false, (payload) => {
+      const { label, custom_id: customId } = payload.components[0].toJSON().components[0]
+      assert.equal(label, 'Open')
+      return {
+        edit: async options => edits.push(options),
+        createMessageComponentCollector: options => ({
+          stop() { stopped = true },
+          on(_event, handler) {
+            click = async () => {
+              const interaction = { customId, deferUpdate: async () => {} }
+              if (!stopped && await options.filter(interaction))
+                await handler(interaction)
+            }
+          },
+        }),
+      }
+    })
+    assert.deepEqual(initial.files, ['begin.gif'])
+    await delay(25) // A click arrives on a later event-loop turn than the reply.
+    assert.equal(stopped, false, 'the default lifetime keeps the collector alive')
+    await click()
+    await delay(0)
+    assert.equal(edits.length, 1)
+    assert.deepEqual(edits[0].files, ['open.gif'])
+    assert.deepEqual(edits[0].components, [])
   }
   finally {
     await bot.stop()
