@@ -124,25 +124,29 @@ export default defineEventHandler(async (event): Promise<TestCommandResponse> =>
     }
 
     if (typeof result === 'function') {
-      let captured: string | undefined
-      const mockInteraction = {
+      const messages: string[] = []
+      type Reply = string | { content?: string }
+      function capture(payload: Reply, index = messages.length) {
+        const content = typeof payload === 'string' ? payload : payload.content
+        messages[index] = content ?? messages[index] ?? '[Reply without text]'
+        return { edit: async (update: Reply) => capture(update, index) }
+      }
+      const interaction = {
         replied: false,
         deferred: false,
-        reply: (opts: any) => {
-          captured = typeof opts === 'string' ? opts : opts?.content
-          return Promise.resolve({ edit: () => Promise.resolve({}) })
+        async deferReply() { this.deferred = true },
+        async reply(payload: Reply) {
+          this.replied = true
+          return capture(payload)
         },
-        editReply: (opts: any) => {
-          captured = typeof opts === 'string' ? opts : opts?.content
-          return Promise.resolve({})
+        async editReply(payload: Reply) {
+          this.replied = true
+          return capture(payload, 0)
         },
-        followUp: (opts: any) => {
-          captured = typeof opts === 'string' ? opts : opts?.content
-          return Promise.resolve({})
-        },
+        async followUp(payload: Reply) { return capture(payload) },
       }
-      await (result as (...a: any[]) => any)(mockInteraction, null)
-      return { ok: true, command: body.name, response: captured ?? '[reply sent]' }
+      await result(interaction, null)
+      return { ok: true, command: body.name, response: messages[0], responses: messages }
     }
 
     return { ok: true, command: body.name, response: String(result) }

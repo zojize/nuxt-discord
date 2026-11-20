@@ -1,2 +1,4 @@
 @import "tailwindcss" source("../../");
 @import "@nuxt/ui";
+@import "../../../src/runtime/client/chat-theme.css";
+@source "../../../src/runtime/client/components/**/*.vue";
