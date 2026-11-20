@@ -1,3 +1,7 @@
+<script setup lang="ts">
+import AppearanceSelect from '../../src/runtime/client/components/AppearanceSelect.vue'
+</script>
+
 <template>
   <div class="min-h-screen bg-default">
     <!-- Header -->
@@ -12,6 +16,7 @@
         </NuxtLink>
 
         <div class="flex items-center gap-1">
+          <AppearanceSelect />
           <UButton
             to="https://github.com/zojize/nuxt-discord"
             target="_blank"

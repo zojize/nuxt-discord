@@ -1,16 +1,53 @@
 @import "@fontsource-variable/source-sans-3/wght.css";
 
+/* Nuxt applies the preferred class before paint. Follow the OS until it does. */
+@custom-variant dark-palette {
+  &:where(.dark) { @slot; }
+  @media (prefers-color-scheme: dark) {
+    &:where(:not(.light, .dark)) { @slot; }
+  }
+}
+
 @theme {
   --font-chat: "Source Sans 3 Variable", "Helvetica Neue", Arial, sans-serif;
-  --color-chat-canvas: #1b1b1f;
-  --color-chat-sidebar: #141417;
-  --color-chat-field: #222328;
-  --color-chat-panel: #242429;
-  --color-chat-hover: #333339;
-  --color-chat-line: #38383e;
-  --color-chat-white: #ededf0;
-  --color-chat-muted: #b5b5bd;
-  --color-chat-faint: #929299;
-  --color-chat-link: #5499ef;
-  --color-chat-brand: #5865f2;
+  --color-chat-canvas: #ffffff;
+  --color-chat-sidebar: #f2f3f5;
+  --color-chat-field: #f5f5f7;
+  --color-chat-panel: #ffffff;
+  --color-chat-hover: #e0e1e5;
+  --color-chat-line: #d1d2d8;
+  --color-chat-text: #232428;
+  --color-chat-muted: #4e5058;
+  --color-chat-faint: #5c5e66;
+  --color-chat-link: #174c92;
+  --color-chat-brand: #505bdc;
+  --color-chat-error: #a32c32;
+}
+
+:root {
+  @variant dark-palette {
+    --color-chat-canvas: #1b1b1f;
+    --color-chat-sidebar: #141417;
+    --color-chat-field: #222328;
+    --color-chat-panel: #242429;
+    --color-chat-hover: #333339;
+    --color-chat-line: #38383e;
+    --color-chat-text: #ededf0;
+    --color-chat-muted: #b5b5bd;
+    --color-chat-faint: #929299;
+    --color-chat-link: #78aff4;
+    --color-chat-brand: #5865f2;
+    --color-chat-error: #ff9e9e;
+  }
+}
+
+@media (forced-colors: active) {
+  :root {
+    --color-chat-canvas: Canvas;
+    --color-chat-panel: Canvas;
+    --color-chat-text: CanvasText;
+    --color-chat-line: ButtonBorder;
+    --color-chat-link: LinkText;
+  }
+  [role="option"][aria-selected="true"] { outline: 2px solid Highlight; outline-offset: -2px; }
 }
