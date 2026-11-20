@@ -24,7 +24,7 @@ Turn TypeScript functions in your Nuxt app into Discord slash commands. Share se
 - **JSDoc Metadata** - `@nsfw`, `@guild`, `@dm`, `@defaultMemberPermissions`, `@middleware` tags
 - **Localization** - i18n via inline JSDoc or `discord/locales/*.json` files
 - **Guild Commands** - Register commands per-guild for instant updates
-- **Hot reload** - Edit standalone commands while the development bot is running. See [hot reload and shared state](#hot-reload-and-shared-state) for current limits.
+- **Hot reload** - Edit commands while the development bot is running. See [hot reload and shared state](#hot-reload-and-shared-state) for state lifetime.
 - **Web Dashboard** - Overview, commands, context menus, listeners, and live activity log
 - **Built-in Middleware** - `guildOnly`, `ownerOnly`, `cooldown`, `requireRole`
 
@@ -276,9 +276,9 @@ File paths link to your editor via `vscode://file` URLs.
 
 ### Hot reload and shared state
 
-An edited command is built separately from the running Nitro server. A command that works at startup can stop replying after an edit if it uses a project alias or imports a Nitro helper such as `useStorage`. Restart the Nuxt dev server to load the edited command and its dependencies together.
+Editing a command updates its handler in the running bot. Commands can share a server helper’s in-memory state across command edits, including when the helper is auto-imported or reached through a project alias. Nitro imports such as `useStorage` continue to use the running server.
 
-Keep data that must survive a restart, such as a per-user pull count, in a database or a persistent Nitro storage mount. A module-level counter can split into separate copies during hot reload and starts over when the server restarts.
+Keep data that must survive a restart, such as a per-user pull count, in a database or a persistent Nitro storage mount. A full Nitro server reload starts a new worker and resets module-level counters.
 
 ## Runtime Hooks
 

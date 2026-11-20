@@ -144,7 +144,7 @@ declare global {
   })
 }
 
-function getSlashCommandTemplateContent(ctx: NuxtDiscordContext, commandRuntime: boolean) {
+export function getSlashCommandTemplateContent(ctx: NuxtDiscordContext, commandRuntime: boolean) {
   const imports = commandRuntime
     ? Object.fromEntries(ctx.slashCommands.flatMap(
         function getImports(cmd: SlashCommand | SlashCommandSubcommandGroup | SlashCommandSubcommand): [string, { name: string, code: string }][] {

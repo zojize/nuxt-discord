@@ -1,17 +1,20 @@
 import type { Listener } from 'listhen'
 import type { Buffer } from 'node:buffer'
 import type { IncomingMessage } from 'node:http'
-import type { InputOptions, OutputOptions, RollupBuild } from 'rollup'
+import type { InputOptions, OutputOptions } from 'rollup'
 import type { WebSocket } from 'ws'
 import type { NuxtDiscordContext } from '../types'
-import fs from 'node:fs'
+import { rm } from 'node:fs/promises'
 import path from 'node:path'
-import { isIgnored, resolveAlias, updateTemplates } from '@nuxt/kit'
+import { pathToFileURL } from 'node:url'
+import { isIgnored, updateTemplates } from '@nuxt/kit'
 import chokidar from 'chokidar'
 import { listen } from 'listhen'
 import { rollup } from 'rollup'
 import { WebSocketServer } from 'ws'
-import collectSlashCommands, { processCommandFile } from './collect'
+import collectSlashCommands from './collect'
+import { captureCommandImports, registryEntry, reuseCommandDependencies } from './commandDependencies'
+import { getSlashCommandTemplateContent } from './templates'
 import TransformPlugin from './transform'
 
 type RollupConfig = InputOptions & {
@@ -21,21 +24,31 @@ type RollupConfig = InputOptions & {
 export function prepareHMR(ctx: NuxtDiscordContext) {
   const { nuxt, options } = ctx
 
-  // Compilation is needed by Nitro builds as well as the development watcher.
+  const watching = nuxt.options.dev && options.watch.enabled
+  const commandsDir = ctx.resolve.root(options.dir, 'commands') + path.sep
+  const hotDir = path.join(nuxt.options.buildDir, 'discord', 'hmr')
+  let dependencies = new Set<string>()
+  const updated = new Map<string, string>()
+  let revision = 0
+  let nextRevision = 0
   let rollupConfig: RollupConfig
   nuxt.hook('nitro:init', (nitro) => {
     nitro.hooks.hook('rollup:before', (_nitro, config) => {
       config.plugins = [config.plugins, TransformPlugin(ctx)]
-      // Nitro exposes one plugin union for both bundlers. This watcher invokes Rollup.
-      rollupConfig = { ...config, plugins: config.plugins as InputOptions['plugins'] }
+      if (watching) {
+        rollupConfig = { ...config, plugins: config.plugins as InputOptions['plugins'] }
+        config.plugins = [config.plugins, captureCommandImports(nuxt.options.rootDir, nuxt.options.buildDir, ctx.resolve.module('runtime/server'), (ids) => {
+          dependencies = ids
+          updated.clear()
+          revision = 0
+        })]
+      }
     })
   })
 
-  if (nuxt.options.dev && options.watch.enabled) {
-    const commandsDir = ctx.resolve.root(options.dir, 'commands')
-
+  if (watching) {
     const ignoreCommandsDir = (file: string) => {
-      if (file.startsWith(commandsDir)) {
+      if (file === commandsDir.slice(0, -1) || file.startsWith(commandsDir)) {
         return true
       }
       return isIgnored(file)
@@ -74,73 +87,153 @@ export function prepareHMR(ctx: NuxtDiscordContext) {
     let websocket: ReturnType<typeof createWebSocket>
     let listener: Listener
     const websocketOptions = options.watch || {}
-    if (websocketOptions.enabled) {
-      nuxt.hook('nitro:init', async (nitro) => {
-        websocket = createWebSocket()
+    nuxt.hook('nitro:init', async (nitro) => {
+      websocket = createWebSocket()
 
-        // Listen dev server
-        listener = await listen(() => 'Nuxt Discord', websocketOptions)
+      await rm(hotDir, { recursive: true, force: true })
 
-        // Register ws url
-        nitro.options.runtimeConfig.public.discord = {
-          wsUrl: listener.url.replace('http', 'ws'),
+      // Listen dev server
+      listener = await listen(() => 'Nuxt Discord', websocketOptions)
+
+      // Register ws url
+      nitro.options.runtimeConfig.public.discord = {
+        wsUrl: listener.url.replace('http', 'ws'),
+      }
+
+      listener.server.on('upgrade', websocket.serve)
+
+      websocket.on('full-update', (client) => {
+        try {
+          client.send(JSON.stringify({
+            event: 'full-update',
+            commands: ctx.slashCommands,
+          }))
         }
-
-        listener.server.on('upgrade', websocket.serve)
-
-        websocket.on('full-update', (client) => {
-          collectSlashCommands(ctx)
-          try {
-            client.send(JSON.stringify({
-              event: 'full-update',
-              commands: ctx.slashCommands,
-            }))
-          }
-          catch {
-          }
-        })
-
-        // Relay activity events from server plugin to all browser clients
-        websocket.on('activity', (_client, message) => {
-          websocket.broadcast(message)
-        })
+        catch {
+        }
       })
+
+      websocket.on('command-revision', (client) => {
+        if (revision)
+          client.send(JSON.stringify({ event: 'command-revision', revision }))
+      })
+
+      // Relay activity events from server plugin to all browser clients
+      websocket.on('activity', (_client, message) => {
+        websocket.broadcast(message)
+      })
+    })
+
+    const dirty = new Set<string>()
+    const modified = new Set<string>()
+    nuxt.hook('nitro:init', (nitro) => {
+      nitro.hooks.hook('compiled', () => {
+        modified.forEach(file => dirty.add(file))
+        void rebuild()
+      })
+    })
+    let building = false
+    let closed = false
+    async function rebuild() {
+      if (building || !rollupConfig || closed)
+        return
+      building = true
+      try {
+        while (dirty.size) {
+          if (closed)
+            return
+          const changed = new Set(dirty)
+          dirty.clear()
+          const version = ++nextRevision
+          const initial = dependencies
+          const outputDir = path.join(hotDir, String(version))
+          try {
+            const snapshot = { ...ctx }
+            collectSlashCommands(snapshot)
+            const source = getSlashCommandTemplateContent(snapshot, true)
+            const additions = await buildCommandUpdate(rollupConfig, source, outputDir, initial, updated, changed)
+            if (initial !== dependencies || closed) {
+              changed.forEach(file => dirty.add(file))
+              continue
+            }
+            ctx.slashCommands = snapshot.slashCommands
+            for (const id of changed)
+              updated.delete(id)
+            additions.forEach((url, id) => updated.set(id, url))
+            revision = version
+            websocket?.broadcast({ event: 'command-revision', revision })
+            websocket?.broadcast({ event: 'full-update', commands: ctx.slashCommands })
+            await updateTemplates({ filter: template => template.filename === 'discord/slashCommands' })
+          }
+          catch (error) {
+            ctx.logger.error('Could not reload slash commands:', error)
+            // Retry failed files along with the next edit.
+            const retry = dirty.size > 0
+            changed.forEach(file => dirty.add(file))
+            if (!retry)
+              break
+          }
+        }
+      }
+      finally { building = false }
     }
 
-    const commandsBuildDir = path.join(ctx.nuxt.options.buildDir, 'discord', 'commands')
-    // clears the commands build directory
-    fs.rmSync(commandsBuildDir, { recursive: true, force: true })
-    fs.mkdirSync(commandsBuildDir, { recursive: true })
-
-    chokidar.watch(ctx.resolve.root(ctx.options.dir, 'commands'), { ignoreInitial: true })
-      .on('all', async (event, path) => {
-        if (event === 'all' || event === 'error' || event === 'raw') {
-          return
-        }
-
-        const fullPath = ctx.resolve.root(path)
-        if (fullPath.startsWith(commandsDir)) {
-          // TODO: subcommands
-          path = ctx.resolve.root(path)
-          const command = processCommandFile(ctx, path) ?? null
-          if (event === 'add' || event === 'change') {
-            ctx.logger.log(`Dynamically loading slash command at ${path}`)
-            await generateDynamicCommandBuild(path, rollupConfig, ctx)
-          }
-          websocket?.broadcast({ event, path, command })
-
-          // I don't think this is doing anything at all...
-          await updateTemplates({
-            filter: template => template.filename === 'discord/slashCommands',
-          })
+    const watcher = chokidar.watch(commandsDir, { ignoreInitial: true })
+      .on('all', (event, file) => {
+        if (['add', 'change', 'unlink'].includes(event) && file.endsWith('.ts')) {
+          const id = path.resolve(file).split(path.sep).join('/')
+          dirty.add(id)
+          modified.add(id)
+          void rebuild()
         }
       })
-
-    nuxt.hook('close', () => {
+    nuxt.hook('close', async () => {
+      closed = true
+      await watcher.close()
       listener?.server.close()
       websocket?.close()
     })
   }
+}
+
+async function buildCommandUpdate(
+  config: RollupConfig,
+  source: string,
+  outputDir: string,
+  dependencies: Set<string>,
+  updated: Map<string, string>,
+  changed: Set<string>,
+) {
+  const additions = new Map<string, string>()
+  const bundle = await rollup({
+    ...config,
+    input: registryEntry,
+    treeshake: false,
+    preserveEntrySignatures: 'strict',
+    plugins: [
+      { name: 'discord:hot-registry', resolveId: id => id === registryEntry ? id : null, load: id => id === registryEntry ? source : null },
+      reuseCommandDependencies(dependencies, updated, changed),
+      config.plugins,
+    ],
+  })
+  try {
+    const { output } = await bundle.write({
+      ...config.output,
+      dir: outputDir,
+      entryFileNames: chunk => chunk.facadeModuleId === registryEntry ? 'commands.mjs' : '[name]-[hash].mjs',
+      inlineDynamicImports: false,
+      preserveModules: true,
+      minifyInternalExports: false,
+      manualChunks: undefined,
+      sourcemap: false,
+    })
+    for (const chunk of output) {
+      if (chunk.type === 'chunk' && chunk.facadeModuleId)
+        additions.set(chunk.facadeModuleId, pathToFileURL(path.join(outputDir, chunk.fileName)).href)
+    }
+  }
+  finally { await bundle.close() }
+  return additions
 }
 
 /**
@@ -208,55 +301,4 @@ function createWebSocket() {
       return new Promise(resolve => wss.close(resolve))
     },
   }
-}
-
-async function generateDynamicCommandBuild(file: string, config: RollupConfig, ctx: NuxtDiscordContext) {
-  let bundle: RollupBuild
-  try {
-    // TODO: this still seem to have issues with typescript files
-    bundle = await rollup({
-      ...config,
-      input: file,
-      plugins: [
-        config.plugins,
-        {
-          name: 'discord:resolve-alias-and-externalize',
-          resolveId: (id, importer) => {
-            // Let the command file itself through
-            if (id.includes(file)) {
-              return null
-            }
-            // Resolve relative imports — if they're local project files, bundle inline
-            if (id.startsWith('.') && importer) {
-              const resolved = path.resolve(path.dirname(importer), id)
-              if (!resolved.includes('node_modules')) {
-                // Try to find the actual file (could be .ts, .js, or extensionless)
-                for (const ext of ['', '.ts', '.js', '.mjs']) {
-                  const candidate = resolved + ext
-                  if (fs.existsSync(candidate)) {
-                    return candidate
-                  }
-                }
-                return null
-              }
-            }
-            // Externalize npm deps, built-in modules, etc.
-            return { id: resolveAlias(id), external: true }
-          },
-        },
-      ],
-    })
-    const { output } = await bundle.generate({ ...config.output, sourcemap: false })
-    const outputFilePath = file
-      .replace(ctx.resolve.root(ctx.nuxt.options.rootDir), ctx.nuxt.options.buildDir)
-      .replace('.ts', '.mjs')
-    fs.mkdirSync(path.dirname(outputFilePath), { recursive: true })
-    fs.writeFileSync(outputFilePath, output[0].code, { encoding: 'utf-8', flush: true })
-  }
-  catch (error) {
-    ctx.logger.error(`Error processing command file ${file}:`, error)
-    return
-  }
-
-  await bundle.close()
 }
