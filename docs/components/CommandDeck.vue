@@ -36,7 +36,7 @@ watchEffect((cleanup) => {
 </script>
 
 <template>
-  <figure ref="deck" aria-label="Example bot command deck" class="min-w-0">
+  <figure ref="deck" aria-label="Example bot command deck" class="isolate min-w-0">
     <div class="stack" :class="{ shuffled: hasShuffled }">
       <CommandDeckCard
         v-for="(card, i) in cards" :key="card.name" :name="card.name" :source="card.source" :options="card.options"
@@ -51,35 +51,35 @@ watchEffect((cleanup) => {
 
 <style scoped>
 .stack {
-  --lift-x: -19%;
-  --lift-angle: -13deg;
+  --lift-x: -10%;
   display: grid;
-  isolation: isolate;
+  perspective: 85rem;
+  transform-style: preserve-3d;
   padding: 2.25rem clamp(1.15rem, 3vw, 2rem) .75rem;
 }
 .card {
+  --front: translate3d(0, 0, 12px) rotateZ(-1.5deg);
+  --middle: translate3d(2%, -4%, 0) rotateZ(4deg) scale(.98);
+  --back: translate3d(-2%, -7%, -12px) rotateZ(-6deg) scale(.96);
   grid-area: 1 / 1;
   min-width: 0;
-  z-index: 3;
-  translate: 0 0;
-  rotate: -1.5deg;
-  scale: 1;
-  transform-origin: 50% 75%;
+  transform-origin: 50% 70%;
+  transform: var(--front);
 }
-.card[data-depth="1"] { z-index: 2; translate: 2% -4%; rotate: 4deg; scale: .98; }
-.card[data-depth="2"] { z-index: 1; translate: -2% -7%; rotate: -6deg; scale: .96; }
+.card[data-depth="1"] { transform: var(--middle); }
+.card[data-depth="2"] { transform: var(--back); }
 figure :focus-visible { outline: 2px solid #9cf5bc; outline-offset: 3px; }
 @media (max-width: 48rem) {
-  .stack { --lift-x: -3%; --lift-angle: -8deg; }
+  .stack { --lift-x: -2%; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .card { transition: translate 600ms ease, rotate 600ms ease, scale 600ms ease; }
-  .shuffled .card[data-depth="2"] { animation: tuck-under 720ms cubic-bezier(.4, 0, .2, 1); }
+  .card { transition: transform 1100ms cubic-bezier(.35, 0, .2, 1); }
+  .shuffled .card[data-depth="2"] { animation: tuck-under 1100ms ease-in-out; }
+  /* The tilted card crosses the next card's plane progressively as it slips underneath. */
   @keyframes tuck-under {
-    0% { z-index: 4; translate: 0 0; rotate: -1.5deg; scale: 1; }
-    45% { z-index: 4; translate: var(--lift-x) -19%; rotate: var(--lift-angle); scale: 1.02; }
-    46% { z-index: 1; }
-    100% { z-index: 1; translate: -2% -7%; rotate: -6deg; scale: .96; }
+    from { transform: var(--front); }
+    42% { transform: translate3d(var(--lift-x), -11%, 8px) rotateZ(-7deg) rotateY(9deg); }
+    to { transform: var(--back); }
   }
 }
 </style>
