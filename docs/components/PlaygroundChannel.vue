@@ -57,7 +57,7 @@ const pinned = ref(false)
         </header>
         <div class="relative flex min-h-0 flex-1">
           <slot :search="search" :pinned="pinned" />
-          <aside v-if="members" id="channel-members" aria-label="Channel members" class="absolute inset-y-0 right-0 z-10 w-52 border-l border-chat-line bg-chat-sidebar p-4 shadow-xl sm:static sm:shrink-0 sm:shadow-none">
+          <aside v-if="members" id="channel-members" aria-label="Channel members" class="absolute top-0 right-0 z-10 w-52 rounded-bl-lg border-b border-l border-chat-line bg-chat-sidebar p-4 shadow-xl lg:static lg:shrink-0 lg:rounded-none lg:border-b-0 lg:shadow-none">
             <p class="mb-3 text-xs font-semibold text-chat-muted">
               Online — 2
             </p>
