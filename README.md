@@ -326,11 +326,13 @@ export default defineNuxtConfig({
 
 ```bash
 bun install
-bun run dev        # Start playground
+bun run dev        # Start the example bot and its local dashboard
 bun run test       # Run tests
 bun run lint       # Lint
 bun run prepack    # Build module
 ```
+
+To try an already registered command in Discord, set `DISCORD_TOKEN` and `DISCORD_CLIENT_ID` in `playground/.env` and keep the dev server running. Wait for “Discord client is ready!” before sending `/add`. The public site's browser playground runs its examples locally even when the bot is offline.
 
 Refer to the [Nuxt Module Author Guide](https://nuxt.com/docs/guide/going-further/modules).
 
