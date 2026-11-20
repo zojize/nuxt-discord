@@ -1,8 +1,16 @@
 {
   "extends": "./.nuxt/tsconfig.json",
+  "include": [
+    ".nuxt/nuxt.d.ts",
+    ".nuxt/nuxt.node.d.ts",
+    "src/**/*",
+    "test/*.test.ts",
+    "__mocks__/**/*",
+    "build.config.ts",
+    "knip.config.ts"
+  ],
   "exclude": [
     "dist",
-    "node_modules",
-    "playground"
+    "node_modules"
   ]
 }
