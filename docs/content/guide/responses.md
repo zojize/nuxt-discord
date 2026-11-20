@@ -51,6 +51,8 @@ export default () => {
 }
 ```
 
+Discord edits are sent in order. Several changes while an edit is in flight can be combined into one update with the latest values. The watcher and button collectors stop when the interaction scope closes.
+
 ## Generator
 
 Yield multiple messages — the first is a reply, subsequent ones are follow-ups:

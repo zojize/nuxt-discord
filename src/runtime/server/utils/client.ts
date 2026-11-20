@@ -492,7 +492,6 @@ export class DiscordClient {
   #interactionScopes: WeakMap<ChatInputCommandInteraction, EffectScope> = new WeakMap()
   #interactionTimeout?: number
   static DISCORD_TOKEN_LIFETIME = 15 * 60 * 1000 // 15 minutes
-  #commandFinalizationRegistry = new FinalizationRegistry((scope: EffectScope) => scope.stop())
   async #handleSlashCommand(interaction: ChatInputCommandInteraction, command: SlashCommandRuntime | SlashCommandSubcommandRuntime): Promise<void> {
     // discord.js option getters may return API types (e.g. APIRole) alongside class types,
     // but gateway bots always receive the class instances at runtime
@@ -565,8 +564,6 @@ export class DiscordClient {
     }
 
     this.#interactionScopes.set(interaction, scope)
-    if (import.meta.dev)
-      this.#commandFinalizationRegistry.register(command, scope)
 
     try {
       let result!: SlashCommandReturnType

@@ -1,8 +1,9 @@
 import type { ChatInputCommandInteraction } from 'discord.js'
 import type { DiscordClient } from '~/src/runtime/server/utils/client'
+import { Buffer } from 'node:buffer'
 import { MessageFlags } from 'discord.js'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ref } from 'vue'
+import { effectScope, ref } from 'vue'
 import { reply } from '../src/runtime/server/utils/reply'
 
 declare module 'vue' {
@@ -114,6 +115,111 @@ describe('reply', () => {
     await expect.poll(() => mockEditFunction).toHaveBeenCalledExactlyOnceWith({
       files: ['updated-file.txt'],
     })
+  })
+
+  it('drops queued changes when the interaction scope closes during the initial send', async () => {
+    const scope = effectScope()
+    const send = Promise.withResolvers<any>()
+    const [interaction, mock] = mockInteraction()
+    mock.reply.mockReturnValue(send.promise)
+    const content = ref('initial')
+    const sent = scope.run(() => reply(content).call(new MockClient(), interaction, new MockClient()))
+    content.value = 'too late'
+    scope.stop()
+    send.resolve({ edit: mockEditFunction })
+    await sent
+    await new Promise(resolve => setTimeout(resolve, 10))
+    expect(mockEditFunction).not.toHaveBeenCalled()
+  })
+
+  it('updates the original private response through the interaction after deferral', async () => {
+    const firstMessage = { edit: vi.fn() }
+    const editReply = vi.fn(async () => firstMessage)
+    const interaction = { deferred: true, ephemeral: true, replied: false, editReply } as unknown as ChatInputCommandInteraction
+    const content = ref('waiting')
+    await reply(content).call(new MockClient(), interaction, new MockClient())
+    content.value = 'done'
+    await vi.waitFor(() => expect(editReply).toHaveBeenLastCalledWith({ content: 'done' }))
+    expect(firstMessage.edit).not.toHaveBeenCalled()
+  })
+
+  it('keeps binary attachments intact and reveals an initially hidden button', async () => {
+    const scope = effectScope()
+    const attachment = Buffer.from('GIF89a')
+    const hide = ref(true)
+    const file = ref({ name: 'open.gif', attachment })
+    const collector = { on: vi.fn(), stop: vi.fn() }
+    const message = { edit: vi.fn(async () => message), createMessageComponentCollector: () => collector }
+    const [interaction, mock] = mockInteraction()
+    mock.reply.mockResolvedValue(message)
+    try {
+      await scope.run(() => reply.file(file).button('Open', () => {}, { hide }).send('Pull').call(new MockClient(), interaction, new MockClient()))
+      expect((mock.reply.mock.calls as any)[0][0].files[0].attachment).toBe(attachment)
+      hide.value = false
+      await vi.waitFor(() => expect(message.edit).toHaveBeenCalledOnce())
+      const options = (message.edit.mock.calls as any)[0][0]
+      expect(options.components[0].toJSON().components[0].label).toBe('Open')
+      file.value = { name: 'result.gif', attachment: Buffer.from('next frame') }
+      hide.value = true
+      await vi.waitFor(() => expect(message.edit).toHaveBeenCalledTimes(2))
+      const final = (message.edit.mock.calls as any)[1][0]
+      expect(final.components).toEqual([])
+      expect(final.files[0].name).toBe('result.gif')
+      expect(final.files[0].attachment).toBe(file.value.attachment)
+    }
+    finally { scope.stop() }
+  })
+
+  it('runs only the clicked button when multiple handlers change a ref', async () => {
+    const scope = effectScope()
+    const count = ref(0)
+    const callbacks: Array<(id: string) => Promise<void>> = []
+    const message = {
+      edit: vi.fn(),
+      createMessageComponentCollector(options: any) {
+        return {
+          stop: vi.fn(),
+          on(_event: string, handler: (interaction: any) => Promise<void>) {
+            callbacks.push(async (id) => {
+              const interaction = { customId: id, deferUpdate: vi.fn() }
+              if (!options.filter || await options.filter(interaction))
+                await handler(interaction)
+            })
+          },
+        }
+      },
+    }
+    const [interaction, mock] = mockInteraction()
+    mock.reply.mockResolvedValue(message)
+    try {
+      await scope.run(() => reply
+        .button('One', () => { count.value++ }, { customId: 'one' })
+        .button('Ten', () => { count.value += 10 }, { customId: 'ten' })
+        .send('Choose')
+        .call(new MockClient(), interaction, new MockClient()))
+      await Promise.all(callbacks.map(collect => collect('ten')))
+      expect(count.value).toBe(10)
+    }
+    finally { scope.stop() }
+  })
+
+  it('keeps a ref to a file list reactive when chaining another attachment', async () => {
+    const [interaction, mock] = mockInteraction()
+    const files = ref(['begin.gif'])
+    await reply.files(files).file('credits.txt').send('Pull').call(new MockClient(), interaction, new MockClient())
+    expect(mock.reply).toHaveBeenCalledWith({ content: 'Pull', files: ['begin.gif', 'credits.txt'] })
+    files.value = ['open.gif']
+    await vi.waitFor(() => expect(mockEditFunction).toHaveBeenCalledWith({ content: 'Pull', files: ['open.gif', 'credits.txt'] }))
+  })
+
+  it('edits a private follow-up by its webhook message ID', async () => {
+    const message = { id: 'follow-up', edit: vi.fn() }
+    const webhook = { editMessage: vi.fn(async () => message) }
+    const interaction = { replied: true, followUp: async () => message, webhook } as unknown as ChatInputCommandInteraction
+    const text = ref('first')
+    await reply.ephemeral(text).call(new MockClient(), interaction, new MockClient())
+    text.value = 'second'
+    await vi.waitFor(() => expect(webhook.editMessage).toHaveBeenCalledWith(message.id, expect.objectContaining({ content: 'second' })))
   })
 
   describe('modal', () => {

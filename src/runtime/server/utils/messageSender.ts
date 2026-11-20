@@ -10,8 +10,9 @@ import type {
   MessageCreateOptions,
 } from 'discord.js'
 import type { MaybeRef } from 'vue'
+import { randomUUID } from 'node:crypto'
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } from 'discord.js'
-import { computed, isProxy, isReactive, isRef, reactive, toRaw, toValue, watch } from 'vue'
+import { computed, getCurrentScope, isRef, onScopeDispose, reactive, toRaw, toValue, watch } from 'vue'
 import { logger } from '../../logger'
 
 export type File = NonNullable<BaseMessageOptions['files']>[number]
@@ -46,120 +47,79 @@ export type ButtonHandlerArgs = [
 
 export interface SendOptions {
   flags?: MessageCreateOptions['flags']
-  files?: MaybeRef<File>[]
+  files?: MaybeRef<readonly MaybeRef<File>[]>
   buttons?: ButtonHandlerArgs[]
 
   components?: any
 }
 
 export function getButtonComponent(buttons: ButtonHandlerArgs[]): NonNullable<BaseMessageOptions['components']> {
-  if (buttons.length === 0)
-    return []
-
-  let row = new ActionRowBuilder<ButtonBuilder>()
-  const rows = [row]
-
-  const it = Iterator.from(buttons)
-    .filter(([, , options]) => !(toValue(options?.hide ?? false)))
-    .map(([label, , options]) => {
-      options ??= {} as NonNullable<typeof options>
-
-      if (toValue(options.style) == null) {
-        options.style = ButtonStyle.Primary
-      }
-      if (options.style === ButtonStyle.Primary) {
-        if (!('customId' in options) || options.customId == null) {
-          (options as any).customId = `button-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
-        }
-      }
-
-      return new ButtonBuilder(
-        Object.fromEntries(
-          Object.entries({
-            label,
-            ...options,
-            type: ComponentType.Button,
-          }).map(([key, value]) => [key, toValue(value)]),
-        ),
-      )
-    })
-
-  for (let i = 0; i < 5; i++) {
-    row.addComponents(...it.take(5))
-
-    if (row.components.length >= 5) {
-      row = new ActionRowBuilder()
-      rows.push(row)
+  const rows: ActionRowBuilder<ButtonBuilder>[] = []
+  for (const [label, , options] of buttons) {
+    if (toValue(options?.hide))
+      continue
+    if (!rows.length || rows.at(-1)!.components.length === 5) {
+      if (rows.length === 5)
+        break
+      rows.push(new ActionRowBuilder<ButtonBuilder>())
     }
+    const { hide: _hide, collector: _collector, defer: _defer, ...fields } = options ?? {}
+    const data = Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, toValue(value)]))
+    const style = toValue(options?.style) ?? ButtonStyle.Primary
+    if (style === ButtonStyle.Link || style === ButtonStyle.Premium)
+      delete data.customId
+    else
+      data.customId ??= randomUUID()
+    rows.at(-1)!.addComponents(new ButtonBuilder({ ...data, style, label: toValue(label), type: ComponentType.Button }))
   }
-
-  if (row.components.length === 0)
-    rows.pop()
-
   return rows
 }
 
 // https://github.com/vuejs/core/issues/5303#issuecomment-1543596383
 
 export function deepToRaw<T extends Record<string, any>>(sourceObj: T): T {
-  const cycleDetector = new WeakSet()
-
-  const objectIterator = (input: any): any => {
-    if (cycleDetector.has(input)) {
-      return input
-    }
-    if (Array.isArray(input)) {
-      cycleDetector.add(input)
-      return input.map(item => objectIterator(item))
-    }
-    if (isRef(input) || isReactive(input) || isProxy(input)) {
-      cycleDetector.add(input)
-      return objectIterator(isRef(input) ? toValue(input) : toRaw(input))
-    }
-    if (input && typeof input === 'object') {
-      cycleDetector.add(input)
-      const copy = Object.fromEntries(
-        Object.entries(input)
-          .map(([key, value]) => [key, objectIterator(value)]),
-      )
-      Object.setPrototypeOf(copy, Object.getPrototypeOf(input))
-      return copy
-    }
-    return input
+  const copies = new WeakMap<object, any>()
+  function unwrap(value: any): any {
+    if (isRef(value))
+      return unwrap(value.value)
+    if (!value || typeof value !== 'object')
+      return value
+    const raw = toRaw(value)
+    const prototype = Object.getPrototypeOf(raw)
+    if (!Array.isArray(raw) && prototype !== Object.prototype && prototype !== null)
+      return raw // Discord builders, buffers and streams must retain their internal state.
+    if (copies.has(raw))
+      return copies.get(raw)
+    const copy: any = Array.isArray(raw) ? [] : Object.create(prototype)
+    copies.set(raw, copy)
+    for (const key of Object.keys(value))
+      copy[key] = unwrap(value[key])
+    return copy
   }
 
-  return objectIterator(sourceObj)
+  return unwrap(sourceObj)
 }
 
 function registerButtonCollectors(
   msg: SentMessage,
   buttons: ButtonHandlerArgs[],
-  existingCollectors: InteractionCollector<ButtonInteraction>[],
 ): InteractionCollector<ButtonInteraction>[] {
-  for (const collector of existingCollectors)
-    collector.stop()
   const newCollectors: InteractionCollector<ButtonInteraction>[] = []
   for (const [, buttonHandler, options] of buttons) {
-    let collectorOptions: ButtonCollectorOptions | undefined
-    if (options && 'collector' in options && options.collector)
-      collectorOptions = options.collector
-    let collector: InteractionCollector<ButtonInteraction>
-    if ('resource' in msg) {
-      collector = msg.resource!.message!.createMessageComponentCollector({
-        componentType: ComponentType.Button,
-        ...collectorOptions,
-      })
-    }
-    else {
-      collector = (msg as Message).createMessageComponentCollector({
-        componentType: ComponentType.Button,
-        ...collectorOptions,
-      })
-    }
+    if (!options || !('customId' in options))
+      continue
+    const { filter, ...collectorOptions } = options.collector ?? {}
+    const target = 'resource' in msg ? msg.resource!.message! : msg
+    const collector = target.createMessageComponentCollector({
+      ...collectorOptions,
+      componentType: ComponentType.Button,
+      filter: (click, ...args) => click.customId === toValue(options.customId)
+        && !toValue(options.hide) && (filter?.(click, ...args) ?? true),
+    })
     newCollectors.push(collector)
     collector.on('collect', async (buttonInteraction) => {
-      if (options?.defer ?? true)
-        buttonInteraction.deferUpdate()
+      if (options.defer ?? true)
+        await buttonInteraction.deferUpdate()
       await buttonHandler(buttonInteraction)
     })
   }
@@ -175,33 +135,72 @@ export function sendReactiveMessage(
   content: MaybeRef<string> | undefined,
   opts: SendOptions = {},
 ): Promise<SentMessage> {
-  const buttons = opts.buttons ?? []
+  const buttons: ButtonHandlerArgs[] = (opts.buttons ?? []).map(([label, handler, options]) => [
+    label,
+    handler,
+    { customId: randomUUID(), ...options },
+  ])
   const buttonComponents = computed(() => getButtonComponent(buttons))
   let collectors: InteractionCollector<ButtonInteraction>[] = []
 
   const messageOptions = reactive({
     content,
-    ...buttonComponents.value.length > 0 ? { components: buttonComponents } : {},
+    ...(buttons.length ? { components: buttonComponents } : {}),
     ...(opts.flags != null ? { flags: opts.flags } : {}),
     ...(opts.files != null ? { files: opts.files } : {}),
   }) as MessageCreateOptions
 
-  const messagePromise: Promise<SentMessage> = config
-    .send(deepToRaw(messageOptions) as MessageCreateOptions)
-    .then((msg) => {
-      collectors = registerButtonCollectors(msg, buttons, collectors)
-      return msg
-    })
-    .catch((err) => {
-      logger.error(err)
-      return err
-    })
+  let active = true
+  let pending = false
+  let editing = false
+  const snapshot = computed(() => deepToRaw(messageOptions))
+  const stop = watch(snapshot, () => {
+    pending = true
+    void flushEdits()
+  })
 
-  watch(messageOptions, async (newOpts) => {
-    const msg = await messagePromise
-    const edited = await config.edit(msg, deepToRaw(newOpts) as MessageCreateOptions)
-    collectors = registerButtonCollectors(edited, buttons, collectors)
-  }, { deep: true, flush: 'sync' })
+  function dispose() {
+    active = false
+    pending = false
+    stop()
+    for (const collector of collectors)
+      collector.stop()
+  }
+  if (getCurrentScope())
+    onScopeDispose(dispose)
+
+  const messagePromise = config.send(snapshot.value).then((msg) => {
+    if (active)
+      collectors = registerButtonCollectors(msg, buttons)
+    return msg
+  }).catch((error) => {
+    dispose()
+    throw error
+  })
+
+  async function flushEdits() {
+    if (editing || !active)
+      return
+    editing = true
+    try {
+      // The caller receives an initial send failure via messagePromise.
+      const msg = await messagePromise.catch(() => null)
+      while (pending) {
+        if (!active || !msg)
+          return
+        pending = false
+        try {
+          await config.edit(msg, snapshot.value)
+        }
+        catch (error) {
+          logger.error(error)
+        }
+      }
+    }
+    finally {
+      editing = false
+    }
+  }
 
   return messagePromise
 }
