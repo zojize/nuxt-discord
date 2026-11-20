@@ -23,7 +23,7 @@ useSeoMeta({
           <NuxtLink class="action" to="/installation">Get started <span aria-hidden="true">→</span></NuxtLink>
           <NuxtLink class="demo" to="/playground">Try a command</NuxtLink>
         </div>
-        <CommandFlipbook />
+        <CommandDeck />
       </section>
       <section class="guides" aria-labelledby="guides-title">
         <h2 id="guides-title">
@@ -41,7 +41,7 @@ useSeoMeta({
 </template>
 
 <style scoped>
-.landing { background: #101418; color: #eef6f1; min-height: 100svh; font: 1rem/1.55 Inter, system-ui, sans-serif; padding-inline: max(1.25rem, calc((100% - 72rem) / 2)); }
+.landing { overflow-x: clip; background: #101418; color: #eef6f1; min-height: 100svh; font: 1rem/1.55 Inter, system-ui, sans-serif; padding-inline: max(1.25rem, calc((100% - 72rem) / 2)); }
 .top, footer, nav, .wordmark { display: flex; align-items: center; gap: 1.5rem; }
 .top, footer { justify-content: space-between; padding-block: 1.25rem; border-bottom: 1px solid #34403b; }
 .wordmark { gap: .65rem; font: bold 1.05rem ui-monospace, monospace; }

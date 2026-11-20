@@ -74,7 +74,12 @@ watch(() => props.entries.map(e => e.state), async (_, previous) => {
           <div v-if="channel && (i === 0 || filtered[i - 1]?.at.toDateString() !== entry.at.toDateString())" class="mx-4 my-4 flex items-center gap-2 text-xs font-semibold text-chat-muted before:h-px before:flex-1 before:bg-chat-line after:h-px after:flex-1 after:bg-chat-line">
             {{ day.format(entry.at) }}
           </div>
-          <article class="group/message relative mt-4 px-4 pb-0.5 pl-[4.5rem] text-base leading-[1.375] hover:bg-white/[0.025]">
+          <article
+            :tabindex="interactive ? -1 : undefined"
+            class="group/message relative mt-4 px-4 pb-0.5 pl-[4.5rem] text-base leading-[1.375]" :class="entry.ephemeral
+              ? 'bg-chat-brand/5 before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-chat-brand hover:bg-chat-brand/10'
+              : 'hover:bg-white/[0.025]'"
+          >
             <div v-if="interactive && !entry.ephemeral && entry.state === 'sent'" role="group" aria-label="Message actions" class="pointer-events-none absolute -top-3 right-4 z-10 flex items-center gap-0.5 rounded-md border border-chat-line bg-chat-panel px-1 py-0.5 opacity-0 shadow group-focus-within/message:pointer-events-auto group-focus-within/message:opacity-100 group-hover/message:pointer-events-auto group-hover/message:opacity-100">
               <button v-for="emoji in ['💯', '👍', '👎']" :key="emoji" type="button" :aria-label="`React with ${emoji}`" :aria-pressed="reactions.get(entry.id)?.has(emoji) ?? false" class="grid size-7 cursor-pointer place-items-center rounded hover:bg-chat-hover" @click="react(entry.id, emoji)">
                 {{ emoji }}
@@ -87,8 +92,8 @@ watch(() => props.entries.map(e => e.state), async (_, previous) => {
               <ChatAvatar user class="size-4" />
               <span class="font-medium">You</span><span>used</span>
               <UPopover :content="{ side: 'top', align: 'center', sideOffset: 8 }" :ui="{ content: 'max-w-[min(28rem,85vw)] rounded-[5px] bg-chat-panel px-3 py-2 font-chat text-base leading-5 text-chat-white shadow-lg ring-0' }">
-                <button type="button" :aria-label="`View sent command /${entry.invocation.name}`" class="inline-flex cursor-pointer items-center gap-0.5 rounded-sm bg-[#26324b] px-1 font-semibold text-chat-link hover:underline focus-visible:outline-2">
-                  <UIcon name="i-lucide-shapes" class="size-2.5" />{{ entry.invocation.name }}
+                <button type="button" :aria-label="`View sent command /${entry.invocation.name}`" class="inline-flex cursor-pointer items-center gap-0.5 rounded-sm bg-chat-brand/25 px-0.5 font-medium text-chat-link hover:underline focus-visible:outline-2">
+                  <UIcon name="i-lucide-blocks" class="size-2.5" />{{ entry.invocation.name }}
                 </button>
                 <template #content>
                   <p class="break-words whitespace-pre-wrap">
@@ -103,7 +108,7 @@ watch(() => props.entries.map(e => e.state), async (_, previous) => {
               <ChatAvatar :user="!entry.invocation" class="absolute top-0 -left-14 size-10" />
               <div class="flex min-h-[1.375rem] flex-wrap items-center gap-x-1">
                 <b class="font-semibold">{{ entry.invocation ? 'nuxt-discord' : 'You' }}</b>
-                <span v-if="entry.invocation" class="inline-flex h-[.9375rem] items-center rounded-[3px] bg-chat-brand px-1 text-xs leading-none font-bold text-white">APP</span>
+                <span v-if="entry.invocation" class="inline-flex h-[.9375rem] items-center min-w-[2.125rem] justify-center rounded-[3px] bg-chat-brand px-1 text-[.8rem] leading-none font-semibold text-white">APP</span>
                 <NuxtTime :datetime="entry.at" hour="numeric" minute="2-digit" class="ml-1 text-xs font-medium text-chat-faint" />
               </div>
               <p v-if="entry.state === 'pending'" class="text-chat-muted italic">
@@ -112,10 +117,10 @@ watch(() => props.entries.map(e => e.state), async (_, previous) => {
               <p v-for="(text, j) in entry.messages" :key="j" class="break-words whitespace-pre-wrap" :class="{ 'text-[#ff9e9e]': entry.state === 'error', 'mt-1': j > 0 }">
                 {{ text }}
               </p>
-              <div v-if="entry.ephemeral" class="mt-1 flex items-center gap-1 text-xs text-chat-muted">
-                <UIcon name="i-lucide-eye-off" class="size-3.5" />Only you can see this
+              <div v-if="entry.ephemeral" class="flex min-h-6 items-start gap-1 pt-1.5 text-xs leading-4 text-chat-muted">
+                <UIcon name="i-lucide-eye" class="size-4 shrink-0" /><span>Only you can see this</span>
                 <template v-if="interactive">
-                  · <button type="button" class="cursor-pointer text-chat-link hover:underline" @click="$emit('dismiss', entry.id)">
+                  <span aria-hidden="true">•</span><button type="button" class="cursor-pointer text-chat-link hover:underline" @click="$emit('dismiss', entry.id)">
                     Dismiss message
                   </button>
                 </template>
