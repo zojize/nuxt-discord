@@ -42,13 +42,14 @@
     "dev:build": "nuxi build playground",
     "dev:docs": "nuxi dev docs --port 4000",
     "dev:prepare": "nuxt-module-build build --stub && nuxt-module-build prepare && nuxi prepare playground",
-    "release": "bun run lint && bun run test && bun run prepack && changelogen --release && bun publish && git push --follow-tags",
+    "release": "bun run release:check && changelogen --release && bun publish && git push --follow-tags",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest watch",
-    "test:types": "vue-tsc --noEmit",
+    "test:types": "node node_modules/@typescript/native/bin/tsc --noEmit -p tsconfig.json && vue-tsc --noEmit -p tsconfig.json && vue-tsc --noEmit -p docs/tsconfig.json && node node_modules/@typescript/native/bin/tsc --noEmit -p docs/.nuxt/tsconfig.node.json",
     "prepare": "simple-git-hooks",
-    "test:package": "node scripts/test-package.mjs"
+    "test:package": "node scripts/test-package.mjs",
+    "release:check": "bun run dev:prepare && nuxi prepare docs && bun run lint && bun run test:types && bun run test && bun run test:package && NUXT_APP_BASE_URL=/nuxt-discord/ bun run --cwd docs generate"
   },
   "peerDependencies": {
     "discord.js": "^14.28.1"
@@ -91,6 +92,7 @@
     "unbuild": "^3.6.1",
     "vitest": "^5.1.1",
     "vue": "^3.5.46",
+    "vue-router": "^5.5.1",
     "vue-tsc": "^3.3.14"
   },
   "workspaces": [
