@@ -1,11 +1,10 @@
 <script lang="ts" setup>
 import type { Listener } from '../../../types'
 import listeners from '#build/discord/listeners'
-import { ref, useRuntimeConfig } from '#imports'
+import { ref } from '#imports'
 import TheHeader from '../components/TheHeader.vue'
 
 const eventListeners = ref<Listener[]>(listeners)
-const rootDir = useRuntimeConfig().public.discord?.rootDir as string | undefined
 </script>
 
 <template>
@@ -45,11 +44,9 @@ const rootDir = useRuntimeConfig().public.discord?.rootDir as string | undefined
           </template>
           <template #footer>
             <a
-              v-if="rootDir"
               :href="`vscode://file${listener.path}`"
               class="text-dimmed text-xs font-mono truncate hover:text-highlighted transition-colors"
             >{{ listener.path.split('/discord/listeners/').pop() }}</a>
-            <span v-else class="text-dimmed text-xs font-mono truncate">{{ listener.path.split('/discord/listeners/').pop() }}</span>
           </template>
         </UCard>
       </div>
