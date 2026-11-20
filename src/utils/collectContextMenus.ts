@@ -3,6 +3,7 @@ import type { CommandSourceContext } from './collect'
 import { globSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import ts from 'typescript'
+import { readMiddlewareTags } from './middlewareTags'
 
 export default function collectContextMenus(ctx: CommandSourceContext) {
   const contextMenuDir = ctx.resolve.root(ctx.options.dir, 'context-menus')
@@ -71,32 +72,9 @@ export function processContextMenuFile(ctx: CommandSourceContext, file: string):
   }
 
   // Parse @middleware JSDoc tags
-  const middleware = getJSDocTags(sourceFile, 'middleware')
+  const middleware = readMiddlewareTags(sourceFile)
 
   return { name, type, path: file, ...(middleware.length > 0 ? { middleware } : {}) }
-}
-
-function getJSDocTags(sourceFile: ts.SourceFile, tagName: string): string[] {
-  const results: string[] = []
-  ts.forEachChild(sourceFile, (node) => {
-    if (ts.isExportAssignment(node)) {
-      for (const tag of ts.getJSDocTags(node)) {
-        if (tag.tagName.escapedText === tagName && tag.comment)
-          results.push(tag.comment.toString().trim())
-      }
-      if (results.length === 0) {
-        for (const doc of ts.getJSDocCommentsAndTags(node)) {
-          if (ts.isJSDoc(doc) && doc.tags) {
-            for (const tag of doc.tags) {
-              if (tag.tagName.escapedText === tagName && tag.comment)
-                results.push(tag.comment.toString().trim())
-            }
-          }
-        }
-      }
-    }
-  })
-  return results
 }
 
 function getJSDocTag(sourceFile: ts.SourceFile, tagName: string): string | undefined {

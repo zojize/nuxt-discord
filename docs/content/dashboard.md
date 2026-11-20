@@ -4,7 +4,7 @@ title: Web Dashboard
 
 # Web Dashboard
 
-Nuxt Discord includes a built-in web dashboard for managing your bot. Access it at `/discord` in your application.
+Nuxt Discord includes a built-in web dashboard for managing your bot. Run the Nuxt dev server and open `/discord`. The dashboard and its management APIs are available only in development.
 
 ## Pages
 

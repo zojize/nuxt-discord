@@ -50,6 +50,10 @@ bun run dev
 
 Your bot will connect and the `/ping` command will be available. Visit `http://localhost:3000/discord/slash-commands` to see the web dashboard.
 
+## Deployment
+
+Build and run the Nuxt app on one always-on Node process that owns the Discord Gateway connection. Supply the bot token and application ID to that process at runtime.
+
 ## Project Structure
 
 ```
