@@ -1,0 +1,16 @@
+@import "@fontsource-variable/source-sans-3/wght.css";
+
+@theme {
+  --font-chat: "Source Sans 3 Variable", "Helvetica Neue", Arial, sans-serif;
+  --color-chat-canvas: #1b1b1f;
+  --color-chat-sidebar: #141417;
+  --color-chat-field: #222328;
+  --color-chat-panel: #242429;
+  --color-chat-hover: #333339;
+  --color-chat-line: #38383e;
+  --color-chat-white: #ededf0;
+  --color-chat-muted: #b5b5bd;
+  --color-chat-faint: #929299;
+  --color-chat-link: #80adff;
+  --color-chat-brand: #5865f2;
+}

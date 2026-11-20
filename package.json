@@ -53,6 +53,7 @@
     "discord.js": "^14.28.1"
   },
   "dependencies": {
+    "@fontsource-variable/source-sans-3": "^5.3.1",
     "@iconify-json/lucide": "^1.2.157",
     "@iconify-json/simple-icons": "^1.2.103",
     "@iconify/vue": "^5.0.5",

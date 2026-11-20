@@ -1,7 +1,10 @@
 <script lang="ts" setup>
 import type { PickerItem } from './CommandPicker.vue'
-import { computed, nextTick, ref, useId, watch } from 'vue'
+import type { ChatEntry } from './CommandTranscript.vue'
+import { computed, nextTick, reactive, ref, useId, watch } from 'vue'
+import ChatAvatar from './ChatAvatar.vue'
 import CommandPicker from './CommandPicker.vue'
+import CommandTranscript from './CommandTranscript.vue'
 
 interface Option {
   name: string
@@ -29,6 +32,9 @@ interface TestRequest {
 }
 const props = defineProps<{
   commands: Command[]
+  channel?: boolean
+  search?: string
+  pinned?: boolean
   execute?: (body: TestRequest) => TestResult | Promise<TestResult>
 }>()
 const id = useId()
@@ -39,13 +45,16 @@ const command = ref<Command>()
 const values = ref<Record<string, string>>({})
 const fields = new Map<string, HTMLInputElement>()
 const runButton = ref<HTMLButtonElement>()
-const optionalButton = ref<HTMLButtonElement>()
 const addedOptions = ref<string[]>([])
 const pickingOption = ref(false)
 const focusIndex = ref(0)
 const index = ref(0)
-const pending = ref(false)
-const responses = ref<{ name: string, text: string, ok: boolean }[]>([])
+const entries = ref<ChatEntry[]>([])
+let sequence = 0
+const more = ref(false)
+const emojis = ref(false)
+const emojiChoices = ['😀', '😂', '❤️', '👍', '🎉', '👋', '✨', '🤖']
+
 const remoteChoices = ref<Option['choices']>([])
 const showChoices = ref(true)
 
@@ -100,12 +109,30 @@ watch([command, option, value], ([cmd, opt, search], _, cleanup) => {
     controller.abort()
   })
 })
+function insertEmoji(emoji: string) {
+  emojis.value = false
+  if (command.value && option.value) {
+    values.value[option.value.name] = (values.value[option.value.name] ?? '') + emoji
+    focusField(focusIndex.value)
+  }
+  else {
+    query.value += emoji
+    nextTick(() => input.value?.focus())
+  }
+}
+
+function sendText() {
+  if (!query.value.trim() || query.value.startsWith('/'))
+    return
+  entries.value.push({ id: ++sequence, at: new Date(), messages: [query.value], state: 'sent' })
+  cancel()
+}
 function focusField(i: number) {
   nextTick(() => {
     const opt = visibleOptions.value[i]
     if (opt)
       fields.get(opt.name)?.focus()
-    else (optionalButton.value ?? runButton.value)?.focus()
+    else runButton.value?.focus()
   })
 }
 function choose(item: PickerItem) {
@@ -139,6 +166,7 @@ function cancel() {
   nextTick(() => input.value?.focus())
 }
 function browse() {
+  more.value = false
   cancel()
   query.value = '/'
   index.value = 0
@@ -146,7 +174,7 @@ function browse() {
 }
 async function send() {
   const cmd = command.value
-  if (!cmd || pending.value)
+  if (!cmd)
     return
   const missing = visibleOptions.value.findIndex(o => o.required && !values.value[o.name]?.trim())
   if (missing >= 0) {
@@ -154,22 +182,26 @@ async function send() {
     fields.get(visibleOptions.value[missing]!.name)?.reportValidity()
     return
   }
-  pending.value = true
+  const body = { name: cmd.name, options: Object.fromEntries(Object.entries(values.value).filter(([,v]) => v !== '')) }
+  const entry = reactive<ChatEntry>({ id: ++sequence, at: new Date(), invocation: body, state: 'pending', messages: [] })
+  entries.value.push(entry)
+  cancel()
   try {
-    const body = { name: cmd.name, options: Object.fromEntries(Object.entries(values.value).filter(([,v]) => v !== '')) }
     const result = props.execute
       ? await props.execute(body)
       : await $fetch<TestResult>('/api/discord/slash-command/test', { method: 'POST', body })
-    responses.value.push({ name: cmd.name, ok: result.ok, text: result.responses?.join('\n') ?? result.response ?? result.error ?? 'Command executed' })
+    if (!result.ok)
+      throw new Error(result.error || 'The application did not respond')
+    entry.messages = result.responses?.length ? result.responses : [result.response ?? 'Command completed without a reply.']
+    entry.state = 'sent'
   }
-  catch (error) { responses.value.push({ name: cmd.name, ok: false, text: String(error) }) }
-  finally {
-    pending.value = false
-    cancel()
+  catch (error) {
+    entry.messages = [error instanceof Error ? error.message : String(error)]
+    entry.state = 'error'
   }
 }
 function keydown(e: KeyboardEvent) {
-  if (e.isComposing || pending.value)
+  if (e.isComposing)
     return
   if (picking.value && ['ArrowDown', 'ArrowUp'].includes(e.key)) {
     e.preventDefault()
@@ -189,6 +221,10 @@ function keydown(e: KeyboardEvent) {
   else if (e.key === 'Enter' && command.value) {
     e.preventDefault()
     send()
+  }
+  else if (e.key === 'Enter' && !command.value) {
+    e.preventDefault()
+    sendText()
   }
   else if (e.key === 'Backspace' && command.value && !value.value) {
     e.preventDefault()
@@ -211,43 +247,68 @@ function setField(name: string, el: unknown) {
 </script>
 
 <template>
-  <section aria-label="Command tester" class="dc-dock">
-    <div v-if="responses.length" class="dc-history">
-      <button type="button" class="dc-clear" @click="responses = []">
-        Clear history
-      </button>
-      <div role="log" aria-label="Command responses">
-        <article v-for="(r, i) in responses" :key="i" class="dc-message">
-          <span class="dc-avatar" aria-hidden="true">/d</span><div><small>You used <b>/{{ r.name }}</b></small><div><strong>nuxt-discord</strong> <span class="dc-app">APP</span></div><p>{{ r.ok ? r.text : `Error: ${r.text}` }}</p></div>
-        </article>
+  <section aria-label="Command tester" class="flex min-w-0 flex-col font-chat text-base leading-[1.375] text-chat-white scheme-dark [font-size-adjust:0.478]" :class="channel ? 'min-h-0 flex-1' : 'fixed inset-x-[max(12px,calc((100vw-72rem)/2+24px))] bottom-3 z-40'">
+    <CommandTranscript :entries="entries" :channel="!!channel" :search="search" :pinned="pinned" interactive>
+      <slot />
+    </CommandTranscript>
+    <div class="relative shrink-0" :class="channel ? 'mx-2 mt-2 mb-[max(.5rem,env(safe-area-inset-bottom))]' : ''">
+      <CommandPicker v-if="picking" :id="id" :label="pickingOption ? 'Options' : option?.name ?? 'nuxt-discord'" :commands="!command" :searching="!command && query.length > 1" :index="index" :items="items" @choose="choose" @highlight="index = $event" />
+      <div class="rounded-lg border border-white/[.065] bg-chat-field">
+        <div v-if="command" class="flex min-h-9 items-center gap-2 rounded-t-lg border-b border-white/[.065] bg-[#28282d] px-4 text-sm text-chat-muted">
+          <strong class="text-chat-white">{{ option?.name ?? `/${command.name}` }}</strong>{{ option?.description ?? command.description }}
+          <button type="button" aria-label="Cancel command" class="ml-auto grid size-7 cursor-pointer place-items-center rounded-full hover:text-white" @click="cancel">
+            <UIcon name="i-lucide-circle-x" class="size-4" />
+          </button>
+        </div>
+        <div class="flex min-h-14 items-center gap-2 px-3 sm:gap-3 sm:px-4">
+          <UPopover v-if="!command" v-model:open="more" :content="{ side: 'top', align: 'start' }" :ui="{ content: 'rounded-lg bg-chat-panel p-1.5 text-chat-white font-chat ring-chat-line' }">
+            <button type="button" aria-label="More message options" class="mr-1.5 grid size-7 shrink-0 cursor-pointer place-items-center text-chat-muted hover:text-white">
+              <UIcon name="i-lucide-plus" class="size-6" />
+            </button>
+            <template #content>
+              <button type="button" class="block w-full cursor-pointer rounded px-3 py-1 text-left hover:bg-chat-hover" @click="browse">
+                Browse commands
+              </button>
+              <button v-if="entries.length" type="button" class="block w-full cursor-pointer rounded px-3 py-1 text-left hover:bg-chat-hover" @click="entries = []; more = false">
+                Clear local history
+              </button>
+            </template>
+          </UPopover>
+          <ChatAvatar v-else class="mr-1 size-[1.375rem] sm:mr-2" />
+          <input v-if="!command" ref="input" v-model="query" class="min-w-0 flex-1 bg-transparent py-3 outline-none placeholder:text-chat-faint" placeholder="Message #command-testing" aria-label="Message #command-testing" role="combobox" aria-autocomplete="list" :aria-controls="picking ? id : undefined" :aria-expanded="picking" :aria-activedescendant="activeId" autocomplete="off" @input="open = true; index = 0" @focus="open = true" @blur="open = false" @keydown="keydown">
+          <div v-else class="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 py-2">
+            <strong class="font-semibold">/{{ command.name }}</strong>
+            <label v-for="(opt, i) in visibleOptions" :key="opt.name" class="inline-flex max-w-full items-stretch overflow-hidden rounded-sm border border-black/60 text-base leading-[1.375] focus-within:border-[#abbbd3]">
+              <span class="bg-[#232329] px-1.5">{{ opt.name }}</span>
+              <input :ref="el => setField(opt.name, el)" v-model="values[opt.name]" :required="opt.required" :aria-label="opt.name" role="combobox" aria-autocomplete="list" :aria-expanded="i === focusIndex && picking && !pickingOption" :aria-controls="picking && i === focusIndex ? id : undefined" :aria-activedescendant="i === focusIndex ? activeId : undefined" :style="{ width: `${Math.max(1, (values[opt.name]?.length ?? 0) + 1)}ch` }" class="box-content min-w-[.6rem] max-w-[45vw] bg-chat-hover px-1 outline-none" autocomplete="off" @focus="focusOption(i)" @input="showChoices = true" @keydown="keydown">
+            </label>
+            <button v-if="remainingOptions.length" type="button" aria-haspopup="listbox" :aria-expanded="pickingOption" :aria-controls="pickingOption ? id : undefined" class="cursor-pointer rounded px-1 text-sm text-chat-muted hover:bg-chat-hover" @focus="showChoices = false" @click="pickingOption = !pickingOption; index = 0" @keydown="pickingOption && keydown($event)">
+              +{{ remainingOptions.length }} optional
+            </button>
+            <button ref="runButton" type="button" aria-label="Run command" class="cursor-pointer rounded px-1.5 text-chat-muted hover:text-white sm:sr-only sm:focus-visible:not-sr-only" @click="send" @keydown.esc="cancel">
+              <UIcon name="i-lucide-send-horizontal" class="size-4" />
+            </button>
+          </div>
+          <div class="flex shrink-0 items-center gap-3 text-chat-muted sm:gap-4">
+            <div v-if="!command" aria-hidden="true" class="hidden items-center gap-4 sm:flex" title="Discord media controls">
+              <UIcon name="i-lucide-gift" class="size-5" /><span class="rounded-[3px] border-2 px-px text-[.625rem] leading-[1.1] font-extrabold">GIF</span><UIcon name="i-lucide-sticker" class="size-5" />
+            </div>
+            <UPopover v-model:open="emojis" :content="{ side: 'top', align: 'end' }" :ui="{ content: 'grid grid-cols-4 gap-1 rounded-lg bg-chat-panel p-2 ring-chat-line' }">
+              <button type="button" aria-label="Add emoji" class="grid size-6 cursor-pointer place-items-center hover:text-white">
+                <UIcon name="i-lucide-smile" class="size-5" />
+              </button>
+              <template #content>
+                <button v-for="emoji in emojiChoices" :key="emoji" type="button" class="size-9 cursor-pointer rounded text-xl hover:bg-chat-hover" @click="insertEmoji(emoji)">
+                  {{ emoji }}
+                </button>
+              </template>
+            </UPopover>
+            <button v-if="!command" type="button" aria-label="Browse commands" class="grid size-6 cursor-pointer place-items-center hover:text-white" @click="browse">
+              <UIcon name="i-lucide-shapes" class="size-5" />
+            </button>
+          </div>
+        </div>
       </div>
-    </div>
-    <CommandPicker v-if="picking" :id="id" :label="pickingOption ? 'Options' : option?.name ?? 'nuxt-discord'" :commands="!command" :index="index" :items="items" @choose="choose" @highlight="index = $event" />
-    <div v-if="command" class="dc-hint">
-      <strong>{{ option?.name ?? `/${command.name}` }}</strong> {{ option?.description ?? command.description }}<button type="button" aria-label="Cancel command" :disabled="pending" @click="cancel">
-        ×
-      </button>
-    </div>
-    <div class="dc-composer">
-      <button v-if="!command" type="button" class="dc-browse" aria-label="Browse commands" @click="browse">
-        +
-      </button>
-      <span v-else class="dc-avatar" aria-hidden="true">/d</span>
-      <input v-if="!command" ref="input" v-model="query" class="dc-input" placeholder="Message #command-testing" aria-label="Message #command-testing" role="combobox" aria-autocomplete="list" :aria-controls="picking ? id : undefined" :aria-expanded="picking" :aria-activedescendant="activeId" autocomplete="off" @input="open = true; index = 0" @focus="open = true" @blur="open = false" @keydown="keydown">
-      <template v-else>
-        <strong>/{{ command.name }}</strong>
-        <label v-for="(opt, i) in visibleOptions" :key="opt.name" class="dc-chip">
-          <span>{{ opt.name }}</span><input :ref="el => setField(opt.name, el)" v-model="values[opt.name]" :required="opt.required" :disabled="pending" :aria-label="opt.name" role="combobox" aria-autocomplete="list" :aria-expanded="i === focusIndex && picking" :aria-controls="picking && i === focusIndex ? id : undefined" :aria-activedescendant="i === focusIndex ? activeId : undefined" :style="{ width: `${Math.max(2, (values[opt.name]?.length ?? 0) + 1)}ch` }" autocomplete="off" @focus="focusOption(i)" @input="showChoices = true" @keydown="keydown">
-        </label>
-        <button v-if="remainingOptions.length" ref="optionalButton" class="dc-optional" type="button" :disabled="pending" aria-haspopup="listbox" :aria-expanded="pickingOption" :aria-controls="pickingOption ? id : undefined" @focus="showChoices = false" @click="pickingOption = !pickingOption; index = 0" @keydown="pickingOption && keydown($event)">
-          +{{ remainingOptions.length }} optional
-        </button>
-        <button ref="runButton" class="dc-send" type="button" :disabled="pending" aria-label="Run command" @click="send" @keydown.esc="cancel">
-          {{ pending ? '…' : '➤' }}
-        </button>
-      </template>
     </div>
   </section>
 </template>
-
-<style src="./composer.css"></style>

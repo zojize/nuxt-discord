@@ -35,25 +35,19 @@ function execute({ name, options }: { name: string, options: Record<string, stri
 </script>
 
 <template>
-  <main class="channel">
-    <header><b><span aria-hidden="true">#</span> command-testing</b><NuxtLink to="/">Back to nuxt-discord</NuxtLink></header>
-    <section class="welcome">
-      <span aria-hidden="true">#</span>
-      <h1>Welcome to #command-testing!</h1>
-      <p>Type <kbd>/</kbd> below to try a command. Replies stay in this browser.</p>
-    </section>
-    <CommandTestBar :commands="commands" :execute="execute" />
-  </main>
+  <PlaygroundChannel v-slot="{ search, pinned }">
+    <CommandTestBar channel :search="search" :pinned="pinned" :commands="commands" :execute="execute">
+      <div class="shrink-0 px-4 pt-10 pb-3">
+        <div class="mb-2 grid size-[4.25rem] place-items-center rounded-full bg-chat-hover">
+          <UIcon name="i-lucide-hash" class="size-11 text-chat-white" />
+        </div>
+        <h1 class="text-[clamp(1.625rem,3vw,2rem)] leading-[1.25] font-bold">
+          Welcome to #command-testing!
+        </h1>
+        <p class="mt-1 text-chat-muted">
+          This is the start of the #command-testing channel. Type <kbd>/</kbd> to try a command in your browser.
+        </p>
+      </div>
+    </CommandTestBar>
+  </PlaygroundChannel>
 </template>
-
-<style scoped>
-.channel { min-height: 100dvh; background: #1b1b1f; color: #efeff1; font: 16px/1.4 "gg sans","Noto Sans","Helvetica Neue",Helvetica,Arial,sans-serif; }
-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; border-bottom: 1px solid #35353a; padding: 12px max(16px, calc((100vw - 72rem)/2 + 24px)); }
-header b { white-space: nowrap; }
-header b span, header a, .welcome p { color: #c7c6cd; }
-header a { font-size: 14px; text-decoration: underline; }
-.welcome { max-width: 72rem; margin-inline: auto; padding: clamp(2rem,12vh,8rem) 24px 7rem; }
-.welcome > span { display: inline-grid; width: 64px; height: 64px; place-items: center; border-radius: 50%; background: #343439; font-size: 42px; font-weight: 650; }
-h1 { margin-block: 12px 6px; font-size: clamp(24px,4vw,32px); font-weight: 700; }
-kbd { border-radius: 4px; padding-inline: 5px; background: #343439; }
-</style>

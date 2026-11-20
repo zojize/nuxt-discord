@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import type { ChatEntry } from '../../src/runtime/client/components/CommandTranscript.vue'
+import CommandTranscript from '../../src/runtime/client/components/CommandTranscript.vue'
+
+const example: ChatEntry[] = [{ id: 0, at: new Date('2026-01-01T12:00:00Z'), invocation: { name: 'ping', options: {} }, state: 'sent', messages: ['pong!'] }]
+
 definePageMeta({ layout: false })
 useSeoMeta({
   title: 'Nuxt Discord · Discord bots for Nuxt',
@@ -27,8 +32,8 @@ useSeoMeta({
           <figcaption>discord/commands/ping.ts</figcaption>
           <pre><code><span>/** Check the connection */</span>
 <i>export default</i> () =&gt; <strong>'pong!'</strong></code></pre>
-          <div class="output">
-            <b aria-hidden="true">/</b><div><small>You used <strong>/ping</strong></small><p>nuxt-discord <sup>APP</sup></p>pong!</div>
+          <div class="border-t border-chat-line bg-chat-canvas pb-3 font-chat text-base leading-[1.375] text-chat-white [font-size-adjust:0.478]">
+            <CommandTranscript :entries="example" :channel="false" />
           </div>
         </figure>
       </section>
@@ -52,7 +57,7 @@ useSeoMeta({
 .top, footer, nav, .wordmark { display: flex; align-items: center; gap: 1.5rem; }
 .top, footer { justify-content: space-between; padding-block: 1.25rem; border-bottom: 1px solid #34403b; }
 .wordmark { gap: .65rem; font: bold 1.05rem ui-monospace, monospace; }
-.wordmark b, .output > b { background: #9cf5bc; color: #132419; border-radius: .5rem; padding: .3em .5em; }
+.wordmark b { background: #9cf5bc; color: #132419; border-radius: .5rem; padding: .3em .5em; }
 .landing a:focus-visible { outline: 3px solid #9cf5bc; outline-offset: 4px; }
 .skip { position: absolute; top: -5rem; } .skip:focus { top: 1rem; background: #101418; }
 .hero { display: grid; grid-template-columns: 1.05fr 1fr; gap: clamp(2rem,5vw,6rem); align-items: center; padding-block: clamp(4rem,10vw,9rem); }
@@ -66,9 +71,6 @@ figcaption, pre { padding: 1rem 1.3rem; font: .85rem/1.7 ui-monospace, monospace
 figcaption { border-bottom: 1px solid #38433d; color: #ccdad1; }
 pre { padding-block: 2.5rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 code span, small { color: #acb9b2; } code i { color: #b0afff; font-style: normal; } code strong { color: #9cf5bc; }
-.output { display: flex; align-items: flex-start; gap: .85rem; border-top: 1px solid #38433d; padding: 1.3rem; background: #242429; }
-.output > b { border-radius: 50%; background: #727ced; color: white; width: 2.5rem; text-align: center; }
-.output p { font-weight: bold; } sup { background: #464fbe; padding: 1px 4px; border-radius: 3px; font: 10px system-ui; vertical-align: middle; }
 .guides { padding-block: 2rem 4rem; border-top: 1px solid #34403b; }
 h2 { font-size: 1.65rem; letter-spacing: -.035em; font-weight: 620; }
 .guides > div { display: grid; grid-template-columns: repeat(3,1fr); gap: 2.5rem; margin-top: 1.5rem; }
