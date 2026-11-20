@@ -42,6 +42,9 @@ jobs:
         env:
           SKIP_INSTALL_SIMPLE_GIT_HOOKS: 1
 
+      - name: Prepare the module and playground
+        run: bun run dev:prepare
+
       - name: Generate static docs
         run: bun run --cwd docs generate
         env:
