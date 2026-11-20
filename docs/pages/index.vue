@@ -20,8 +20,10 @@ useSeoMeta({
         <div>
           <h1>Your Nuxt app,<br><em>in Discord.</em></h1>
           <p>Turn a TypeScript function into a slash command. Give your community access to the same data and server logic that power your app.</p>
-          <NuxtLink class="action" to="/installation">Get started <span aria-hidden="true">→</span></NuxtLink>
-          <NuxtLink class="demo" to="/playground">Try a command</NuxtLink>
+          <div class="actions">
+            <NuxtLink class="action" to="/installation">Get started <span aria-hidden="true">→</span></NuxtLink>
+            <NuxtLink class="demo" to="/playground">Try a command</NuxtLink>
+          </div>
         </div>
         <CommandDeck />
       </section>
@@ -44,7 +46,7 @@ useSeoMeta({
 .landing { overflow-x: clip; background: #101418; color: #eef6f1; min-height: 100svh; font: 1rem/1.55 Inter, system-ui, sans-serif; padding-inline: max(1.25rem, calc((100% - 72rem) / 2)); }
 .top, footer, nav, .wordmark { display: flex; align-items: center; gap: 1.5rem; }
 .top, footer { justify-content: space-between; padding-block: 1.25rem; border-bottom: 1px solid #34403b; }
-.wordmark { gap: .65rem; font: bold 1.05rem ui-monospace, monospace; }
+.wordmark { white-space: nowrap; gap: .65rem; font: bold 1.05rem ui-monospace, monospace; }
 .wordmark b { background: #9cf5bc; color: #132419; border-radius: .5rem; padding: .3em .5em; }
 .landing a:focus-visible { outline: 3px solid #9cf5bc; outline-offset: 4px; }
 .skip { position: absolute; top: -5rem; } .skip:focus { top: 1rem; background: #101418; }
@@ -52,7 +54,8 @@ useSeoMeta({
 h1 { font-weight: 680; font-size: clamp(3.1rem,6.4vw,6.4rem); line-height: .99; letter-spacing: -.07em; }
 h1 em { color: #9cf5bc; font-style: normal; }
 .hero > div > p { max-width: 32rem; font-size: 1.14rem; margin-block: 1.6rem 2rem; color: #b8c5bf; }
-.demo { margin-inline-start: 1.2rem; color: #ccdad1; text-decoration: underline; text-underline-offset: .22em; }
+.actions { display: flex; flex-wrap: wrap; gap: .35rem 1.2rem; align-items: center; }
+.demo { display: inline-flex; align-items: center; min-height: 44px; white-space: nowrap; color: #ccdad1; text-decoration: underline; text-underline-offset: .22em; }
 .action { display: inline-flex; align-items: center; gap: 1.5rem; border-radius: .45rem; background: #9cf5bc; color: #132419; font-weight: 650; padding: .7rem 1.15rem; }
 .guides { padding-block: 2rem 4rem; border-top: 1px solid #34403b; }
 h2 { font-size: 1.65rem; letter-spacing: -.035em; font-weight: 620; }
@@ -60,4 +63,11 @@ h2 { font-size: 1.65rem; letter-spacing: -.035em; font-weight: 620; }
 .guides a:hover b, nav a:hover { text-decoration: underline; } .guides p, footer { color: #afbab5; } .guides p { margin-top: .4rem; }
 footer { border-top: 1px solid #34403b; border-bottom: 0; font-size: .85rem; }
 @media (max-width: 48rem) { .hero, .guides > div { grid-template-columns: 1fr; } .guides > div { gap: 1.25rem; } }
+@media (max-width: 30rem) {
+  .top, .top nav { gap: .75rem; }
+  .top nav a { display: inline-flex; align-items: center; min-height: 44px; white-space: nowrap; }
+  .wordmark { font-size: 1rem; gap: .45rem; }
+  .actions { column-gap: 1rem; }
+  .action { gap: .75rem; }
+}
 </style>

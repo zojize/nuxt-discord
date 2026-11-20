@@ -329,7 +329,7 @@ function setField(name: string, el: unknown) {
             <button v-if="remainingOptions.length" type="button" aria-haspopup="listbox" :aria-expanded="pickingOption" :aria-controls="pickingOption ? id : undefined" class="cursor-pointer rounded px-1 text-sm text-chat-muted hover:bg-chat-hover" @focus="showChoices = false" @click="pickingOption = !pickingOption; index = 0" @keydown="pickingOption && keydown($event)">
               +{{ remainingOptions.length }} optional
             </button>
-            <button ref="runButton" type="button" aria-label="Run command" class="cursor-pointer rounded px-1.5 text-chat-muted hover:text-white sm:h-5 sm:w-px sm:rounded-none sm:px-0 sm:focus-visible:bg-chat-white sm:focus-visible:outline-none" @focus="focusIndex = -1; showChoices = false" @click="send" @keydown.esc="cancel">
+            <button ref="runButton" type="button" aria-label="Run command" class="grid size-11 shrink-0 cursor-pointer place-items-center rounded text-chat-muted hover:text-white sm:h-5 sm:w-px sm:rounded-none sm:px-0 sm:focus-visible:bg-chat-white sm:focus-visible:outline-none" @pointerdown.prevent @focus="focusIndex = -1; showChoices = false" @click="send" @keydown.esc="cancel">
               <UIcon name="i-lucide-send-horizontal" class="size-4 sm:hidden" />
             </button>
           </div>
