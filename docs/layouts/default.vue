@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { appearanceSelect } from '../../src/runtime/client/components/appearance-select'
+import ProjectLogo from '../../src/runtime/client/components/ProjectLogo.vue'
 </script>
 
 <template>
@@ -8,9 +9,7 @@ import { appearanceSelect } from '../../src/runtime/client/components/appearance
     <header class="sticky top-0 z-50 w-full border-b border-default bg-default/80 backdrop-blur-xl">
       <div class="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
         <NuxtLink to="/" class="flex items-center gap-2.5">
-          <div class="flex size-7 items-center justify-center rounded-lg bg-[#5865F2]">
-            <span class="text-sm font-bold text-white">/</span>
-          </div>
+          <ProjectLogo width="32" height="32" aria-hidden="true" class="shrink-0" />
           <span class="text-sm font-semibold tracking-tight">nuxt-discord</span>
           <UBadge label="docs" variant="subtle" color="neutral" size="xs" />
         </NuxtLink>

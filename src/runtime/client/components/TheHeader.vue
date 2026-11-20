@@ -2,6 +2,7 @@
 import { Icon } from '@iconify/vue'
 import { useRoute } from '#imports'
 import { appearanceSelect } from './appearance-select'
+import ProjectLogo from './ProjectLogo.vue'
 
 const route = useRoute()
 
@@ -20,9 +21,7 @@ const nav = [
     <div class="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
       <div class="flex items-center gap-6">
         <NuxtLink to="/discord" class="flex items-center gap-2.5">
-          <div class="relative flex size-7 items-center justify-center rounded-lg bg-linear-to-br from-[#00DC82] to-[#5865F2]">
-            <span class="text-xs font-bold text-white">/d</span>
-          </div>
+          <ProjectLogo width="32" height="32" aria-hidden="true" class="shrink-0" />
           <span class="text-sm font-semibold tracking-tight">nuxt-discord</span>
         </NuxtLink>
 

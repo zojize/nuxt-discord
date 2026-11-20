@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { appearanceSelect } from '../../src/runtime/client/components/appearance-select'
+import ProjectLogo from '../../src/runtime/client/components/ProjectLogo.vue'
 
 definePageMeta({ layout: false })
 useHead({ htmlAttrs: { class: 'landing-page' } })
@@ -20,7 +21,7 @@ const guides = [
     <a class="absolute -top-20 z-10 bg-(--landing-canvas) focus:top-4" href="#main">Skip to content</a>
     <header class="flex items-center justify-between gap-6 border-b border-(--landing-rule) py-5">
       <ULink raw to="/" aria-label="Nuxt Discord home" class="wordmark">
-        <b aria-hidden="true" class="rounded-lg bg-(--landing-accent) px-[.5em] py-[.3em] text-(--landing-on-accent) forced-colors:outline">/d</b> nuxt-discord
+        <ProjectLogo width="40" height="40" aria-hidden="true" class="size-10 shrink-0 max-[23rem]:size-8" /> nuxt-discord
       </ULink>
       <nav aria-label="Main" class="flex items-center gap-[inherit]">
         <ULink raw to="/getting-started">
