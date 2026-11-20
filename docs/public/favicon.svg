@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <style>
+    .peaks { fill: #00ad70 }
+    @media (prefers-color-scheme: dark) {
+      .peaks { fill: #00dc82 }
+    }
+  </style>
+  <defs>
+    <mask id="brim" maskUnits="userSpaceOnUse" x="0" y="0" width="16" height="16">
+      <rect width="16" height="16" fill="white"/>
+      <path d="M.95 7.65C3.2 6.03 5.66 5.76 7.37 6.1c1.26.25 2.24 1.08 2.95 1.89q.15.17.01.29-.12.1-.27-.03C9.12 7.46 8.25 6.99 7.2 6.8c-1.64-.31-3.76.27-6.25 2.05Z" fill="black"/>
+    </mask>
+  </defs>
+  <g mask="url(#brim)">
+    <path class="peaks" fill-rule="evenodd" d="M7 6.3 9.2 10l1.4-2.3q.4-.7.9 0l4.3 7.4q.3.6-.4.6H9.7l1.1-1.9h2.5l-2.2-3.9-2.3 4c-.8 1.3-1.6 1.8-3.2 1.8H1.1q-.8 0-.4-.8l5-8.6q.6-1.1 1.3 0Zm-3.9 7.5h2.5c.8 0 1.2-.2 1.6-.9l.9-1.3-1.8-3z"/>
+    <path fill="#5865f2" d="M2.45 7.35C.9 5.85.55 2.95 1.55 1.45 2.18.47 3.1.28 4.18.42c2.42.24 5.2 2 6.64 3.57 1.56-.16 3.54-.08 4.08 1.01.88 1.74-1.64 2.79-4.4 3.41-.74.9-1.3 1.22-2.05 1.02-1.53-.41-2.52-.83-3.8-.67-1.22.15-2.25.65-3.06.98-.52.21-.11-1.15.86-2.39Z"/>
+    <g fill="#fff" transform="rotate(-20 5 4)">
+      <rect x="2.8" y="3.5" width="1.55" height="2.05" rx=".76"/>
+      <rect x="5.18" y="3.25" width="1.55" height="2.05" rx=".76"/>
+    </g>
+  </g>
+</svg>
