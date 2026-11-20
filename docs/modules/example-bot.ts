@@ -1,5 +1,6 @@
 import type { SlashCommand, SlashCommandSubcommand, SlashCommandSubcommandGroup } from '../../src/types'
 import type { CommandSourceContext } from '../../src/utils/collect'
+import { spawnSync } from 'node:child_process'
 import { relative, resolve } from 'node:path'
 import { addTemplate, createResolver, defineNuxtModule, useLogger } from '@nuxt/kit'
 import { ApplicationCommandOptionType } from 'discord.js'
@@ -12,6 +13,7 @@ export default defineNuxtModule({
   setup(_, nuxt) {
     const root = resolve(nuxt.options.rootDir, '../playground')
     const directory = 'discord'
+    const revision = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout?.trim() || 'main'
     nuxt.options.watch.push(resolve(root, directory))
     addTemplate({
       filename: 'example-bot.json',
@@ -55,6 +57,7 @@ export default defineNuxtModule({
           })
         }
         return JSON.stringify({
+          revision,
           commands: flatten(ctx.slashCommands).toSorted((a, b) => a.name.localeCompare(b.name)),
           menus: ctx.contextMenus.map(({ name, type }) => ({ name, type })).toSorted((a, b) => a.name.localeCompare(b.name)),
         })
