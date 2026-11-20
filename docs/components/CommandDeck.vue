@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useDocumentVisibility, useElementVisibility, usePreferredReducedMotion } from '@vueuse/core'
+import { useDocumentVisibility, useElementVisibility, useFocusWithin, usePreferredReducedMotion } from '@vueuse/core'
 import { ref, watchEffect } from 'vue'
 import addSource from '../../playground/discord/commands/add.ts?raw'
 import pingSource from '../../playground/discord/commands/ping.ts?raw'
@@ -13,8 +13,7 @@ const cards: { name: string, source: string, options: Record<string, string> }[]
 const deck = ref<HTMLElement>()
 const front = ref(0)
 const hasShuffled = ref(false)
-const paused = ref(false)
-const hovering = ref(false)
+const { focused } = useFocusWithin(deck)
 const motion = usePreferredReducedMotion()
 const visibility = useDocumentVisibility()
 const inView = useElementVisibility(deck)
@@ -28,13 +27,8 @@ function shuffle() {
   front.value = (front.value + 1) % cards.length
 }
 
-function dealNext() {
-  paused.value = true
-  shuffle()
-}
-
 watchEffect((cleanup) => {
-  if (!import.meta.client || paused.value || hovering.value || !inView.value || visibility.value !== 'visible' || motion.value !== 'no-preference')
+  if (!import.meta.client || focused.value || !inView.value || visibility.value !== 'visible' || motion.value !== 'no-preference')
     return
   const timer = setInterval(shuffle, 5500)
   cleanup(() => clearInterval(timer))
@@ -42,23 +36,15 @@ watchEffect((cleanup) => {
 </script>
 
 <template>
-  <figure ref="deck" aria-label="Example bot command deck" class="min-w-0" @mouseenter="hovering = true" @mouseleave="hovering = false">
-    <div class="stack" :class="{ shuffled: hasShuffled }" @focusin="paused = true">
+  <figure ref="deck" aria-label="Example bot command deck" class="min-w-0">
+    <div class="stack" :class="{ shuffled: hasShuffled }">
       <CommandDeckCard
         v-for="(card, i) in cards" :key="card.name" :name="card.name" :source="card.source" :options="card.options"
         class="card" :data-depth="depth(i)" :inert="i !== front" :aria-hidden="i !== front ? true : undefined"
       />
     </div>
-    <figcaption class="mx-3 mt-6 flex flex-wrap items-center justify-between gap-2 sm:mx-6">
-      <NuxtLink :to="`/example-bot#${cards[front]!.name}`" class="rounded px-1 py-2 text-sm text-[#c5d5cd] underline-offset-4 hover:underline" @focus="paused = true">View command reference ↗</NuxtLink>
-      <div class="flex items-center gap-2">
-        <button type="button" class="deck-control motion-reduce:hidden!" :aria-label="paused ? 'Resume automatic shuffle' : 'Pause automatic shuffle'" @click="paused = !paused">
-          <UIcon :name="paused ? 'i-lucide-play' : 'i-lucide-pause'" class="size-4" />
-        </button>
-        <button type="button" class="deck-control gap-2 px-3 text-sm font-medium" @click="dealNext">
-          <UIcon name="i-lucide-shuffle" class="size-4 text-[#9cf5bc]" />Shuffle deck
-        </button>
-      </div>
+    <figcaption class="mx-3 mt-6 sm:mx-6">
+      <NuxtLink :to="`/example-bot#${cards[front]!.name}`" class="inline-block rounded px-1 py-2 text-sm text-[#c5d5cd] underline-offset-4 hover:underline">View command reference ↗</NuxtLink>
     </figcaption>
   </figure>
 </template>
@@ -82,19 +68,6 @@ watchEffect((cleanup) => {
 }
 .card[data-depth="1"] { z-index: 2; translate: 2% -4%; rotate: 4deg; scale: .98; }
 .card[data-depth="2"] { z-index: 1; translate: -2% -7%; rotate: -6deg; scale: .96; }
-.deck-control {
-  display: inline-flex;
-  min-width: 2.25rem;
-  min-height: 2.25rem;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  border: 1px solid #43534d;
-  border-radius: .45rem;
-  color: #d3dfd8;
-  background: #1b2421;
-}
-.deck-control:hover { background: #29372f; }
 figure :focus-visible { outline: 2px solid #9cf5bc; outline-offset: 3px; }
 @media (max-width: 48rem) {
   .stack { --lift-x: -3%; --lift-angle: -8deg; }
