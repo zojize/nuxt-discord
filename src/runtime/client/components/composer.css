@@ -1,11 +1,11 @@
 .dc-dock { position: fixed; z-index: 40; inset: auto max(12px, calc((100vw - 72rem)/2 + 24px)) max(12px, env(safe-area-inset-bottom)); color-scheme: dark; color: #efeff1; font: 16px/1.375 "gg sans","Noto Sans","Helvetica Neue",Helvetica,Arial,sans-serif; }
 .dc-composer, .dc-picker, .dc-history, .dc-hint { box-sizing: border-box; border: 1px solid #39393e; }
-.dc-composer { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 9px 15px; min-height: 58px; background: #242429; border-radius: 8px; }
+.dc-composer { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 9px 15px; min-height: 58px; background: oklab(25.6757% 0.00063 -0.00759); border-radius: 8px; }
 .dc-input { flex: 1; min-width: 0; height: 38px; outline: none; } .dc-input::placeholder { color: #a5a5ae; }
 .dc-composer:focus-within { border-color: #737682; }
 .dc-dock button { cursor: pointer; } .dc-dock button:focus-visible { outline: 2px solid #b6c8ff; outline-offset: 2px; }
 .dc-browse { font-size: 27px; color: #c6c6cd; margin-right: 12px; width: 26px; }
-.dc-picker { background: #242329; display: flex; border-radius: 5px; margin: 0 5px 6px; overflow: hidden; box-shadow: 0 8px 20px #0004; }
+.dc-picker { background: oklab(26.239% 0.00252 -0.00890); display: flex; border-radius: 5px; margin: 0 5px 6px; overflow: hidden; box-shadow: 0 8px 20px #0004; }
 .dc-rail { flex: 0 0 46px; background: #141418; padding: 12px 5px; }
 .dc-rail b, .dc-avatar { display: inline-grid; place-content: center; width: 32px; height: 32px; background: #5969b7; color: white; border-radius: 50%; font-size: 13px; font-weight: bold; }
 .dc-list { flex: 1; min-width: 0; padding: 8px; max-height: min(420px,40dvh); overflow-y: auto; overscroll-behavior: contain; }
@@ -24,3 +24,4 @@
 .dc-message { display: flex; align-items: flex-start; gap: 12px; margin: 12px 0; } .dc-message p { white-space: pre-wrap; overflow-wrap: anywhere; }
 .dc-clear { float: right; color: #c7c6cd; font-size: 12px; } .dc-message small { color: #c7c6cd; } .dc-message small b { color: #a1bbff; }
 .dc-app { border-radius: 3px; padding: 1px 4px; background: #505bc6; color: white; font-size: 10px; font-weight: bold; }
+.dc-optional { padding: 2px 6px; color: #c7c6cd; font-size: 14px; }

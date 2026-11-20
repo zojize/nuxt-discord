@@ -57,7 +57,7 @@ export function prepareHMR(ctx: NuxtDiscordContext) {
             config.plugins,
             TransformPlugin(ctx),
           ]
-          rollupConfig = config
+          rollupConfig = { ...config, plugins: config.plugins as InputOptions['plugins'] }
         },
       }
     })

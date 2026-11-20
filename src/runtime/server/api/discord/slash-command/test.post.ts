@@ -92,7 +92,7 @@ export default defineEventHandler(async (event): Promise<TestCommandResponse> =>
   }
 
   try {
-    let result = resolved.execute(...args)
+    let result: unknown = resolved.execute(...args)
 
     if (result && typeof result === 'object' && 'then' in result) {
       result = await result
@@ -141,13 +141,8 @@ export default defineEventHandler(async (event): Promise<TestCommandResponse> =>
           return Promise.resolve({})
         },
       }
-      try {
-        await (result as (...a: any[]) => any)(mockInteraction, null)
-        return { ok: true, command: body.name, response: captured ?? '[reply sent]' }
-      }
-      catch {
-        return { ok: true, command: body.name, response: captured ?? '[reply handler executed]' }
-      }
+      await (result as (...a: any[]) => any)(mockInteraction, null)
+      return { ok: true, command: body.name, response: captured ?? '[reply sent]' }
     }
 
     return { ok: true, command: body.name, response: String(result) }
