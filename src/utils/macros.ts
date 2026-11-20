@@ -1,5 +1,6 @@
 import type { DescribeCommandOptions } from '../runtime/server/utils/describeCommand'
-import type { NuxtDiscordContext, SlashCommand, SlashCommandOption } from '../types'
+import type { SlashCommand, SlashCommandOption } from '../types'
+import type { CommandSourceContext } from './collect'
 import ts from 'typescript'
 
 export const macros = {
@@ -86,7 +87,7 @@ export const macros = {
     // The actual middleware references are preserved in the transform step.
     // Here we just record the presence for metadata purposes.
   },
-} satisfies Record<string, (ctx: NuxtDiscordContext, node: ts.CallExpression, command: Partial<SlashCommand>) => void>
+} satisfies Record<string, (ctx: CommandSourceContext, node: ts.CallExpression, command: Partial<SlashCommand>) => void>
 
 function parseLiteral<T = unknown>(node: ts.Node): T
 function parseLiteral(node: ts.Node): unknown {

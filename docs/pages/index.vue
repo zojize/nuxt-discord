@@ -1,9 +1,4 @@
 <script setup lang="ts">
-import type { ChatEntry } from '../../src/runtime/client/components/CommandTranscript.vue'
-import CommandTranscript from '../../src/runtime/client/components/CommandTranscript.vue'
-
-const example: ChatEntry[] = [{ id: 0, at: new Date('2026-01-01T12:00:00Z'), invocation: { name: 'ping', options: {} }, state: 'sent', messages: ['pong!'] }]
-
 definePageMeta({ layout: false })
 useSeoMeta({
   title: 'Nuxt Discord · Discord bots for Nuxt',
@@ -28,14 +23,7 @@ useSeoMeta({
           <NuxtLink class="action" to="/installation">Get started <span aria-hidden="true">→</span></NuxtLink>
           <NuxtLink class="demo" to="/playground">Try a command</NuxtLink>
         </div>
-        <figure aria-label="A TypeScript command and its reply in Discord">
-          <figcaption>discord/commands/ping.ts</figcaption>
-          <pre><code><span>/** Check the connection */</span>
-<i>export default</i> () =&gt; <strong>'pong!'</strong></code></pre>
-          <div class="border-t border-chat-line bg-chat-canvas pb-3 font-chat text-base leading-[1.375] text-chat-white [font-size-adjust:0.478]">
-            <CommandTranscript :entries="example" :channel="false" />
-          </div>
-        </figure>
+        <CommandFlipbook />
       </section>
       <section class="guides" aria-labelledby="guides-title">
         <h2 id="guides-title">
@@ -44,7 +32,7 @@ useSeoMeta({
         <div>
           <NuxtLink to="/guide/options"><b>Typed arguments ↗</b><p>Use a function signature to define the options Discord asks for.</p></NuxtLink>
           <NuxtLink to="/guide/responses"><b>Reactive replies ↗</b><p>Update a Vue ref to edit a bot message as its state changes.</p></NuxtLink>
-          <NuxtLink to="/dashboard"><b>Local command testing ↗</b><p>Browse commands and try their arguments in your development dashboard.</p></NuxtLink>
+          <NuxtLink to="/example-bot"><b>Example bot reference ↗</b><p>Browse the slash commands and context menus generated from the example bot.</p></NuxtLink>
         </div>
       </section>
     </main>
@@ -66,11 +54,6 @@ h1 em { color: #9cf5bc; font-style: normal; }
 .hero > div > p { max-width: 32rem; font-size: 1.14rem; margin-block: 1.6rem 2rem; color: #b8c5bf; }
 .demo { margin-inline-start: 1.2rem; color: #ccdad1; text-decoration: underline; text-underline-offset: .22em; }
 .action { display: inline-flex; align-items: center; gap: 1.5rem; border-radius: .45rem; background: #9cf5bc; color: #132419; font-weight: 650; padding: .7rem 1.15rem; }
-figure { min-width: 0; background: #1d2228; border: 1px solid #425149; border-radius: .85rem; overflow: hidden; box-shadow: .65rem .65rem 0 #222e29; }
-figcaption, pre { padding: 1rem 1.3rem; font: .85rem/1.7 ui-monospace, monospace; }
-figcaption { border-bottom: 1px solid #38433d; color: #ccdad1; }
-pre { padding-block: 2.5rem; white-space: pre-wrap; overflow-wrap: anywhere; }
-code span, small { color: #acb9b2; } code i { color: #b0afff; font-style: normal; } code strong { color: #9cf5bc; }
 .guides { padding-block: 2rem 4rem; border-top: 1px solid #34403b; }
 h2 { font-size: 1.65rem; letter-spacing: -.035em; font-weight: 620; }
 .guides > div { display: grid; grid-template-columns: repeat(3,1fr); gap: 2.5rem; margin-top: 1.5rem; }

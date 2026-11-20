@@ -25,7 +25,15 @@ const modifiersMap: Record<SlashCommandOptionTypeIdentifier, string[]> = {
   Attachment: [],
 }
 
-export default function collectSlashCommands(ctx: NuxtDiscordContext) {
+export interface CommandSourceContext {
+  options: Pick<NuxtDiscordContext['options'], 'dir'>
+  resolve: Pick<NuxtDiscordContext['resolve'], 'root'>
+  logger: Pick<NuxtDiscordContext['logger'], 'warn'>
+  slashCommands: NuxtDiscordContext['slashCommands']
+  contextMenus: NuxtDiscordContext['contextMenus']
+}
+
+export default function collectSlashCommands(ctx: CommandSourceContext) {
   const commandFiles = globSync(`${ctx.resolve.root(ctx.options.dir, 'commands')}/**/*.ts`)
   ctx.slashCommands = []
   for (const file of commandFiles) {
@@ -49,7 +57,7 @@ interface LocaleCommandEntry {
  * Load locale files from discord/locales/*.json and apply
  * name_localizations / description_localizations to commands and options.
  */
-function applyLocalizations(ctx: NuxtDiscordContext) {
+function applyLocalizations(ctx: CommandSourceContext) {
   const localesDir = ctx.resolve.root(ctx.options.dir, 'locales')
   const localeFiles = globSync(`${localesDir}/*.json`)
 
@@ -109,7 +117,7 @@ function applyLocalizations(ctx: NuxtDiscordContext) {
   }
 }
 
-export function processCommandFile(ctx: NuxtDiscordContext, file: string): SlashCommand | undefined {
+export function processCommandFile(ctx: CommandSourceContext, file: string): SlashCommand | undefined {
   const sourceFile = ts.createSourceFile(file, readFileSync(file).toString(), ts.ScriptTarget.Latest, /* setParentNodes */ true)
   const commandDefinition = extractCommandDefinition(sourceFile)
 
@@ -367,7 +375,7 @@ export function processCommandFile(ctx: NuxtDiscordContext, file: string): Slash
   return command as SlashCommand
 }
 
-export function processSubcommands(ctx: NuxtDiscordContext) {
+export function processSubcommands(ctx: CommandSourceContext) {
   for (let i = 0; i < 2; i++) {
     const done: number[] = []
     ;(ctx.slashCommands as (SlashCommand | SlashCommandSubcommand | SlashCommandSubcommandGroup)[]).forEach((command, i) => {

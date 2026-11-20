@@ -19,10 +19,10 @@ watch(() => props.index, index => document.getElementById(`${props.id}-${index}`
     <div v-if="commands && !searching" aria-hidden="true" class="flex w-[2.875rem] shrink-0 justify-center bg-chat-sidebar pt-3">
       <ChatAvatar class="size-8" />
     </div>
-    <div :id="id" role="listbox" :aria-label="label" class="max-h-[min(26.25rem,45dvh)] min-w-0 flex-1 overflow-y-auto overscroll-contain px-2 py-1.5">
-      <div v-if="!searching || !commands" class="px-2 py-1.5 text-sm font-semibold">
+    <div :id="id" role="listbox" :aria-label="label" class="max-h-[min(26.25rem,55dvh)] min-w-0 flex-1 overflow-y-auto overscroll-contain px-2 py-1.5">
+      <h3 class="px-2 py-1.5 text-sm font-semibold">
         {{ label }}
-      </div>
+      </h3>
       <div
         v-for="(item, i) in items" :id="`${id}-${i}`" :key="item.value" role="option"
         :aria-selected="i === index" class="flex cursor-pointer items-center gap-4 rounded px-2 aria-selected:bg-chat-hover"

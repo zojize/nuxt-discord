@@ -1,9 +1,10 @@
-import type { ContextMenu, NuxtDiscordContext } from '../types'
+import type { ContextMenu } from '../types'
+import type { CommandSourceContext } from './collect'
 import { globSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import ts from 'typescript'
 
-export default function collectContextMenus(ctx: NuxtDiscordContext) {
+export default function collectContextMenus(ctx: CommandSourceContext) {
   const contextMenuDir = ctx.resolve.root(ctx.options.dir, 'context-menus')
   const allFiles = globSync(`${contextMenuDir}/**/*.ts`)
 
@@ -17,7 +18,7 @@ export default function collectContextMenus(ctx: NuxtDiscordContext) {
   }
 }
 
-export function processContextMenuFile(ctx: NuxtDiscordContext, file: string): ContextMenu | undefined {
+export function processContextMenuFile(ctx: CommandSourceContext, file: string): ContextMenu | undefined {
   const source = readFileSync(file, 'utf-8')
   const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true)
 

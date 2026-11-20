@@ -1,5 +1,6 @@
+import type { MessageFlagsResolvable } from 'discord.js'
 import type { SlashCommandRuntime, SlashCommandSubcommandGroupRuntime, SlashCommandSubcommandRuntime } from '../../../../../types'
-import { ApplicationCommandOptionType } from 'discord.js'
+import { ApplicationCommandOptionType, MessageFlagsBitField } from 'discord.js'
 import { defineEventHandler, readBody } from 'h3'
 import { isRef, toValue } from 'vue'
 import { useDiscordClient } from '../../../utils/useDiscordClient'
@@ -16,6 +17,7 @@ interface TestCommandResponse {
   command: string
   response?: string
   responses?: string[]
+  ephemeral?: boolean
   error?: string
 }
 
@@ -125,8 +127,14 @@ export default defineEventHandler(async (event): Promise<TestCommandResponse> =>
 
     if (typeof result === 'function') {
       const messages: string[] = []
-      type Reply = string | { content?: string }
+      type Reply = string | { content?: string | null, flags?: MessageFlagsResolvable, ephemeral?: boolean }
+      let ephemeral = false
+      function isPrivate(payload: Reply) {
+        return typeof payload !== 'string' && (payload.ephemeral === true || new MessageFlagsBitField(payload.flags).has('Ephemeral'))
+      }
       function capture(payload: Reply, index = messages.length) {
+        if (!messages.length && isPrivate(payload))
+          ephemeral = true
         const content = typeof payload === 'string' ? payload : payload.content
         messages[index] = content ?? messages[index] ?? '[Reply without text]'
         return { edit: async (update: Reply) => capture(update, index) }
@@ -134,7 +142,10 @@ export default defineEventHandler(async (event): Promise<TestCommandResponse> =>
       const interaction = {
         replied: false,
         deferred: false,
-        async deferReply() { this.deferred = true },
+        async deferReply(payload: Reply = {}) {
+          this.deferred = true
+          ephemeral = isPrivate(payload)
+        },
         async reply(payload: Reply) {
           this.replied = true
           return capture(payload)
@@ -146,7 +157,7 @@ export default defineEventHandler(async (event): Promise<TestCommandResponse> =>
         async followUp(payload: Reply) { return capture(payload) },
       }
       await result(interaction, null)
-      return { ok: true, command: body.name, response: messages[0], responses: messages }
+      return { ok: true, command: body.name, response: messages[0], responses: messages, ephemeral }
     }
 
     return { ok: true, command: body.name, response: String(result) }
