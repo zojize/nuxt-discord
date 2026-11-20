@@ -1,10 +1,15 @@
-# <span style="color:oklch(72.3% 0.219 149.579)">Nuxt</span> <span style="color:#5865F2">Discord</span>
+<img src="./docs/public/logo.svg" width="84" height="84" alt="">
+
+# Nuxt Discord
 
 [![npm version][npm-version-src]][npm-version-href]
 [![License][license-src]][license-href]
 [![Nuxt][nuxt-src]][nuxt-href]
 
-A Nuxt module for building Discord bots with slash commands, featuring hot module replacement, automatic command registration, and a web interface for command management.
+Turn TypeScript functions in your Nuxt app into Discord slash commands. Share server code with your bot, register commands automatically, and try them in a local dashboard.
+
+- **[Try the live playground](https://zojize.github.io/nuxt-discord/playground/)** — Run `/add`, enter two numbers, and open the sent command to inspect its arguments. The demo runs in your browser.
+- **[Browse the example bot’s command reference](https://zojize.github.io/nuxt-discord/example-bot/)** — Explore the slash commands, options, and context menus generated from the example bot’s source.
 
 ## Features
 
@@ -19,7 +24,7 @@ A Nuxt module for building Discord bots with slash commands, featuring hot modul
 - **JSDoc Metadata** - `@nsfw`, `@guild`, `@dm`, `@defaultMemberPermissions`, `@middleware` tags
 - **Localization** - i18n via inline JSDoc or `discord/locales/*.json` files
 - **Guild Commands** - Register commands per-guild for instant updates
-- **HMR** - Hot reload commands during development
+- **Hot reload** - Edit standalone commands while the development bot is running. See [hot reload and shared state](#hot-reload-and-shared-state) for current limits.
 - **Web Dashboard** - Overview, commands, context menus, listeners, and live activity log
 - **Built-in Middleware** - `guildOnly`, `ownerOnly`, `cooldown`, `requireRole`
 
@@ -268,6 +273,12 @@ Start the Nuxt dev server and open `/discord`. The dashboard and its APIs are de
 - **Activity Log** - Real-time interaction history with filtering and stats
 
 File paths link to your editor via `vscode://file` URLs.
+
+### Hot reload and shared state
+
+An edited command is built separately from the running Nitro server. A command that works at startup can stop replying after an edit if it uses a project alias or imports a Nitro helper such as `useStorage`. Restart the Nuxt dev server to load the edited command and its dependencies together.
+
+Keep data that must survive a restart, such as a per-user pull count, in a database or a persistent Nitro storage mount. A module-level counter can split into separate copies during hot reload and starts over when the server restarts.
 
 ## Runtime Hooks
 
