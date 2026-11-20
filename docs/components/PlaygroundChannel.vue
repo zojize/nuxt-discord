@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { useMediaQuery } from '@vueuse/core'
+import { useMediaQuery, useMounted, useWindowSize } from '@vueuse/core'
+import AppearanceSelect from '../../src/runtime/client/components/AppearanceSelect.vue'
 import ChatAvatar from '../../src/runtime/client/components/ChatAvatar.vue'
 
 const drawer = useTemplateRef<HTMLDialogElement>('drawer')
+const mounted = useMounted()
+const { height: visibleHeight } = useWindowSize({ type: 'visual' })
 function dismissOnBackdropClick() {
   if (!('closedBy' in HTMLDialogElement.prototype))
     drawer.value?.close()
@@ -20,39 +23,42 @@ const pinned = ref(false)
 </script>
 
 <template>
-  <main class="flex h-dvh min-h-0 flex-col overflow-hidden bg-chat-sidebar font-chat text-base leading-[1.375] text-chat-white scheme-dark [font-size-adjust:0.478]">
-    <div class="flex h-8 shrink-0 items-center justify-center gap-2 text-sm font-medium">
-      <ChatAvatar class="size-4 rounded-[4px]" /> nuxt-discord
+  <main :style="mounted ? { '--chat-viewport': `${visibleHeight}px` } : undefined" class="flex h-[min(100dvh,var(--chat-viewport,100dvh))] min-h-0 flex-col overflow-clip bg-chat-sidebar font-chat text-base leading-[1.375] text-chat-text [font-size-adjust:0.478]">
+    <div class="grid h-11 shrink-0 grid-cols-[1fr_auto_1fr] items-center px-1 md:h-8">
+      <div class="col-start-2 flex items-center gap-2 text-sm font-medium">
+        <ChatAvatar class="size-4 rounded-[4px]" /> nuxt-discord
+      </div>
+      <AppearanceSelect class="justify-self-end md:size-8" />
     </div>
     <div class="relative flex min-h-0 flex-1">
       <nav aria-label="Server navigation" class="hidden w-[4.5rem] shrink-0 flex-col items-center gap-3 py-2 md:flex">
-        <NuxtLink to="/" title="Project home" aria-label="Project home" class="grid size-10 place-items-center rounded-xl bg-chat-hover text-chat-white hover:bg-chat-brand"><UIcon name="i-lucide-house" class="size-5" /></NuxtLink>
+        <NuxtLink to="/" title="Project home" aria-label="Project home" class="grid size-10 place-items-center rounded-xl bg-chat-hover text-chat-text hover:bg-chat-brand"><UIcon name="i-lucide-house" class="size-5" /></NuxtLink>
         <span class="h-px w-8 bg-chat-line" />
-        <span aria-label="Current server, nuxt-discord" class="relative grid size-10 place-items-center rounded-xl bg-chat-brand before:absolute before:-left-4 before:h-8 before:w-1 before:rounded-r before:bg-chat-white"><UIcon name="i-lucide-bot" class="size-6" /></span>
+        <span aria-label="Current server, nuxt-discord" class="relative grid size-10 place-items-center rounded-xl bg-chat-brand before:absolute before:-left-4 before:h-8 before:w-1 before:rounded-r text-white before:bg-chat-text"><UIcon name="i-lucide-bot" class="size-6" /></span>
       </nav>
-      <aside aria-label="Channel navigation" class="hidden w-[clamp(13rem,18vw,19rem)] shrink-0 rounded-tl-xl border border-white/[.06] bg-chat-sidebar md:block">
+      <aside aria-label="Channel navigation" class="hidden w-[clamp(13rem,18vw,19rem)] shrink-0 rounded-tl-xl border border-chat-line bg-chat-sidebar md:block">
         <PlaygroundChannelNav v-model:expanded="expanded" />
       </aside>
-      <dialog id="channel-drawer" ref="drawer" closedby="any" aria-label="Channel navigation" class="fixed inset-y-0 left-0 m-0 h-dvh max-h-none w-64 max-w-[85vw] border-r border-chat-line bg-chat-sidebar text-chat-white backdrop:bg-black/50" @click.self="dismissOnBackdropClick">
+      <dialog id="channel-drawer" ref="drawer" closedby="any" aria-label="Channel navigation" class="fixed inset-y-0 left-0 m-0 h-dvh max-h-none w-64 max-w-[85vw] border-r border-chat-line bg-chat-sidebar text-chat-text backdrop:bg-black/50" @click.self="dismissOnBackdropClick">
         <PlaygroundChannelNav v-model:expanded="expanded" dismissible @close="drawer?.close()" />
       </dialog>
-      <section class="flex min-w-0 flex-1 flex-col border-t border-white/[.06] bg-chat-canvas">
-        <header class="flex h-12 shrink-0 items-center gap-1 border-b border-white/[.065] px-1 sm:gap-2 sm:px-4">
+      <section class="flex min-w-0 flex-1 flex-col border-t border-chat-line bg-chat-canvas">
+        <header class="flex h-12 shrink-0 items-center gap-1 border-b border-chat-line px-1 sm:gap-2 sm:px-4">
           <button type="button" aria-label="Show channels" aria-controls="channel-drawer" aria-haspopup="dialog" class="grid size-11 shrink-0 cursor-pointer place-items-center md:hidden" @click="drawer?.showModal()">
             <UIcon name="i-lucide-panel-left" class="size-5" />
           </button>
           <UIcon name="i-lucide-hash" class="hidden size-6 shrink-0 text-chat-faint sm:block" /><strong class="min-w-0 truncate font-semibold">command-testing</strong>
           <div class="ml-auto flex shrink-0 items-center text-chat-muted sm:gap-4">
-            <button type="button" aria-label="Pinned messages" :aria-pressed="pinned" class="grid size-11 cursor-pointer place-items-center hover:text-white sm:size-6 aria-pressed:text-white" @click="pinned = !pinned">
+            <button type="button" aria-label="Pinned messages" :aria-pressed="pinned" class="grid size-11 cursor-pointer place-items-center hover:text-chat-text sm:size-6 aria-pressed:text-chat-text" @click="pinned = !pinned">
               <UIcon name="i-lucide-pin" class="size-5" />
             </button>
-            <button type="button" aria-label="Channel members" aria-controls="channel-members" :aria-expanded="members" class="grid size-11 cursor-pointer place-items-center hover:text-white sm:size-6" @click="members = !members">
+            <button type="button" aria-label="Channel members" aria-controls="channel-members" :aria-expanded="members" class="grid size-11 cursor-pointer place-items-center hover:text-chat-text sm:size-6" @click="members = !members">
               <UIcon name="i-lucide-users" class="size-5" />
             </button>
             <label class="hidden h-7 items-center gap-1 rounded-md border border-chat-line bg-chat-sidebar px-2 focus-within:border-chat-muted sm:flex">
               <input v-model="search" type="search" aria-label="Search channel messages" placeholder="Search" class="w-24 bg-transparent text-sm outline-none lg:w-36" @keydown.esc="search = ''"><UIcon name="i-lucide-search" class="size-3.5" />
             </label>
-            <NuxtLink to="/" title="Back to project" aria-label="Back to project" class="grid size-11 place-items-center hover:text-white sm:size-6"><UIcon name="i-lucide-house" class="size-5" /></NuxtLink>
+            <NuxtLink to="/" title="Back to project" aria-label="Back to project" class="grid size-11 place-items-center hover:text-chat-text sm:size-6"><UIcon name="i-lucide-house" class="size-5" /></NuxtLink>
           </div>
         </header>
         <div class="relative flex min-h-0 flex-1">

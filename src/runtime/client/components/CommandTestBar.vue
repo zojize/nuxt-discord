@@ -127,7 +127,7 @@ function insertEmoji(emoji: string) {
   }
   else {
     query.value += emoji
-    nextTick(() => input.value?.focus())
+    nextTick(() => input.value?.focus({ preventScroll: true }))
   }
 }
 
@@ -141,8 +141,8 @@ function focusField(i: number) {
   nextTick(() => {
     const opt = visibleOptions.value[i]
     if (opt)
-      fields.get(opt.name)?.focus()
-    else runButton.value?.focus()
+      fields.get(opt.name)?.focus({ preventScroll: true })
+    else runButton.value?.focus({ preventScroll: true })
   })
 }
 function choose(item: PickerItem) {
@@ -173,7 +173,7 @@ function cancel() {
   pickingOption.value = false
   query.value = ''
   open.value = false
-  nextTick(() => input.value?.focus())
+  nextTick(() => input.value?.focus({ preventScroll: true }))
 }
 function browse() {
   more.value = false
@@ -291,22 +291,22 @@ function setField(name: string, el: unknown) {
 </script>
 
 <template>
-  <section aria-label="Command tester" class="flex min-w-0 flex-col font-chat text-base leading-[1.375] text-chat-white scheme-dark [font-size-adjust:0.478]" :class="channel ? 'min-h-0 flex-1' : 'fixed inset-x-[max(12px,calc((100vw-72rem)/2+24px))] bottom-3 z-40'">
+  <section aria-label="Command tester" class="flex min-w-0 flex-col font-chat text-base leading-[1.375] text-chat-text [font-size-adjust:0.478]" :class="channel ? 'channel-tester min-h-0 flex-1' : 'fixed inset-x-[max(12px,calc((100vw-72rem)/2+24px))] bottom-3 z-40'">
     <CommandTranscript :entries="entries" :channel="!!channel" :search="search" :pinned="pinned" interactive @dismiss="id => entries = entries.filter(entry => entry.id !== id)">
       <slot />
     </CommandTranscript>
     <div class="relative shrink-0" :class="channel ? 'mx-2 mt-2 mb-[max(.5rem,env(safe-area-inset-bottom))]' : ''">
       <CommandPicker v-if="picking" :id="id" :label="pickingOption ? 'Options' : option?.name ?? (query.length > 1 ? `Commands matching ${query}` : 'nuxt-discord')" :commands="!command" :searching="!command && query.length > 1" :index="index" :items="items" @choose="choose" @highlight="index = $event" />
-      <div class="rounded-lg border border-white/[.065] bg-chat-field">
-        <div v-if="command" class="flex min-h-9 items-center gap-2 rounded-t-lg border-b border-white/[.065] bg-[#28282d] px-4 text-sm text-chat-muted">
-          <strong class="text-chat-white">{{ option?.name ?? `/${command.name}` }}</strong>{{ option?.description ?? command.description }}
-          <button type="button" aria-label="Cancel command" class="ml-auto grid size-7 cursor-pointer place-items-center rounded-full hover:text-white" @click="cancel">
+      <div class="rounded-lg border border-chat-line bg-chat-field">
+        <div v-if="command" class="flex min-h-9 items-center gap-2 rounded-t-lg border-b border-chat-line bg-chat-panel px-4 text-sm text-chat-muted">
+          <strong class="text-chat-text">{{ option?.name ?? `/${command.name}` }}</strong>{{ option?.description ?? command.description }}
+          <button type="button" aria-label="Cancel command" class="ml-auto grid size-7 cursor-pointer place-items-center rounded-full hover:text-chat-text" @click="cancel">
             <UIcon name="i-lucide-circle-x" class="size-4" />
           </button>
         </div>
         <div class="flex min-h-14 items-center gap-2 px-3 sm:gap-3 sm:px-4">
-          <UPopover v-if="!command" v-model:open="more" :content="{ side: 'top', align: 'start' }" :ui="{ content: 'rounded-lg bg-chat-panel p-1.5 text-chat-white font-chat ring-chat-line' }">
-            <button type="button" aria-label="More message options" class="mr-1.5 grid size-7 shrink-0 cursor-pointer place-items-center text-chat-muted hover:text-white">
+          <UPopover v-if="!command" v-model:open="more" :content="{ side: 'top', align: 'start' }" :ui="{ content: 'rounded-lg bg-chat-panel p-1.5 text-chat-text font-chat ring-chat-line' }">
+            <button type="button" aria-label="More message options" class="mr-1.5 grid size-7 shrink-0 cursor-pointer place-items-center text-chat-muted hover:text-chat-text">
               <UIcon name="i-lucide-plus" class="size-6" />
             </button>
             <template #content>
@@ -322,14 +322,14 @@ function setField(name: string, el: unknown) {
           <input v-if="!command" ref="input" v-model="query" class="min-w-0 flex-1 bg-transparent py-3 outline-none placeholder:text-chat-faint" placeholder="Message #command-testing" aria-label="Message #command-testing" role="combobox" aria-autocomplete="list" :aria-controls="picking ? id : undefined" :aria-expanded="picking" :aria-activedescendant="activeId" autocomplete="off" @input="open = true; index = 0" @focus="open = true" @blur="open = false" @keydown="keydown">
           <div v-else class="flex min-w-0 flex-1 flex-wrap items-center gap-2 py-2">
             <strong class="font-semibold">/{{ command.name }}</strong>
-            <label v-for="(opt, i) in visibleOptions" :key="opt.name" class="inline-flex max-w-full items-stretch overflow-hidden rounded-sm border border-black/60 text-base leading-[1.375] focus-within:border-[#abbbd3]">
-              <span class="bg-[#232329] px-2">{{ opt.name }}</span>
+            <label v-for="(opt, i) in visibleOptions" :key="opt.name" class="inline-flex max-w-full items-stretch overflow-hidden rounded-sm border border-chat-faint/60 text-base leading-[1.375] focus-within:border-chat-link">
+              <span class="bg-chat-field px-2">{{ opt.name }}</span>
               <input :ref="el => setField(opt.name, el)" v-model="values[opt.name]" :required="opt.required" :minlength="opt.minLength" :maxlength="opt.maxLength" :aria-label="opt.name" role="combobox" aria-autocomplete="list" :aria-expanded="i === focusIndex && picking && !pickingOption" :aria-controls="picking && i === focusIndex ? id : undefined" :aria-activedescendant="i === focusIndex ? activeId : undefined" :style="{ width: `${Math.max(1, (values[opt.name]?.length ?? 0) + 1)}ch` }" class="box-content min-w-[.6rem] max-w-[45vw] bg-chat-hover px-1.5 outline-none" autocomplete="off" @focus="focusOption(i)" @input="showChoices = true; fields.get(opt.name)?.setCustomValidity('')" @keydown="keydown">
             </label>
             <button v-if="remainingOptions.length" type="button" aria-haspopup="listbox" :aria-expanded="pickingOption" :aria-controls="pickingOption ? id : undefined" class="cursor-pointer rounded px-1 text-sm text-chat-muted hover:bg-chat-hover" @focus="showChoices = false" @click="pickingOption = !pickingOption; index = 0" @keydown="pickingOption && keydown($event)">
               +{{ remainingOptions.length }} optional
             </button>
-            <button ref="runButton" type="button" aria-label="Run command" class="grid size-11 shrink-0 cursor-pointer place-items-center rounded text-chat-muted hover:text-white lg:pointer-fine:h-5 lg:pointer-fine:w-px lg:pointer-fine:rounded-none lg:pointer-fine:px-0 lg:pointer-fine:focus-visible:bg-chat-white lg:pointer-fine:focus-visible:outline-none" @pointerdown.prevent @focus="focusIndex = -1; showChoices = false" @click="send" @keydown.esc="cancel">
+            <button ref="runButton" type="button" aria-label="Run command" class="grid size-11 shrink-0 cursor-pointer place-items-center rounded text-chat-muted hover:text-chat-text lg:pointer-fine:h-5 lg:pointer-fine:w-px lg:pointer-fine:rounded-none lg:pointer-fine:px-0 lg:pointer-fine:focus-visible:bg-chat-text lg:pointer-fine:focus-visible:outline-none" @pointerdown.prevent @focus="focusIndex = -1; showChoices = false" @click="send" @keydown.esc="cancel">
               <UIcon name="i-lucide-send-horizontal" class="size-4 lg:pointer-fine:hidden" />
             </button>
           </div>
@@ -338,7 +338,7 @@ function setField(name: string, el: unknown) {
               <UIcon name="i-lucide-gift" class="size-5" /><span class="rounded-[3px] border-2 px-px text-[.625rem] leading-[1.1] font-extrabold">GIF</span><UIcon name="i-lucide-sticker" class="size-5" />
             </div>
             <UPopover v-if="!command || option" v-model:open="emojis" :content="{ side: 'top', align: 'end' }" :ui="{ content: 'grid grid-cols-4 gap-1 rounded-lg bg-chat-panel p-2 ring-chat-line' }">
-              <button type="button" aria-label="Add emoji" class="grid size-6 cursor-pointer place-items-center hover:text-white">
+              <button type="button" aria-label="Add emoji" class="grid size-6 cursor-pointer place-items-center hover:text-chat-text">
                 <UIcon name="i-lucide-smile" class="size-5" />
               </button>
               <template #content>
@@ -347,7 +347,7 @@ function setField(name: string, el: unknown) {
                 </button>
               </template>
             </UPopover>
-            <button v-if="!command" type="button" aria-label="Browse commands" class="grid size-6 cursor-pointer place-items-center hover:text-white" @click="browse">
+            <button v-if="!command" type="button" aria-label="Browse commands" class="grid size-6 cursor-pointer place-items-center hover:text-chat-text" @click="browse">
               <UIcon name="i-lucide-shapes" class="size-5" />
             </button>
           </div>
@@ -356,3 +356,11 @@ function setField(name: string, el: unknown) {
     </div>
   </section>
 </template>
+
+<style scoped>
+.channel-tester {
+  container-type: size;
+  /* The popup sits above its composer. Reserve its actual height and margins. */
+  --picker-space: calc(100cqh - 100% - 1.5rem);
+}
+</style>

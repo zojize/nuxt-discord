@@ -1,15 +1,9 @@
 <script lang="ts" setup>
 import { Icon } from '@iconify/vue'
-import { useColorMode } from '@vueuse/core'
-import { computed, useRoute } from '#imports'
+import { useRoute } from '#imports'
+import AppearanceSelect from './AppearanceSelect.vue'
 
 const route = useRoute()
-const mode = useColorMode()
-const isDark = computed(() => mode.value === 'dark')
-
-function toggleDark() {
-  mode.value = isDark.value ? 'light' : 'dark'
-}
 
 const nav = [
   { label: 'Overview', to: '/discord' },
@@ -48,13 +42,7 @@ const nav = [
       </div>
 
       <div class="flex items-center gap-1">
-        <button
-          class="flex size-8 cursor-pointer items-center justify-center rounded-md text-muted transition-colors hover:bg-elevated hover:text-highlighted"
-          title="Toggle dark mode"
-          @click="toggleDark"
-        >
-          <Icon :icon="isDark ? 'lucide:moon' : 'lucide:sun'" class="size-4" />
-        </button>
+        <AppearanceSelect />
         <a
           href="https://github.com/zojize/nuxt-discord"
           target="_blank"

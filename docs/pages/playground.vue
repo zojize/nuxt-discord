@@ -3,6 +3,10 @@ import CommandTestBar from '../../src/runtime/client/components/CommandTestBar.v
 import { demoCommands, demoSuggestions, runDemo } from '../utils/demo-commands'
 
 definePageMeta({ layout: false })
+useHead({
+  htmlAttrs: { class: 'playground-page' },
+  meta: [{ name: 'viewport', content: 'width=device-width, initial-scale=1, interactive-widget=resizes-content' }],
+})
 useSeoMeta({ title: 'Command playground · Nuxt Discord', description: 'Try Discord-style slash commands in your browser.' })
 </script>
 
@@ -11,7 +15,7 @@ useSeoMeta({ title: 'Command playground · Nuxt Discord', description: 'Try Disc
     <CommandTestBar channel :search="search" :pinned="pinned" :commands="demoCommands" :execute="runDemo" :suggest="demoSuggestions">
       <div class="shrink-0 px-4 pt-10 pb-3">
         <div class="mb-2 grid size-[4.25rem] place-items-center rounded-full bg-chat-hover">
-          <UIcon name="i-lucide-hash" class="size-11 text-chat-white" />
+          <UIcon name="i-lucide-hash" class="size-11 text-chat-text" />
         </div>
         <h1 class="text-[clamp(1.625rem,3vw,2rem)] leading-[1.25] font-bold">
           Welcome to #command-testing!

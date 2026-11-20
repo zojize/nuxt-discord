@@ -2,3 +2,48 @@
 @import "@nuxt/ui";
 @import "../../../src/runtime/client/chat-theme.css";
 @source "../../../src/runtime/client/components/**/*.vue";
+
+:root {
+  color-scheme: light dark;
+  background-color: var(--ui-bg);
+  --landing-canvas: #f6faf7;
+  --landing-text: #18271f;
+  --landing-muted: #495b50;
+  --landing-link: #314e3e;
+  --landing-rule: #c4d2c8;
+  --landing-accent: #17613e;
+  --landing-on-accent: #fff;
+  --code-bg: #fff;
+  --code-text: #23372b;
+  --code-declaration: #5d469c;
+  --code-result: #20623d;
+  --card-green: #def0e3;
+  --card-purple: #eae5f5;
+  --card-gold: #f3ebda;
+
+  @variant dark-palette {
+    --landing-canvas: #101418;
+    --landing-text: #eef6f1;
+    --landing-muted: #b8c5bf;
+    --landing-link: #ccdad1;
+    --landing-rule: #34403b;
+    --landing-accent: #9cf5bc;
+    --landing-on-accent: #132419;
+    --code-bg: #1d2422;
+    --code-text: #e1ebe6;
+    --code-declaration: #c5c1ff;
+    --code-result: #a8eabd;
+    --card-green: #283930;
+    --card-purple: #342e43;
+    --card-gold: #3b352c;
+  }
+}
+
+:root.light { color-scheme: light; }
+:root.dark { color-scheme: dark; }
+:root.landing-page, .landing-page body { background-color: var(--landing-canvas); }
+:root.playground-page, .playground-page body { background-color: var(--color-chat-sidebar); }
+:root.playground-page { overscroll-behavior-y: none; }
+
+#channel-drawer:modal, #channel-drawer::backdrop { overscroll-behavior: contain; }
+#channel-drawer::backdrop { overflow: hidden; }

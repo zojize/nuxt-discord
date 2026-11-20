@@ -44,7 +44,7 @@ watchEffect((cleanup) => {
       />
     </div>
     <figcaption class="mx-3 mt-6 sm:mx-6">
-      <NuxtLink :to="`/example-bot#${cards[front]!.name}`" class="inline-block rounded px-1 py-2 text-sm text-[#c5d5cd] underline-offset-4 hover:underline">View command reference ↗</NuxtLink>
+      <NuxtLink :to="`/example-bot#${cards[front]!.name}`" class="inline-block rounded px-1 py-2 text-sm text-(--landing-link) underline-offset-4 hover:underline">View command reference ↗</NuxtLink>
     </figcaption>
   </figure>
 </template>
@@ -67,7 +67,7 @@ watchEffect((cleanup) => {
 }
 .card[data-depth="1"] { z-index: 2; transform: var(--middle); }
 .card[data-depth="2"] { z-index: 1; transform: var(--back); }
-figure :focus-visible { outline: 2px solid #9cf5bc; outline-offset: 3px; }
+figure :focus-visible { outline: 2px solid var(--landing-accent); outline-offset: 3px; }
 @media (max-width: 48rem) {
   .stack { --lift-x: -2%; }
 }
