@@ -49,5 +49,4 @@
     --color-chat-line: ButtonBorder;
     --color-chat-link: LinkText;
   }
-  [role="option"][aria-selected="true"] { outline: 2px solid Highlight; outline-offset: -2px; }
 }

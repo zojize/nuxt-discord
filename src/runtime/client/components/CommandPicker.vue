@@ -60,3 +60,9 @@ watch(() => props.index, (index) => {
     </div>
   </div>
 </template>
+
+<style scoped>
+@media (forced-colors: active) {
+  [role="option"][aria-selected="true"] { outline: 2px solid Highlight; outline-offset: -2px; }
+}
+</style>
