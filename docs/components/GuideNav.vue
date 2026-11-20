@@ -28,6 +28,7 @@ const navigation = [
     label: 'Web Dashboard',
     items: [
       { label: 'Overview', to: '/dashboard' },
+      { label: 'Example bot reference', to: '/example-bot' },
     ],
   },
 ]

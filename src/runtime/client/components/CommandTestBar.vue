@@ -12,6 +12,10 @@ interface Option {
   required: boolean
   type: number
   choices?: { name: string, value: string | number }[]
+  minLength?: number
+  maxLength?: number
+  min?: number
+  max?: number
   hasAutocomplete?: boolean
 }
 interface Command {
@@ -21,6 +25,7 @@ interface Command {
   subcommands?: Command[]
 }
 interface TestResult {
+  ephemeral?: boolean
   ok: boolean
   response?: string
   responses?: string[]
@@ -35,6 +40,7 @@ const props = defineProps<{
   channel?: boolean
   search?: string
   pinned?: boolean
+  suggest?: (command: string, option: string, value: string) => NonNullable<Option['choices']>
   execute?: (body: TestRequest) => TestResult | Promise<TestResult>
 }>()
 const id = useId()
@@ -91,6 +97,10 @@ watch([command, option, value], ([cmd, opt, search], _, cleanup) => {
   index.value = 0
   if (!cmd || !opt?.hasAutocomplete || opt.choices?.length)
     return
+  if (props.suggest) {
+    remoteChoices.value = props.suggest(cmd.name, opt.name, search)
+    return
+  }
   const controller = new AbortController()
   const timer = setTimeout(async () => {
     try {
@@ -182,6 +192,31 @@ async function send() {
     fields.get(visibleOptions.value[missing]!.name)?.reportValidity()
     return
   }
+  for (const [i, opt] of visibleOptions.value.entries()) {
+    const field = fields.get(opt.name)
+    const raw = values.value[opt.name]?.trim()
+    if (!field || !raw)
+      continue
+    let error = ''
+    if (opt.choices?.length && !opt.choices.some(choice => String(choice.value) === values.value[opt.name])) {
+      error = 'Select one of the listed choices.'
+    }
+    else if (opt.type === 4 || opt.type === 10) {
+      const n = Number(raw)
+      if (!Number.isFinite(n) || (opt.type === 4 && !Number.isInteger(n)))
+        error = opt.type === 4 ? 'Enter an integer.' : 'Enter a number.'
+      else if (opt.min !== undefined && n < opt.min)
+        error = `Enter a number greater than or equal to ${opt.min}.`
+      else if (opt.max !== undefined && n > opt.max)
+        error = `Enter a number less than or equal to ${opt.max}.`
+    }
+    field.setCustomValidity(error)
+    if (!field.validity.valid) {
+      focusField(i)
+      field.reportValidity()
+      return
+    }
+  }
   const body = { name: cmd.name, options: Object.fromEntries(Object.entries(values.value).filter(([,v]) => v !== '')) }
   const entry = reactive<ChatEntry>({ id: ++sequence, at: new Date(), invocation: body, state: 'pending', messages: [] })
   entries.value.push(entry)
@@ -193,17 +228,26 @@ async function send() {
     if (!result.ok)
       throw new Error(result.error || 'The application did not respond')
     entry.messages = result.responses?.length ? result.responses : [result.response ?? 'Command completed without a reply.']
+    entry.ephemeral = result.ephemeral
     entry.state = 'sent'
   }
   catch (error) {
     entry.messages = [error instanceof Error ? error.message : String(error)]
+    entry.ephemeral = true
     entry.state = 'error'
   }
 }
 function keydown(e: KeyboardEvent) {
   if (e.isComposing)
     return
-  if (picking.value && ['ArrowDown', 'ArrowUp'].includes(e.key)) {
+  if (!command.value && picking.value && e.key === ' ') {
+    const exact = matches.value.find(item => item.name === query.value)
+    if (!exact)
+      return
+    e.preventDefault()
+    choose(exact)
+  }
+  else if (picking.value && ['ArrowDown', 'ArrowUp'].includes(e.key)) {
     e.preventDefault()
     index.value = Math.max(0, Math.min(items.value.length - 1, index.value + (e.key === 'ArrowDown' ? 1 : -1)))
   }
@@ -248,11 +292,11 @@ function setField(name: string, el: unknown) {
 
 <template>
   <section aria-label="Command tester" class="flex min-w-0 flex-col font-chat text-base leading-[1.375] text-chat-white scheme-dark [font-size-adjust:0.478]" :class="channel ? 'min-h-0 flex-1' : 'fixed inset-x-[max(12px,calc((100vw-72rem)/2+24px))] bottom-3 z-40'">
-    <CommandTranscript :entries="entries" :channel="!!channel" :search="search" :pinned="pinned" interactive>
+    <CommandTranscript :entries="entries" :channel="!!channel" :search="search" :pinned="pinned" interactive @dismiss="id => entries = entries.filter(entry => entry.id !== id)">
       <slot />
     </CommandTranscript>
     <div class="relative shrink-0" :class="channel ? 'mx-2 mt-2 mb-[max(.5rem,env(safe-area-inset-bottom))]' : ''">
-      <CommandPicker v-if="picking" :id="id" :label="pickingOption ? 'Options' : option?.name ?? 'nuxt-discord'" :commands="!command" :searching="!command && query.length > 1" :index="index" :items="items" @choose="choose" @highlight="index = $event" />
+      <CommandPicker v-if="picking" :id="id" :label="pickingOption ? 'Options' : option?.name ?? (query.length > 1 ? `Commands matching ${query}` : 'nuxt-discord')" :commands="!command" :searching="!command && query.length > 1" :index="index" :items="items" @choose="choose" @highlight="index = $event" />
       <div class="rounded-lg border border-white/[.065] bg-chat-field">
         <div v-if="command" class="flex min-h-9 items-center gap-2 rounded-t-lg border-b border-white/[.065] bg-[#28282d] px-4 text-sm text-chat-muted">
           <strong class="text-chat-white">{{ option?.name ?? `/${command.name}` }}</strong>{{ option?.description ?? command.description }}
@@ -274,26 +318,26 @@ function setField(name: string, el: unknown) {
               </button>
             </template>
           </UPopover>
-          <ChatAvatar v-else class="mr-1 size-[1.375rem] sm:mr-2" />
+          <ChatAvatar v-else class="mr-2 size-[1.375rem] sm:mr-3" />
           <input v-if="!command" ref="input" v-model="query" class="min-w-0 flex-1 bg-transparent py-3 outline-none placeholder:text-chat-faint" placeholder="Message #command-testing" aria-label="Message #command-testing" role="combobox" aria-autocomplete="list" :aria-controls="picking ? id : undefined" :aria-expanded="picking" :aria-activedescendant="activeId" autocomplete="off" @input="open = true; index = 0" @focus="open = true" @blur="open = false" @keydown="keydown">
-          <div v-else class="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 py-2">
+          <div v-else class="flex min-w-0 flex-1 flex-wrap items-center gap-2 py-2">
             <strong class="font-semibold">/{{ command.name }}</strong>
             <label v-for="(opt, i) in visibleOptions" :key="opt.name" class="inline-flex max-w-full items-stretch overflow-hidden rounded-sm border border-black/60 text-base leading-[1.375] focus-within:border-[#abbbd3]">
-              <span class="bg-[#232329] px-1.5">{{ opt.name }}</span>
-              <input :ref="el => setField(opt.name, el)" v-model="values[opt.name]" :required="opt.required" :aria-label="opt.name" role="combobox" aria-autocomplete="list" :aria-expanded="i === focusIndex && picking && !pickingOption" :aria-controls="picking && i === focusIndex ? id : undefined" :aria-activedescendant="i === focusIndex ? activeId : undefined" :style="{ width: `${Math.max(1, (values[opt.name]?.length ?? 0) + 1)}ch` }" class="box-content min-w-[.6rem] max-w-[45vw] bg-chat-hover px-1 outline-none" autocomplete="off" @focus="focusOption(i)" @input="showChoices = true" @keydown="keydown">
+              <span class="bg-[#232329] px-2">{{ opt.name }}</span>
+              <input :ref="el => setField(opt.name, el)" v-model="values[opt.name]" :required="opt.required" :minlength="opt.minLength" :maxlength="opt.maxLength" :aria-label="opt.name" role="combobox" aria-autocomplete="list" :aria-expanded="i === focusIndex && picking && !pickingOption" :aria-controls="picking && i === focusIndex ? id : undefined" :aria-activedescendant="i === focusIndex ? activeId : undefined" :style="{ width: `${Math.max(1, (values[opt.name]?.length ?? 0) + 1)}ch` }" class="box-content min-w-[.6rem] max-w-[45vw] bg-chat-hover px-1.5 outline-none" autocomplete="off" @focus="focusOption(i)" @input="showChoices = true; fields.get(opt.name)?.setCustomValidity('')" @keydown="keydown">
             </label>
             <button v-if="remainingOptions.length" type="button" aria-haspopup="listbox" :aria-expanded="pickingOption" :aria-controls="pickingOption ? id : undefined" class="cursor-pointer rounded px-1 text-sm text-chat-muted hover:bg-chat-hover" @focus="showChoices = false" @click="pickingOption = !pickingOption; index = 0" @keydown="pickingOption && keydown($event)">
               +{{ remainingOptions.length }} optional
             </button>
-            <button ref="runButton" type="button" aria-label="Run command" class="cursor-pointer rounded px-1.5 text-chat-muted hover:text-white sm:sr-only sm:focus-visible:not-sr-only" @click="send" @keydown.esc="cancel">
-              <UIcon name="i-lucide-send-horizontal" class="size-4" />
+            <button ref="runButton" type="button" aria-label="Run command" class="cursor-pointer rounded px-1.5 text-chat-muted hover:text-white sm:h-5 sm:w-px sm:rounded-none sm:px-0 sm:focus-visible:bg-chat-white sm:focus-visible:outline-none" @focus="focusIndex = -1; showChoices = false" @click="send" @keydown.esc="cancel">
+              <UIcon name="i-lucide-send-horizontal" class="size-4 sm:hidden" />
             </button>
           </div>
           <div class="flex shrink-0 items-center gap-3 text-chat-muted sm:gap-4">
             <div v-if="!command" aria-hidden="true" class="hidden items-center gap-4 sm:flex" title="Discord media controls">
               <UIcon name="i-lucide-gift" class="size-5" /><span class="rounded-[3px] border-2 px-px text-[.625rem] leading-[1.1] font-extrabold">GIF</span><UIcon name="i-lucide-sticker" class="size-5" />
             </div>
-            <UPopover v-model:open="emojis" :content="{ side: 'top', align: 'end' }" :ui="{ content: 'grid grid-cols-4 gap-1 rounded-lg bg-chat-panel p-2 ring-chat-line' }">
+            <UPopover v-if="!command || option" v-model:open="emojis" :content="{ side: 'top', align: 'end' }" :ui="{ content: 'grid grid-cols-4 gap-1 rounded-lg bg-chat-panel p-2 ring-chat-line' }">
               <button type="button" aria-label="Add emoji" class="grid size-6 cursor-pointer place-items-center hover:text-white">
                 <UIcon name="i-lucide-smile" class="size-5" />
               </button>

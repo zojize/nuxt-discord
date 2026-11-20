@@ -23,7 +23,7 @@ export default defineNuxtConfig({
   nitro: {
     prerender: {
       crawlLinks: true,
-      routes: ['/', '/getting-started', '/guide/middleware', '/guide/use-text-channel'],
+      routes: ['/', '/example-bot', '/getting-started', '/guide/middleware', '/guide/use-text-channel'],
       failOnError: true,
     },
   },
