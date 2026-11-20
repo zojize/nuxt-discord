@@ -1,5 +1,6 @@
+import type { ModuleDependencies } from 'nuxt/schema'
 import type { NuxtDiscordOptions } from './types'
-import { addImports, addServerScanDir, defineNuxtModule } from '@nuxt/kit'
+import { addImports, addServerImportsDir, addServerPlugin, addServerScanDir, defineNuxtModule } from '@nuxt/kit'
 import { GatewayIntentBits } from 'discord.js'
 import { createContext } from './context'
 import { prepareClient } from './utils/client'
@@ -17,7 +18,7 @@ export default defineNuxtModule<NuxtDiscordOptions>({
     name: 'nuxt-discord',
     configKey: 'discord',
   },
-  moduleDependencies: { '@nuxt/ui': {} },
+  moduleDependencies: (nuxt): ModuleDependencies => nuxt.options.dev || nuxt.options._prepare ? { '@nuxt/ui': {} } : {},
   defaults: {
     client: {
       intents: [GatewayIntentBits.Guilds],
@@ -37,11 +38,17 @@ export default defineNuxtModule<NuxtDiscordOptions>({
   setup(discordOptions, nuxt) {
     const ctx = createContext(discordOptions, nuxt)
 
-    // Disable SSR for the client-only admin UI pages
-    nuxt.options.routeRules ??= {}
-    nuxt.options.routeRules['/discord/**'] = { ssr: false }
-
-    addServerScanDir(ctx.resolve.module('runtime/server'))
+    if (nuxt.options.dev || nuxt.options._prepare) {
+      nuxt.options.routeRules ??= {}
+      nuxt.options.routeRules['/discord/**'] = { ssr: false }
+      addServerScanDir(ctx.resolve.module('runtime/server'))
+      prepareClient(ctx)
+    }
+    else {
+      addServerPlugin(ctx.resolve.module('runtime/server/plugins/discord'))
+      addServerImportsDir(ctx.resolve.module('runtime/server/utils'))
+      addServerImportsDir(ctx.resolve.module('runtime/server/utils/middleware'))
+    }
     // this prevents not found errors in the client
     addImports([
       {
@@ -120,7 +127,5 @@ export default defineNuxtModule<NuxtDiscordOptions>({
     prepareTemplates(ctx)
 
     prepareHMR(ctx)
-
-    prepareClient(ctx)
   },
 })
