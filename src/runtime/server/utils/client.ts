@@ -7,7 +7,7 @@ import type { MiddlewareOpts } from './defineMiddleware'
 import process from 'node:process'
 import { ApplicationCommandOptionType, ApplicationCommandType, ContextMenuCommandBuilder, Events, Client as InternalClient, MessageFlags, REST, Routes, SlashCommandBuilder, SlashCommandSubcommandBuilder, SlashCommandSubcommandGroupBuilder } from 'discord.js'
 import { useNitroApp, useRuntimeConfig } from 'nitropack/runtime'
-import { effectScope, isRef } from 'vue'
+import { effectScope, isRef, onScopeDispose } from 'vue'
 import { logger } from '../../logger'
 import { resolveMiddlewareTags } from '../../middleware'
 import { MiddlewareError, setMiddlewareContext } from './defineMiddleware'
@@ -138,7 +138,10 @@ export class DiscordClient {
     }
     this.#clientId = process.env.DISCORD_CLIENT_ID
 
-    this.#interactionTimeout = useRuntimeConfig().discord?.interactionTimeout
+    // Nitro serializes an unset runtime config value as an empty string.
+    const timeout = useRuntimeConfig().discord?.interactionTimeout
+    if (typeof timeout === 'number' && Number.isFinite(timeout) && timeout >= 0)
+      this.#interactionTimeout = timeout
 
     // default print errors to console
     this.#nitro.hooks.hook('discord:client:error', (error: unknown) => {
@@ -595,13 +598,15 @@ export class DiscordClient {
     }
 
     // Schedule scope disposal based on remaining interaction token lifetime
-    if (this.#interactionTimeout !== 0) {
+    if (scope.active && this.#interactionTimeout !== 0) {
       const timeout = this.#interactionTimeout
         ?? Math.max(0, DiscordClient.DISCORD_TOKEN_LIFETIME - (Date.now() - interaction.createdTimestamp))
-      setTimeout(() => {
-        scope.stop()
+      const timer = setTimeout(() => scope.stop(), timeout)
+      timer.unref()
+      scope.run(() => onScopeDispose(() => {
+        clearTimeout(timer)
         this.#interactionScopes.delete(interaction)
-      }, timeout)
+      }))
     }
   }
 
