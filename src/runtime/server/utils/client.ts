@@ -9,6 +9,7 @@ import { ApplicationCommandOptionType, ApplicationCommandType, ContextMenuComman
 import { useNitroApp, useRuntimeConfig } from 'nitropack/runtime'
 import { effectScope, isRef } from 'vue'
 import { logger } from '../../logger'
+import { resolveMiddlewareTags } from '../../middleware'
 import { MiddlewareError, setMiddlewareContext } from './defineMiddleware'
 import { reply } from './reply'
 
@@ -116,7 +117,7 @@ export class DiscordClient {
   }
 
   #slashCommands: SlashCommandRuntime[] = []
-  #contextMenus: (ContextMenuDefinition & { name: string, middlewareEntries?: MiddlewareEntry[] })[] = []
+  #contextMenus: (ContextMenuDefinition & { name: string, middleware?: string[], middlewareEntries?: MiddlewareEntry[] })[] = []
   #activityLog: ActivityLogEntry[] = []
   #activityId = 0
   #onActivity?: (entry: ActivityLogEntry) => void
@@ -320,7 +321,7 @@ export class DiscordClient {
       return
     }
     // Run middleware
-    const middlewareEntries = menu.middlewareEntries ?? []
+    const middlewareEntries = [...resolveMiddlewareTags(menu.middleware, menu.name), ...menu.middlewareEntries ?? []]
     if (middlewareEntries.length > 0) {
       try {
         await this.#runMiddleware(middlewareEntries, interaction, undefined, 'context-menu')
@@ -529,7 +530,7 @@ export class DiscordClient {
     }
 
     // Run middleware before execution
-    const middlewareEntries = command.middlewareEntries ?? []
+    const middlewareEntries = [...resolveMiddlewareTags(command.middleware, command.path), ...command.middlewareEntries ?? []]
     let middlewareContext: Record<string, unknown> = {}
     if (middlewareEntries.length > 0) {
       try {

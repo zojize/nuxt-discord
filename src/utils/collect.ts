@@ -6,6 +6,7 @@ import { Locale } from 'discord.js'
 import ts from 'typescript'
 import { typeIdentifierToEnum } from '../types'
 import { macros } from './macros'
+import { readMiddlewareTags } from './middlewareTags'
 
 function isOptionTypeIdentifier(s: string): s is SlashCommandOptionTypeIdentifier {
   return s in typeIdentifierToEnum
@@ -183,12 +184,9 @@ export function processCommandFile(ctx: CommandSourceContext, file: string): Sla
   }
 
   // @middleware tags
-  const middlewareTags = jsDocTags.filter(tag => tag.tagName.escapedText === 'middleware')
-  if (middlewareTags.length > 0) {
-    command.middleware = middlewareTags
-      .map(tag => tag.comment?.toString().trim())
-      .filter((name): name is string => !!name && name.length > 0)
-  }
+  const middleware = readMiddlewareTags(sourceFile, commandDefinition)
+  if (middleware.length)
+    command.middleware = middleware
 
   // Inline localization: @name.ja ピング, @description.fr Ping le bot
   for (const tag of jsDocTags) {

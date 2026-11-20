@@ -36,7 +36,7 @@ export default defineSlashCommand(() => {
 
 ### Via JSDoc
 
-For simple guards that don't need options:
+Use built-in names for guards that need no options. An unknown name fails the build with the command filename. Pass custom guards through the macro or context menu options.
 
 ```ts
 /** @middleware guildOnly */

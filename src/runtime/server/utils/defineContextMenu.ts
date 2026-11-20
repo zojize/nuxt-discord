@@ -1,6 +1,8 @@
 import type { MessageContextMenuCommandInteraction, UserContextMenuCommandInteraction } from 'discord.js'
 
-export type ContextMenuDefinition = {
+interface MenuOptions { middleware?: import('./defineMiddleware').MiddlewareDefinition[] }
+
+export type ContextMenuDefinition = ({
   type: 'user'
   name?: string
   execute: (interaction: UserContextMenuCommandInteraction) => unknown
@@ -8,7 +10,7 @@ export type ContextMenuDefinition = {
   type: 'message'
   name?: string
   execute: (interaction: MessageContextMenuCommandInteraction) => unknown
-}
+}) & { middlewareEntries?: MenuOptions['middleware'] }
 
 /**
  * Define a user context menu command (right-click on a user).
@@ -28,9 +30,10 @@ export type ContextMenuDefinition = {
 export function defineUserContextMenu(
   nameOrExecute: string | ((interaction: UserContextMenuCommandInteraction) => unknown),
   execute?: (interaction: UserContextMenuCommandInteraction) => unknown,
+  options?: MenuOptions,
 ): ContextMenuDefinition {
   if (typeof nameOrExecute === 'string') {
-    return { type: 'user', name: nameOrExecute, execute: execute! }
+    return { type: 'user', name: nameOrExecute, execute: execute!, ...(options?.middleware && { middlewareEntries: options.middleware }) }
   }
   return { type: 'user', execute: nameOrExecute }
 }
@@ -53,9 +56,10 @@ export function defineUserContextMenu(
 export function defineMessageContextMenu(
   nameOrExecute: string | ((interaction: MessageContextMenuCommandInteraction) => unknown),
   execute?: (interaction: MessageContextMenuCommandInteraction) => unknown,
+  options?: MenuOptions,
 ): ContextMenuDefinition {
   if (typeof nameOrExecute === 'string') {
-    return { type: 'message', name: nameOrExecute, execute: execute! }
+    return { type: 'message', name: nameOrExecute, execute: execute!, ...(options?.middleware && { middlewareEntries: options.middleware }) }
   }
   return { type: 'message', execute: nameOrExecute }
 }
