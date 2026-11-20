@@ -21,6 +21,7 @@ useSeoMeta({
           <h1>Your Nuxt app,<br><em>in Discord.</em></h1>
           <p>Turn a TypeScript function into a slash command. Give your community access to the same data and server logic that power your app.</p>
           <NuxtLink class="action" to="/installation">Get started <span aria-hidden="true">→</span></NuxtLink>
+          <NuxtLink class="demo" to="/playground">Try a command</NuxtLink>
         </div>
         <figure aria-label="A TypeScript command and its reply in Discord">
           <figcaption>discord/commands/ping.ts</figcaption>
@@ -58,6 +59,7 @@ useSeoMeta({
 h1 { font-weight: 680; font-size: clamp(3.1rem,6.4vw,6.4rem); line-height: .99; letter-spacing: -.07em; }
 h1 em { color: #9cf5bc; font-style: normal; }
 .hero > div > p { max-width: 32rem; font-size: 1.14rem; margin-block: 1.6rem 2rem; color: #b8c5bf; }
+.demo { margin-inline-start: 1.2rem; color: #ccdad1; text-decoration: underline; text-underline-offset: .22em; }
 .action { display: inline-flex; align-items: center; gap: 1.5rem; border-radius: .45rem; background: #9cf5bc; color: #132419; font-weight: 650; padding: .7rem 1.15rem; }
 figure { min-width: 0; background: #1d2228; border: 1px solid #425149; border-radius: .85rem; overflow: hidden; box-shadow: .65rem .65rem 0 #222e29; }
 figcaption, pre { padding: 1rem 1.3rem; font: .85rem/1.7 ui-monospace, monospace; }

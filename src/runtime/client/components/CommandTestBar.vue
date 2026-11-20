@@ -2,7 +2,6 @@
 import type { PickerItem } from './CommandPicker.vue'
 import { computed, nextTick, ref, useId, watch } from 'vue'
 import CommandPicker from './CommandPicker.vue'
-import './composer.css'
 
 interface Option {
   name: string
@@ -18,7 +17,20 @@ interface Command {
   options: Option[]
   subcommands?: Command[]
 }
-const props = defineProps<{ commands: Command[] }>()
+interface TestResult {
+  ok: boolean
+  response?: string
+  responses?: string[]
+  error?: string
+}
+interface TestRequest {
+  name: string
+  options: Record<string, string>
+}
+const props = defineProps<{
+  commands: Command[]
+  execute?: (body: TestRequest) => TestResult | Promise<TestResult>
+}>()
 const id = useId()
 const input = ref<HTMLInputElement>()
 const query = ref('')
@@ -27,6 +39,9 @@ const command = ref<Command>()
 const values = ref<Record<string, string>>({})
 const fields = new Map<string, HTMLInputElement>()
 const runButton = ref<HTMLButtonElement>()
+const optionalButton = ref<HTMLButtonElement>()
+const addedOptions = ref<string[]>([])
+const pickingOption = ref(false)
 const focusIndex = ref(0)
 const index = ref(0)
 const pending = ref(false)
@@ -41,7 +56,9 @@ function leaves(commands: Command[], prefix = ''): Command[] {
   })
 }
 const commands = computed(() => leaves(props.commands))
-const option = computed(() => command.value?.options[focusIndex.value])
+const visibleOptions = computed(() => command.value?.options.filter(o => o.required || addedOptions.value.includes(o.name)) ?? [])
+const remainingOptions = computed(() => command.value?.options.filter(o => !o.required && !addedOptions.value.includes(o.name)) ?? [])
+const option = computed(() => visibleOptions.value[focusIndex.value])
 const value = computed(() => values.value[option.value?.name ?? ''] ?? '')
 const matches = computed<PickerItem[]>(() => commands.value.filter(cmd => cmd.name.includes(query.value.slice(1).toLowerCase())).map(cmd => ({
   name: `/${cmd.name}`,
@@ -54,8 +71,10 @@ const choices = computed<PickerItem[]>(() => {
   const fixed = option.value?.choices ?? (option.value?.type === 5 ? [{ name: 'True', value: 'true' }, { name: 'False', value: 'false' }] : undefined)
   return (fixed?.filter(c => c.name.toLowerCase().includes(value.value.toLowerCase())) ?? remoteChoices.value ?? []).map(c => ({ name: c.name, value: String(c.value) }))
 })
-const picking = computed(() => command.value ? showChoices.value && choices.value.length > 0 : open.value && query.value.startsWith('/'))
-const items = computed(() => command.value ? choices.value : matches.value)
+const picking = computed(() => command.value ? pickingOption.value || (showChoices.value && choices.value.length > 0) : open.value && query.value.startsWith('/'))
+const items = computed<PickerItem[]>(() => pickingOption.value
+  ? remainingOptions.value.map(o => ({ name: o.name, value: o.name, description: o.description }))
+  : command.value ? choices.value : matches.value)
 const activeId = computed(() => picking.value && items.value[index.value] ? `${id}-${index.value}` : undefined)
 
 watch([command, option, value], ([cmd, opt, search], _, cleanup) => {
@@ -82,10 +101,20 @@ watch([command, option, value], ([cmd, opt, search], _, cleanup) => {
   })
 })
 function focusField(i: number) {
-  const opt = command.value?.options[i]
-  nextTick(() => opt ? fields.get(opt.name)?.focus() : runButton.value?.focus())
+  nextTick(() => {
+    const opt = visibleOptions.value[i]
+    if (opt)
+      fields.get(opt.name)?.focus()
+    else (optionalButton.value ?? runButton.value)?.focus()
+  })
 }
 function choose(item: PickerItem) {
+  if (pickingOption.value) {
+    addedOptions.value.push(item.value)
+    pickingOption.value = false
+    focusField(visibleOptions.value.findIndex(o => o.name === item.value))
+    return
+  }
   if (command.value && option.value) {
     values.value[option.value.name] = item.value
     showChoices.value = false
@@ -95,6 +124,8 @@ function choose(item: PickerItem) {
   command.value = commands.value.find(c => c.name === item.value)
   query.value = ''
   values.value = {}
+  addedOptions.value = []
+  pickingOption.value = false
   focusIndex.value = 0
   open.value = false
   showChoices.value = true
@@ -102,6 +133,7 @@ function choose(item: PickerItem) {
 }
 function cancel() {
   command.value = undefined
+  pickingOption.value = false
   query.value = ''
   open.value = false
   nextTick(() => input.value?.focus())
@@ -116,18 +148,18 @@ async function send() {
   const cmd = command.value
   if (!cmd || pending.value)
     return
-  const missing = cmd.options.findIndex(o => o.required && !values.value[o.name]?.trim())
+  const missing = visibleOptions.value.findIndex(o => o.required && !values.value[o.name]?.trim())
   if (missing >= 0) {
     focusField(missing)
-    fields.get(cmd.options[missing]!.name)?.reportValidity()
+    fields.get(visibleOptions.value[missing]!.name)?.reportValidity()
     return
   }
   pending.value = true
   try {
-    const result = await $fetch<{ ok: boolean, response?: string, responses?: string[], error?: string }>('/api/discord/slash-command/test', {
-      method: 'POST',
-      body: { name: cmd.name, options: Object.fromEntries(Object.entries(values.value).filter(([,v]) => v !== '')) },
-    })
+    const body = { name: cmd.name, options: Object.fromEntries(Object.entries(values.value).filter(([,v]) => v !== '')) }
+    const result = props.execute
+      ? await props.execute(body)
+      : await $fetch<TestResult>('/api/discord/slash-command/test', { method: 'POST', body })
     responses.value.push({ name: cmd.name, ok: result.ok, text: result.responses?.join('\n') ?? result.response ?? result.error ?? 'Command executed' })
   }
   catch (error) { responses.value.push({ name: cmd.name, ok: false, text: String(error) }) }
@@ -148,7 +180,9 @@ function keydown(e: KeyboardEvent) {
     choose(items.value[index.value]!)
   }
   else if (e.key === 'Escape') {
-    if (command.value && picking.value)
+    if (pickingOption.value)
+      pickingOption.value = false
+    else if (command.value && picking.value)
       showChoices.value = false
     else cancel()
   }
@@ -164,6 +198,7 @@ function keydown(e: KeyboardEvent) {
   }
 }
 function focusOption(i: number) {
+  pickingOption.value = false
   focusIndex.value = i
   showChoices.value = true
   index.value = 0
@@ -176,7 +211,7 @@ function setField(name: string, el: unknown) {
 </script>
 
 <template>
-  <section aria-label="Local command tester" class="dc-dock">
+  <section aria-label="Command tester" class="dc-dock">
     <div v-if="responses.length" class="dc-history">
       <button type="button" class="dc-clear" @click="responses = []">
         Clear history
@@ -187,7 +222,7 @@ function setField(name: string, el: unknown) {
         </article>
       </div>
     </div>
-    <CommandPicker v-if="picking" :id="id" :label="command ? option!.name : 'nuxt-discord'" :commands="!command" :index="index" :items="items" @choose="choose" @highlight="index = $event" />
+    <CommandPicker v-if="picking" :id="id" :label="pickingOption ? 'Options' : option?.name ?? 'nuxt-discord'" :commands="!command" :index="index" :items="items" @choose="choose" @highlight="index = $event" />
     <div v-if="command" class="dc-hint">
       <strong>{{ option?.name ?? `/${command.name}` }}</strong> {{ option?.description ?? command.description }}<button type="button" aria-label="Cancel command" :disabled="pending" @click="cancel">
         ×
@@ -201,9 +236,12 @@ function setField(name: string, el: unknown) {
       <input v-if="!command" ref="input" v-model="query" class="dc-input" placeholder="Message #command-testing" aria-label="Message #command-testing" role="combobox" aria-autocomplete="list" :aria-controls="picking ? id : undefined" :aria-expanded="picking" :aria-activedescendant="activeId" autocomplete="off" @input="open = true; index = 0" @focus="open = true" @blur="open = false" @keydown="keydown">
       <template v-else>
         <strong>/{{ command.name }}</strong>
-        <label v-for="(opt, i) in command.options" :key="opt.name" class="dc-chip">
+        <label v-for="(opt, i) in visibleOptions" :key="opt.name" class="dc-chip">
           <span>{{ opt.name }}</span><input :ref="el => setField(opt.name, el)" v-model="values[opt.name]" :required="opt.required" :disabled="pending" :aria-label="opt.name" role="combobox" aria-autocomplete="list" :aria-expanded="i === focusIndex && picking" :aria-controls="picking && i === focusIndex ? id : undefined" :aria-activedescendant="i === focusIndex ? activeId : undefined" :style="{ width: `${Math.max(2, (values[opt.name]?.length ?? 0) + 1)}ch` }" autocomplete="off" @focus="focusOption(i)" @input="showChoices = true" @keydown="keydown">
         </label>
+        <button v-if="remainingOptions.length" ref="optionalButton" class="dc-optional" type="button" :disabled="pending" aria-haspopup="listbox" :aria-expanded="pickingOption" :aria-controls="pickingOption ? id : undefined" @focus="showChoices = false" @click="pickingOption = !pickingOption; index = 0" @keydown="pickingOption && keydown($event)">
+          +{{ remainingOptions.length }} optional
+        </button>
         <button ref="runButton" class="dc-send" type="button" :disabled="pending" aria-label="Run command" @click="send" @keydown.esc="cancel">
           {{ pending ? '…' : '➤' }}
         </button>
@@ -211,3 +249,5 @@ function setField(name: string, el: unknown) {
     </div>
   </section>
 </template>
+
+<style src="./composer.css"></style>
