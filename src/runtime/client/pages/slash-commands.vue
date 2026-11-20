@@ -1,9 +1,9 @@
 <script lang="ts" setup>
 import type { WatchEvent } from 'nuxt/schema'
 import type { SlashCommand, SlashCommandOption } from '../../../types'
+import { useWebSocket } from '@vueuse/core'
 import slashCommands from '#build/discord/slashCommands'
 import { computed, ref, useFetch, useRuntimeConfig, useToast, watchEffect } from '#imports'
-import { useWebSocket } from '@vueuse/core'
 import CommandTestBar from '../components/CommandTestBar.vue'
 import TheHeader from '../components/TheHeader.vue'
 
@@ -73,7 +73,7 @@ const commandsWithStatus = computed(() => {
 })
 
 const sortedCommands = computed(() =>
-  [...commandsWithStatus.value].sort((a, b) => a.name.localeCompare(b.name)),
+  commandsWithStatus.value.toSorted((a, b) => a.name.localeCompare(b.name)),
 )
 
 const allSynced = computed(() => commandsWithStatus.value.every(cmd => cmd.status === 'synced'))
@@ -86,7 +86,7 @@ const runtimeConfig = useRuntimeConfig()
 
 let ws: ReturnType<typeof useWebSocket> | undefined
 if (import.meta.dev && runtimeConfig.public.discord?.wsUrl) {
-  if ('WebSocket' in window) {
+  if (import.meta.client && 'WebSocket' in window) {
     ws = useWebSocket(runtimeConfig.public.discord.wsUrl, {
       autoReconnect: true,
       onConnected: (ws) => {
@@ -155,7 +155,7 @@ function constraintBadges(option: SlashCommandOption) {
   <div class="bg-default min-h-screen">
     <TheHeader />
 
-    <main class="mx-auto px-6 py-8 pb-24 max-w-6xl">
+    <main id="discord-main" tabindex="-1" class="mx-auto px-6 py-8 pb-24 max-w-6xl">
       <!-- Title bar -->
       <div class="mb-8 flex items-start justify-between">
         <div>

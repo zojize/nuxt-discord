@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { ActivityLogEntry } from '../../../types'
-import { computed, onMounted, ref, useRuntimeConfig, watchEffect } from '#imports'
 import { useWebSocket } from '@vueuse/core'
+import { computed, onMounted, ref, useRuntimeConfig, watchEffect } from '#imports'
 import TheHeader from '../components/TheHeader.vue'
 
 const entries = ref<ActivityLogEntry[]>([])
@@ -42,7 +42,7 @@ const filtered = computed(() => {
     : filter.value === 'error'
       ? entries.value.filter(e => e.status === 'error')
       : entries.value.filter(e => e.type === filter.value)
-  return [...list].reverse()
+  return list.toReversed()
 })
 
 const stats = computed(() => {
@@ -92,7 +92,7 @@ const filters = [
   <div class="bg-default min-h-screen">
     <TheHeader />
 
-    <main class="mx-auto px-6 py-8 max-w-6xl">
+    <main id="discord-main" tabindex="-1" class="mx-auto px-6 py-8 max-w-6xl">
       <!-- Title bar -->
       <div class="mb-6 flex items-start justify-between">
         <div>
@@ -107,6 +107,7 @@ const filters = [
           <button
             class="cursor-pointer rounded-md border px-3 py-1.5 text-xs font-medium transition-colors"
             :class="paused ? 'border-amber-500/50 text-amber-500 bg-amber-500/5' : 'border-default text-muted hover:text-highlighted hover:bg-elevated'"
+            :aria-pressed="paused"
             @click="paused = !paused"
           >
             {{ paused ? 'Resume' : 'Pause' }}
@@ -173,6 +174,7 @@ const filters = [
           :class="filter === f.key
             ? 'bg-elevated text-highlighted'
             : 'text-muted hover:text-highlighted hover:bg-elevated/50'"
+          :aria-pressed="filter === f.key"
           @click="filter = f.key"
         >
           {{ f.label }}

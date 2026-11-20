@@ -1,6 +1,7 @@
 import MyModule from '../../../src/module'
 
 export default defineNuxtConfig({
+  ui: { fonts: false },
   modules: [
     MyModule,
   ],

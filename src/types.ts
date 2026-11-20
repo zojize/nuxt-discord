@@ -1,7 +1,7 @@
-import type { DiscordClient } from '#build/types/nitro-imports'
 import type { APIInteractionDataResolvedGuildMember, APIRole, Attachment, ChatInputCommandInteraction, ClientOptions, GuildMember, LocalizationMap, Role, User } from 'discord.js'
 import type { ListenOptions } from 'listhen'
 import type { MaybeRef } from 'vue'
+import type { DiscordClient } from '#build/types/nitro-imports'
 import type { DescribeOptionOptions, IntegerOption, NumberOption, StringOption } from './runtime/server/utils/describeOption'
 import { ApplicationCommandOptionType } from 'discord.js'
 

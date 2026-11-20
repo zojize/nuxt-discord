@@ -1,454 +1,213 @@
 <script lang="ts" setup>
-import { computed, nextTick, ref, watch } from 'vue'
+import type { PickerItem } from './CommandPicker.vue'
+import { computed, nextTick, ref, useId, watch } from 'vue'
+import CommandPicker from './CommandPicker.vue'
+import './composer.css'
 
-const props = defineProps<{
-  commands: { name: string, description: string, options: { name: string, description: string, type: number, required: boolean, hasAutocomplete: boolean, choices?: { name: string, value: string | number }[] }[] }[]
-}>()
-
-type Phase = 'idle' | 'suggesting' | 'filling'
-const phase = ref<Phase>('idle')
-const rawInput = ref('')
-const selectedIndex = ref(0)
-const inputEl = ref<HTMLInputElement>()
-const pending = ref(false)
-const activeCommand = ref<typeof props.commands[number] | null>(null)
-const optionValues = ref<Record<string, string>>({})
-const focusedOptionIndex = ref(0)
-const optionInputRefs = ref<Record<string, HTMLInputElement>>({})
-const responses = ref<{ command: string, ok: boolean, text: string, time: number }[]>([])
-const showChoices = ref(false)
-const choiceIndex = ref(0)
-const fillingEl = ref<HTMLDivElement>()
-const autocompleteSuggestions = ref<{ name: string, value: string | number }[]>([])
-let autocompleteTimer: ReturnType<typeof setTimeout> | undefined
-
-const allCommands = computed(() => {
-  const result: typeof props.commands = []
-  for (const cmd of props.commands) {
-    result.push(cmd)
-    if ('subcommands' in cmd && Array.isArray((cmd as any).subcommands)) {
-      for (const sub of (cmd as any).subcommands) {
-        result.push({ ...sub, name: `${cmd.name} ${sub.name}` })
-        if (sub.subcommands) {
-          for (const leaf of sub.subcommands) {
-            result.push({ ...leaf, name: `${cmd.name} ${sub.name} ${leaf.name}` })
-          }
-        }
-      }
-    }
-  }
-  return result
-})
-
-const suggestions = computed(() => {
-  const raw = rawInput.value
-  if (raw === '/')
-    return allCommands.value.slice(0, 10)
-  if (!raw)
-    return []
-  const q = raw.startsWith('/') ? raw.slice(1) : raw
-  return allCommands.value.filter(c => c.name.startsWith(q)).slice(0, 8)
-})
-
-const focusedOption = computed(() => activeCommand.value?.options[focusedOptionIndex.value] ?? null)
-
-const filteredChoices = computed(() => {
-  if (autocompleteSuggestions.value.length > 0)
-    return autocompleteSuggestions.value
-  if (!focusedOption.value?.choices)
-    return []
-  const val = (optionValues.value[focusedOption.value.name] ?? '').toLowerCase()
-  return focusedOption.value.choices.filter(c =>
-    !val || c.name.toLowerCase().includes(val),
-  )
-})
-
-const typeLabels: Record<number, string> = {
-  3: 'text',
-  4: 'integer',
-  5: 'true/false',
-  6: 'user',
-  7: 'channel',
-  8: 'role',
-  9: 'mention',
-  10: 'number',
-  11: 'file',
+interface Option {
+  name: string
+  description: string
+  required: boolean
+  type: number
+  choices?: { name: string, value: string | number }[]
+  hasAutocomplete?: boolean
 }
+interface Command {
+  name: string
+  description: string
+  options: Option[]
+  subcommands?: Command[]
+}
+const props = defineProps<{ commands: Command[] }>()
+const id = useId()
+const input = ref<HTMLInputElement>()
+const query = ref('')
+const open = ref(false)
+const command = ref<Command>()
+const values = ref<Record<string, string>>({})
+const fields = new Map<string, HTMLInputElement>()
+const runButton = ref<HTMLButtonElement>()
+const focusIndex = ref(0)
+const index = ref(0)
+const pending = ref(false)
+const responses = ref<{ name: string, text: string, ok: boolean }[]>([])
+const remoteChoices = ref<Option['choices']>([])
+const showChoices = ref(true)
 
-function selectCommand(cmd: typeof allCommands.value[number]) {
-  activeCommand.value = cmd
-  optionValues.value = {}
-  focusedOptionIndex.value = 0
-  phase.value = 'filling'
-  rawInput.value = ''
-  showChoices.value = false
-  nextTick(() => {
-    if (cmd.options.length > 0) {
-      const first = cmd.options[0]
-      if (first) {
-        optionInputRefs.value[first.name]?.focus()
-        showChoices.value = !!first.choices?.length
-      }
-    }
-    else {
-      fillingEl.value?.focus()
-    }
+function leaves(commands: Command[], prefix = ''): Command[] {
+  return commands.flatMap((cmd) => {
+    const name = prefix + cmd.name
+    return cmd.subcommands?.length ? leaves(cmd.subcommands, `${name} `) : [{ ...cmd, name }]
   })
 }
+const commands = computed(() => leaves(props.commands))
+const option = computed(() => command.value?.options[focusIndex.value])
+const value = computed(() => values.value[option.value?.name ?? ''] ?? '')
+const matches = computed<PickerItem[]>(() => commands.value.filter(cmd => cmd.name.includes(query.value.slice(1).toLowerCase())).map(cmd => ({
+  name: `/${cmd.name}`,
+  value: cmd.name,
+  description: cmd.description,
+  required: cmd.options.filter(o => o.required).map(o => o.name),
+  optional: cmd.options.filter(o => !o.required).length,
+})))
+const choices = computed<PickerItem[]>(() => {
+  const fixed = option.value?.choices ?? (option.value?.type === 5 ? [{ name: 'True', value: 'true' }, { name: 'False', value: 'false' }] : undefined)
+  return (fixed?.filter(c => c.name.toLowerCase().includes(value.value.toLowerCase())) ?? remoteChoices.value ?? []).map(c => ({ name: c.name, value: String(c.value) }))
+})
+const picking = computed(() => command.value ? showChoices.value && choices.value.length > 0 : open.value && query.value.startsWith('/'))
+const items = computed(() => command.value ? choices.value : matches.value)
+const activeId = computed(() => picking.value && items.value[index.value] ? `${id}-${index.value}` : undefined)
 
-function cancelCommand() {
-  phase.value = 'idle'
-  activeCommand.value = null
-  optionValues.value = {}
-  rawInput.value = ''
-  showChoices.value = false
-  autocompleteSuggestions.value = []
-  clearTimeout(autocompleteTimer)
-  nextTick(() => inputEl.value?.focus())
-}
-
-async function executeCommand() {
-  if (!activeCommand.value || pending.value)
+watch([command, option, value], ([cmd, opt, search], _, cleanup) => {
+  remoteChoices.value = []
+  index.value = 0
+  if (!cmd || !opt?.hasAutocomplete || opt.choices?.length)
     return
-  const cmd = activeCommand.value
+  const controller = new AbortController()
+  const timer = setTimeout(async () => {
+    try {
+      const result = await $fetch<NonNullable<Option['choices']>>('/api/discord/slash-command/autocomplete', {
+        method: 'POST',
+        body: { command: cmd.name, option: opt.name, value: search },
+        signal: controller.signal,
+      })
+      if (!controller.signal.aborted)
+        remoteChoices.value = result
+    }
+    catch { /* The field remains editable when suggestions are unavailable. */ }
+  }, 150)
+  cleanup(() => {
+    clearTimeout(timer)
+    controller.abort()
+  })
+})
+function focusField(i: number) {
+  const opt = command.value?.options[i]
+  nextTick(() => opt ? fields.get(opt.name)?.focus() : runButton.value?.focus())
+}
+function choose(item: PickerItem) {
+  if (command.value && option.value) {
+    values.value[option.value.name] = item.value
+    showChoices.value = false
+    focusField(focusIndex.value + 1)
+    return
+  }
+  command.value = commands.value.find(c => c.name === item.value)
+  query.value = ''
+  values.value = {}
+  focusIndex.value = 0
+  open.value = false
+  showChoices.value = true
+  focusField(0)
+}
+function cancel() {
+  command.value = undefined
+  query.value = ''
+  open.value = false
+  nextTick(() => input.value?.focus())
+}
+function browse() {
+  cancel()
+  query.value = '/'
+  index.value = 0
+  open.value = true
+}
+async function send() {
+  const cmd = command.value
+  if (!cmd || pending.value)
+    return
+  const missing = cmd.options.findIndex(o => o.required && !values.value[o.name]?.trim())
+  if (missing >= 0) {
+    focusField(missing)
+    fields.get(cmd.options[missing]!.name)?.reportValidity()
+    return
+  }
   pending.value = true
-  const start = performance.now()
   try {
-    const result = await $fetch('/api/discord/slash-command/test', {
+    const result = await $fetch<{ ok: boolean, response?: string, responses?: string[], error?: string }>('/api/discord/slash-command/test', {
       method: 'POST',
-      body: { name: cmd.name, options: optionValues.value },
-    }) as any
-    const time = Math.round(performance.now() - start)
-    const text = result.ok
-      ? (result.responses?.join('\n') ?? result.response ?? 'Command executed')
-      : result.error
-    responses.value.unshift({ command: `/${cmd.name}`, ok: result.ok, text, time })
+      body: { name: cmd.name, options: Object.fromEntries(Object.entries(values.value).filter(([,v]) => v !== '')) },
+    })
+    responses.value.push({ name: cmd.name, ok: result.ok, text: result.responses?.join('\n') ?? result.response ?? result.error ?? 'Command executed' })
   }
-  catch (e) {
-    responses.value.unshift({ command: `/${cmd.name}`, ok: false, text: String(e), time: Math.round(performance.now() - start) })
-  }
+  catch (error) { responses.value.push({ name: cmd.name, ok: false, text: String(error) }) }
   finally {
     pending.value = false
-    cancelCommand()
+    cancel()
   }
 }
-
-function selectChoice(value: string) {
-  if (!focusedOption.value)
+function keydown(e: KeyboardEvent) {
+  if (e.isComposing || pending.value)
     return
-  optionValues.value[focusedOption.value.name] = value
-  showChoices.value = false
-  autocompleteSuggestions.value = []
-  // Move to next option
-  const opts = activeCommand.value?.options ?? []
-  const next = focusedOptionIndex.value + 1
-  if (next < opts.length) {
-    focusedOptionIndex.value = next
-    const o = opts[next]
-    if (o) {
-      nextTick(() => {
-        optionInputRefs.value[o.name]?.focus()
-        showChoices.value = !!o.choices?.length
-      })
-    }
-  }
-}
-
-function onRawKeydown(e: KeyboardEvent) {
-  if (phase.value === 'suggesting' && suggestions.value.length > 0) {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      selectedIndex.value = Math.min(selectedIndex.value + 1, suggestions.value.length - 1)
-    }
-    else if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      selectedIndex.value = Math.max(selectedIndex.value - 1, 0)
-    }
-    else if (e.key === 'Enter' || e.key === 'Tab') {
-      e.preventDefault()
-      const s = suggestions.value[selectedIndex.value]
-      if (s)
-        selectCommand(s)
-    }
-  }
-  if (e.key === 'Escape') {
-    cancelCommand()
-  }
-}
-
-function onOptionKeydown(e: KeyboardEvent, idx: number) {
-  const opts = activeCommand.value?.options ?? []
-
-  // Choice navigation
-  if (showChoices.value && filteredChoices.value.length > 0) {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      choiceIndex.value = Math.min(choiceIndex.value + 1, filteredChoices.value.length - 1)
-      return
-    }
-    if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      choiceIndex.value = Math.max(choiceIndex.value - 1, 0)
-      return
-    }
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      const c = filteredChoices.value[choiceIndex.value]
-      if (c) {
-        selectChoice(String(c.value))
-      }
-      return
-    }
-  }
-
-  if (e.key === 'Tab') {
+  if (picking.value && ['ArrowDown', 'ArrowUp'].includes(e.key)) {
     e.preventDefault()
-    showChoices.value = false
-    const next = e.shiftKey ? Math.max(0, idx - 1) : Math.min(opts.length - 1, idx + 1)
-    focusedOptionIndex.value = next
-    const o = opts[next]
-    if (o) {
-      nextTick(() => {
-        optionInputRefs.value[o.name]?.focus()
-        showChoices.value = !!o.choices?.length
-        choiceIndex.value = 0
-      })
-    }
+    index.value = Math.max(0, Math.min(items.value.length - 1, index.value + (e.key === 'ArrowDown' ? 1 : -1)))
   }
-  else if (e.key === 'Enter' && !showChoices.value) {
+  else if (picking.value && !e.shiftKey && (e.key === 'Enter' || e.key === 'Tab') && items.value[index.value]) {
     e.preventDefault()
-    executeCommand()
+    choose(items.value[index.value]!)
   }
   else if (e.key === 'Escape') {
-    if (showChoices.value) {
+    if (command.value && picking.value)
       showChoices.value = false
-    }
-    else {
-      cancelCommand()
-    }
+    else cancel()
   }
-  else if (e.key === 'Backspace' && !optionValues.value[opts[idx]?.name ?? '']) {
-    if (idx === 0) {
-      cancelCommand()
-    }
-    else {
-      e.preventDefault()
-      focusedOptionIndex.value = idx - 1
-      const prev = opts[idx - 1]
-      if (prev) {
-        nextTick(() => optionInputRefs.value[prev.name]?.focus())
-      }
-    }
+  else if (e.key === 'Enter' && command.value) {
+    e.preventDefault()
+    send()
+  }
+  else if (e.key === 'Backspace' && command.value && !value.value) {
+    e.preventDefault()
+    if (focusIndex.value)
+      focusField(focusIndex.value - 1)
+    else cancel()
   }
 }
-
-async function fetchAutocomplete(commandName: string, optionName: string, value: string) {
-  try {
-    const results = await $fetch<{ name: string, value: string | number }[]>('/api/discord/slash-command/autocomplete', {
-      method: 'POST',
-      body: { command: commandName, option: optionName, value },
-    })
-    autocompleteSuggestions.value = results
-    showChoices.value = results.length > 0
-    choiceIndex.value = 0
-  }
-  catch {
-    autocompleteSuggestions.value = []
-  }
+function focusOption(i: number) {
+  focusIndex.value = i
+  showChoices.value = true
+  index.value = 0
 }
-
-function onOptionInput(name: string, e: Event) {
-  optionValues.value[name] = (e.target as HTMLInputElement).value
-  const opt = activeCommand.value?.options.find(o => o.name === name)
-
-  // Static choices take priority
-  if (opt?.choices?.length) {
-    autocompleteSuggestions.value = []
-    showChoices.value = true
-    choiceIndex.value = 0
-    return
-  }
-
-  // Autocomplete: debounced fetch
-  if (opt?.hasAutocomplete && activeCommand.value) {
-    clearTimeout(autocompleteTimer)
-    autocompleteTimer = setTimeout(() => {
-      fetchAutocomplete(activeCommand.value!.name, name, optionValues.value[name] ?? '')
-    }, 150)
-    return
-  }
-
-  showChoices.value = false
-  autocompleteSuggestions.value = []
+function setField(name: string, el: unknown) {
+  if (el instanceof HTMLInputElement)
+    fields.set(name, el)
+  else fields.delete(name)
 }
-
-function onRawInput() {
-  phase.value = rawInput.value.length > 0 ? 'suggesting' : 'idle'
-  selectedIndex.value = 0
-}
-
-function onRawFocus() {
-  if (rawInput.value.length > 0)
-    phase.value = 'suggesting'
-}
-
-function onRawBlur() {
-  if (phase.value === 'suggesting') {
-    phase.value = 'idle'
-  }
-}
-
-function setOptionRef(name: string, el: any) {
-  if (el) {
-    optionInputRefs.value[name] = el
-  }
-}
-
-watch(rawInput, () => {
-  selectedIndex.value = 0
-})
 </script>
 
 <template>
-  <div class="fixed inset-x-0 bottom-0 z-40 pb-5 pointer-events-none">
-    <div class="mx-auto max-w-3xl px-6 pointer-events-auto">
-      <!-- Response log -->
-      <div v-if="responses.length > 0" class="mb-2 max-h-48 overflow-y-auto rounded-lg border border-default bg-default shadow-lg">
-        <div class="flex items-center justify-between border-b border-default px-4 py-1.5">
-          <span class="text-xs font-medium text-muted">Test Output</span>
-          <button class="cursor-pointer text-xs text-muted hover:text-highlighted" @click="responses = []">
-            Clear
-          </button>
-        </div>
-        <div class="divide-y divide-default">
-          <div v-for="(r, i) in responses" :key="i" class="px-4 py-2">
-            <div class="flex items-center gap-2">
-              <code class="text-xs font-semibold" :class="r.ok ? 'text-highlighted' : 'text-error'">{{ r.command }}</code>
-              <span class="text-xs text-dimmed">{{ r.time }}ms</span>
-            </div>
-            <pre class="mt-1 whitespace-pre-wrap text-sm" :class="r.ok ? 'text-default' : 'text-error'" style="font-family: inherit;">{{ r.text }}</pre>
-          </div>
-        </div>
-      </div>
-
-      <!-- Choice autocomplete / option description (above input) -->
-      <div v-if="phase === 'filling' && (focusedOption || showChoices)" class="mb-1 rounded-lg border border-default bg-default shadow-lg">
-        <!-- Choices dropdown -->
-        <div v-if="showChoices && filteredChoices.length > 0" class="py-1 px-1">
-          <button
-            v-for="(c, i) in filteredChoices"
-            :key="String(c.value)"
-            class="flex w-full cursor-pointer items-center rounded-md px-3 py-1.5 text-left text-sm transition-colors"
-            :class="i === choiceIndex ? 'bg-elevated text-highlighted' : 'text-muted hover:bg-elevated/50'"
-            @mousedown.prevent="selectChoice(String(c.value))"
-            @mouseenter="choiceIndex = i"
-          >
-            {{ c.name }}
-          </button>
-        </div>
-        <!-- Option description -->
-        <div v-else-if="focusedOption" class="flex items-center gap-2 px-4 py-2">
-          <span class="text-sm font-semibold text-highlighted">{{ focusedOption.name }}</span>
-          <span class="text-xs text-muted">{{ focusedOption.description || `Enter a ${typeLabels[focusedOption.type] ?? 'value'}` }}</span>
-        </div>
-      </div>
-
-      <!-- Autocomplete popup (above input) -->
-      <div v-if="phase === 'suggesting' && suggestions.length > 0" class="mb-1 rounded-lg border border-default bg-default shadow-lg">
-        <div class="py-1 px-1">
-          <button
-            v-for="(s, i) in suggestions"
-            :key="s.name"
-            class="flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-1.5 text-left transition-colors"
-            :class="i === selectedIndex ? 'bg-elevated' : 'hover:bg-elevated/50'"
-            @mousedown.prevent="selectCommand(s)"
-            @mouseenter="selectedIndex = i"
-          >
-            <code class="text-sm font-semibold text-highlighted">/{{ s.name }}</code>
-            <span class="truncate text-xs text-muted">{{ s.description }}</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- Main input -->
-      <div
-        class="flex min-h-11 items-center rounded-lg border bg-default px-4 shadow-sm transition-colors"
-        :class="phase !== 'idle' ? 'border-highlighted' : 'border-default focus-within:border-highlighted'"
-      >
-        <!-- Idle: raw text input -->
-        <div v-if="phase !== 'filling'" class="flex flex-1 items-center py-2">
-          <input
-            ref="inputEl"
-            v-model="rawInput"
-            type="text"
-            class="flex-1 border-none bg-transparent text-base text-highlighted outline-none placeholder:text-dimmed"
-            placeholder="Type a command or / to browse..."
-            autocomplete="off"
-            @input="onRawInput"
-            @keydown="onRawKeydown"
-            @focus="onRawFocus"
-            @blur="onRawBlur"
-          >
-        </div>
-
-        <!-- Filling: inline pills -->
-        <div
-          v-else
-          ref="fillingEl"
-          tabindex="0"
-          class="flex flex-1 cursor-text flex-wrap items-center gap-1 py-2 outline-none"
-          @click="() => { const o = activeCommand?.options[focusedOptionIndex]; if (o) { optionInputRefs[o.name]?.focus() } }"
-          @keydown.enter.prevent="executeCommand"
-          @keydown.escape="cancelCommand"
-        >
-          <span class="text-base font-semibold text-highlighted">/{{ activeCommand!.name }}</span>
-
-          <template v-for="(opt, idx) in activeCommand!.options" :key="opt.name">
-            <span
-              class="inline-flex items-center gap-0.5 rounded-md border px-2 py-0.5 text-xs transition-colors"
-              :class="focusedOptionIndex === idx
-                ? 'border-primary bg-(--ui-primary)/5'
-                : optionValues[opt.name]
-                  ? 'border-default bg-elevated'
-                  : 'border-dashed border-default'"
-            >
-              <span
-                class="select-none"
-                :class="focusedOptionIndex === idx ? 'text-primary' : 'text-dimmed'"
-              >{{ opt.name }}:</span>
-              <input
-                :ref="(el) => setOptionRef(opt.name, el)"
-                :value="optionValues[opt.name] ?? ''"
-                type="text"
-                class="min-w-0 border-none bg-transparent text-xs text-highlighted outline-none placeholder:text-dimmed"
-                :placeholder="typeLabels[opt.type] ?? 'value'"
-                :style="{ width: `${Math.max(3, (optionValues[opt.name]?.length ?? typeLabels[opt.type]?.length ?? 3) + 1)}ch` }"
-                @input="(e) => onOptionInput(opt.name, e)"
-                @focus="() => { focusedOptionIndex = idx; autocompleteSuggestions = []; showChoices = !!(opt.choices?.length); choiceIndex = 0; if (opt.hasAutocomplete && !opt.choices?.length) fetchAutocomplete(activeCommand!.name, opt.name, optionValues[opt.name] ?? '') }"
-                @keydown="(e) => onOptionKeydown(e, idx)"
-              >
-            </span>
-          </template>
-
-          <span v-if="activeCommand!.options.length === 0" class="text-sm text-dimmed">
-            press Enter to run
-          </span>
-        </div>
-
-        <!-- Send button -->
-        <button
-          v-if="phase === 'filling'"
-          class="ml-2 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md transition-colors"
-          :class="pending ? 'text-dimmed' : 'text-muted hover:text-highlighted hover:bg-elevated'"
-          :disabled="pending"
-          title="Run command"
-          @click="executeCommand"
-        >
-          <svg class="size-4" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-          </svg>
-        </button>
+  <section aria-label="Local command tester" class="dc-dock">
+    <div v-if="responses.length" class="dc-history">
+      <button type="button" class="dc-clear" @click="responses = []">
+        Clear history
+      </button>
+      <div role="log" aria-label="Command responses">
+        <article v-for="(r, i) in responses" :key="i" class="dc-message">
+          <span class="dc-avatar" aria-hidden="true">/d</span><div><small>You used <b>/{{ r.name }}</b></small><div><strong>nuxt-discord</strong> <span class="dc-app">APP</span></div><p>{{ r.ok ? r.text : `Error: ${r.text}` }}</p></div>
+        </article>
       </div>
     </div>
-  </div>
+    <CommandPicker v-if="picking" :id="id" :label="command ? option!.name : 'nuxt-discord'" :commands="!command" :index="index" :items="items" @choose="choose" @highlight="index = $event" />
+    <div v-if="command" class="dc-hint">
+      <strong>{{ option?.name ?? `/${command.name}` }}</strong> {{ option?.description ?? command.description }}<button type="button" aria-label="Cancel command" :disabled="pending" @click="cancel">
+        ×
+      </button>
+    </div>
+    <div class="dc-composer">
+      <button v-if="!command" type="button" class="dc-browse" aria-label="Browse commands" @click="browse">
+        +
+      </button>
+      <span v-else class="dc-avatar" aria-hidden="true">/d</span>
+      <input v-if="!command" ref="input" v-model="query" class="dc-input" placeholder="Message #command-testing" aria-label="Message #command-testing" role="combobox" aria-autocomplete="list" :aria-controls="picking ? id : undefined" :aria-expanded="picking" :aria-activedescendant="activeId" autocomplete="off" @input="open = true; index = 0" @focus="open = true" @blur="open = false" @keydown="keydown">
+      <template v-else>
+        <strong>/{{ command.name }}</strong>
+        <label v-for="(opt, i) in command.options" :key="opt.name" class="dc-chip">
+          <span>{{ opt.name }}</span><input :ref="el => setField(opt.name, el)" v-model="values[opt.name]" :required="opt.required" :disabled="pending" :aria-label="opt.name" role="combobox" aria-autocomplete="list" :aria-expanded="i === focusIndex && picking" :aria-controls="picking && i === focusIndex ? id : undefined" :aria-activedescendant="i === focusIndex ? activeId : undefined" :style="{ width: `${Math.max(2, (values[opt.name]?.length ?? 0) + 1)}ch` }" autocomplete="off" @focus="focusOption(i)" @input="showChoices = true" @keydown="keydown">
+        </label>
+        <button ref="runButton" class="dc-send" type="button" :disabled="pending" aria-label="Run command" @click="send" @keydown.esc="cancel">
+          {{ pending ? '…' : '➤' }}
+        </button>
+      </template>
+    </div>
+  </section>
 </template>
