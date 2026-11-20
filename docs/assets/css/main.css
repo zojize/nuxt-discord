@@ -1,7 +1,7 @@
 @import "tailwindcss" source("../../");
 @import "@nuxt/ui";
 @import "../../../src/runtime/client/chat-theme.css";
-@source "../../../src/runtime/client/components/**/*.vue";
+@source "../../../src/runtime/client/components";
 
 :root {
   color-scheme: light dark;
@@ -15,8 +15,6 @@
   --landing-on-accent: #fff;
   --code-bg: #fff;
   --code-text: #23372b;
-  --code-declaration: #5d469c;
-  --code-result: #20623d;
   --card-green: #def0e3;
   --card-purple: #eae5f5;
   --card-gold: #f3ebda;
@@ -31,8 +29,6 @@
     --landing-on-accent: #132419;
     --code-bg: #1d2422;
     --code-text: #e1ebe6;
-    --code-declaration: #c5c1ff;
-    --code-result: #a8eabd;
     --card-green: #283930;
     --card-purple: #342e43;
     --card-gold: #3b352c;
