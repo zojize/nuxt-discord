@@ -1,10 +1,10 @@
 <script lang="ts" setup>
 import type { ContextMenu, Listener, SlashCommand } from '../../../types'
+import { useWebSocket } from '@vueuse/core'
 import contextMenus from '#build/discord/contextMenus'
 import listeners from '#build/discord/listeners'
 import slashCommands from '#build/discord/slashCommands'
 import { computed, ref, useFetch, useRuntimeConfig, watchEffect } from '#imports'
-import { useWebSocket } from '@vueuse/core'
 import TheHeader from '../components/TheHeader.vue'
 
 const commands = ref<SlashCommand[]>(slashCommands)
@@ -41,7 +41,7 @@ const runtimeConfig = useRuntimeConfig()
 
 let ws: ReturnType<typeof useWebSocket> | undefined
 if (import.meta.dev && runtimeConfig.public.discord?.wsUrl) {
-  if ('WebSocket' in window) {
+  if (import.meta.client && 'WebSocket' in window) {
     ws = useWebSocket(runtimeConfig.public.discord.wsUrl, {
       autoReconnect: true,
       onConnected: ws => ws.send(JSON.stringify({ event: 'full-update' })),
@@ -71,7 +71,7 @@ const uniqueEvents = computed(() => {
   <div class="bg-default min-h-screen">
     <TheHeader />
 
-    <main class="mx-auto px-6 py-8 max-w-6xl">
+    <main id="discord-main" tabindex="-1" class="mx-auto px-6 py-8 max-w-6xl">
       <!-- Hero -->
       <div class="mb-10 relative overflow-hidden rounded-xl border border-default bg-elevated px-6 py-8">
         <div class="absolute inset-0 bg-linear-to-br from-[#00DC82]/5 via-transparent to-[#5865F2]/5" />

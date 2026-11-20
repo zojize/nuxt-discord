@@ -14,7 +14,7 @@ const messageMenus = computed(() => menus.value.filter(m => m.type === 'message'
   <div class="bg-default min-h-screen">
     <TheHeader />
 
-    <main class="mx-auto px-6 py-8 max-w-6xl">
+    <main id="discord-main" tabindex="-1" class="mx-auto px-6 py-8 max-w-6xl">
       <!-- Title bar -->
       <div class="mb-8">
         <h1 class="text-2xl tracking-tight font-bold">

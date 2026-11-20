@@ -1,10 +1,10 @@
 <script lang="ts" setup>
-import { computed, useRoute } from '#imports'
 import { Icon } from '@iconify/vue'
 import { useColorMode } from '@vueuse/core'
+import { computed, useRoute } from '#imports'
 
 const route = useRoute()
-const mode = useColorMode({ emitAuto: true })
+const mode = useColorMode()
 const isDark = computed(() => mode.value === 'dark')
 
 function toggleDark() {
@@ -22,6 +22,7 @@ const nav = [
 
 <template>
   <header class="sticky top-0 z-50 w-full border-b border-default bg-default/80 backdrop-blur-xl">
+    <a href="#discord-main" class="sr-only focus:not-sr-only">Skip to content</a>
     <div class="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
       <div class="flex items-center gap-6">
         <NuxtLink to="/discord" class="flex items-center gap-2.5">
@@ -64,5 +65,10 @@ const nav = [
         </a>
       </div>
     </div>
+    <nav aria-label="Dashboard" class="flex gap-3 overflow-x-auto border-t border-default px-4 py-2 text-sm sm:hidden">
+      <NuxtLink v-for="item in nav" :key="item.to" :to="item.to" class="shrink-0" exact-active-class="font-bold">
+        {{ item.label }}
+      </NuxtLink>
+    </nav>
   </header>
 </template>

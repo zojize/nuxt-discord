@@ -17,6 +17,7 @@ export default defineNuxtModule<NuxtDiscordOptions>({
     name: 'nuxt-discord',
     configKey: 'discord',
   },
+  moduleDependencies: { '@nuxt/ui': {} },
   defaults: {
     client: {
       intents: [GatewayIntentBits.Guilds],

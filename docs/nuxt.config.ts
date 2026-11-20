@@ -1,4 +1,5 @@
 export default defineNuxtConfig({
+  ui: { fonts: false },
   modules: [
     '@nuxt/content',
     '@nuxt/ui',
@@ -19,16 +20,11 @@ export default defineNuxtConfig({
     },
   },
 
-  routeRules: {
-    // eslint-disable-next-line node/prefer-global/process
-    '/': { redirect: `${process.env.NUXT_APP_BASE_URL ?? '/'}getting-started` },
-  },
-
   nitro: {
     prerender: {
       crawlLinks: true,
-      routes: ['/getting-started', '/guide/middleware', '/guide/use-text-channel'],
-      failOnError: false,
+      routes: ['/', '/getting-started', '/guide/middleware', '/guide/use-text-channel'],
+      failOnError: true,
     },
   },
 

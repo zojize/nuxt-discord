@@ -12,7 +12,7 @@ const rootDir = useRuntimeConfig().public.discord?.rootDir as string | undefined
   <div class="bg-default min-h-screen">
     <TheHeader />
 
-    <main class="mx-auto px-6 py-8 max-w-6xl">
+    <main id="discord-main" tabindex="-1" class="mx-auto px-6 py-8 max-w-6xl">
       <div class="mb-8">
         <h1 class="text-2xl tracking-tight font-bold">
           Event Listeners

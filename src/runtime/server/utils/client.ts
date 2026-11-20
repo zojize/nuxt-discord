@@ -870,10 +870,7 @@ export class DiscordClient {
         ],
       )
 
-    const nameToCommands = flattenedLocalCommands.reduce((acc, command) => {
-      (acc[command.name] ??= []).push(command)
-      return acc
-    }, {} as Record<string, LocalSlashCommand[]>)
+    const nameToCommands = Object.groupBy(flattenedLocalCommands, command => command.name)
 
     return flattenedLocalCommands.reduce((acc, command) => {
       // if there are multiple commands with the same name

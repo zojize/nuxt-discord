@@ -1,10 +1,8 @@
 import type { NuxtDiscordContext } from '../types'
-import { extendPages, installModule } from '@nuxt/kit'
+import { extendPages } from '@nuxt/kit'
 
-export async function prepareClient(ctx: NuxtDiscordContext) {
+export function prepareClient(ctx: NuxtDiscordContext) {
   ctx.nuxt.options.css.push(ctx.resolve.module('runtime/client/style.css'))
-
-  await installModule('@nuxt/ui')
 
   extendPages((pages) => {
     pages.unshift(
