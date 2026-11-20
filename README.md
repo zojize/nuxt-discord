@@ -48,6 +48,8 @@ DISCORD_TOKEN=your_bot_token
 DISCORD_CLIENT_ID=your_application_id
 ```
 
+Deploy the app on one always-on Node process that owns the Discord Gateway connection.
+
 ## Creating Commands
 
 Create files in `discord/commands/`:
@@ -257,7 +259,7 @@ export const withUser = defineMiddleware('withUser', async ({ interaction, next 
 
 ## Web Dashboard
 
-Access `/discord` to view:
+Start the Nuxt dev server and open `/discord`. The dashboard and its APIs are development-only. Available views include:
 
 - **Overview** - Stat cards for commands, context menus, listeners
 - **Slash Commands** - Option types, sync status, one-click sync, command test bar with parameter autocomplete

@@ -61,6 +61,9 @@ export default defineNitroPlugin(async (nitro) => {
           }
           else if (existingCommand) {
             runtimeCommand.execute = existingCommand.execute
+            runtimeCommand.middlewareEntries = existingCommand.middlewareEntries
+            runtimeCommand.optionMacros = existingCommand.optionMacros
+            runtimeCommand.subcommands = existingCommand.subcommands
           }
           else {
             logger.error(`Unable to dynamically load slash command at ${cmd.path}`)

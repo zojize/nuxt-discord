@@ -25,7 +25,7 @@ export function prepareTemplates(ctx: NuxtDiscordContext) {
         const varName = `cm_${i}`
         return {
           importLine: `import ${varName} from '${cm.path}'`,
-          entry: `{ ...${varName}, name: ${JSON.stringify(cm.name)}, path: ${JSON.stringify(cm.path)} }`,
+          entry: `{ ...${varName}, name: ${JSON.stringify(cm.name)}, middleware: ${JSON.stringify(cm.middleware ?? [])}, path: ${JSON.stringify(cm.path)} }`,
         }
       })
       return [
@@ -102,7 +102,7 @@ declare module '#build/discord/listeners' {
 }
 
 declare module 'discord/contextMenus' {
-  declare const contextMenus: (import('nuxt-discord/types').ContextMenuDefinition & { name: string, path: string })[]
+  declare const contextMenus: (import(${genString(ctx.resolve.module('runtime/server/utils/defineContextMenu'))}).ContextMenuDefinition & { name: string, path: string })[]
   export default contextMenus
 }
 

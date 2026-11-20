@@ -50,6 +50,11 @@ describe('collect', () => {
   })
 
   describe('processCommandFile', () => {
+    it('rejects unknown guards even in an earlier JSDoc block', () => {
+      const file = writeCommand(commandsDir, 'protected.ts', '/** @middleware missing */\n/** @middleware ownerOnly */\nexport default () => 1')
+      expect(() => processCommandFile(ctx, file)).toThrow(`Unknown @middleware "missing" in ${file}`)
+    })
+
     it('should parse a simple arrow function command', () => {
       const file = writeCommand(commandsDir, 'ping.ts', `
 /**
