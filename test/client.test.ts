@@ -15,19 +15,14 @@ vi.mock('discord.js', async (importOriginal) => {
   // Wrap .on so it's a spy but still registers listeners
   const originalOn = emitter.on.bind(emitter)
   ;(emitter as any).on = vi.fn((event: string, listener: (...args: any[]) => void) => originalOn(event, listener))
-  // eslint-disable-next-line prefer-arrow-callback
-  const MockClient = vi.fn(function () {
-    return emitter
-  }) as any
-  MockClient.prototype = emitter
-  Object.setPrototypeOf(emitter, EventEmitter.prototype)
   return {
     ...original,
-    Client: MockClient,
-    // eslint-disable-next-line prefer-arrow-callback
-    REST: vi.fn(function () {
-      return { setToken: vi.fn().mockReturnThis() }
-    }),
+    Client: class {
+      constructor() { return emitter }
+    },
+    REST: class {
+      setToken = vi.fn().mockReturnThis()
+    },
   }
 })
 const mockedNitroApp = {
@@ -55,8 +50,7 @@ describe('client', () => {
   })
 
   it('should mock dependencies', () => {
-    expect(vi.isMockFunction(Client)).toBe(true)
-    expect(vi.isMockFunction(REST)).toBe(true)
+    expect(vi.isMockFunction(new REST().setToken)).toBe(true)
     expect(new Client({ intents: [] })).toBe(mockedClient)
     expect(vi.isMockFunction(useNitroApp)).toBe(true)
     expect(useNitroApp()).toBe(mockedNitroApp)
