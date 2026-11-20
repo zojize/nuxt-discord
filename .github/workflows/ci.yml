@@ -38,5 +38,7 @@ jobs:
         run: bun run dev:prepare
       - name: Test
         run: bun run test
+      - name: Test packed consumer
+        run: bun run test:package
       - name: Type check
         run: bunx tsc --noEmit --project tsconfig.json 2>&1 | grep -v 'docs/\|test/fixtures/' | { ! grep 'error TS'; }

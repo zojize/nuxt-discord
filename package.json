@@ -47,7 +47,8 @@
     "test": "vitest run",
     "test:watch": "vitest watch",
     "test:types": "vue-tsc --noEmit",
-    "prepare": "simple-git-hooks"
+    "prepare": "simple-git-hooks",
+    "test:package": "node scripts/test-package.mjs"
   },
   "peerDependencies": {
     "discord.js": "^14.28.1"
