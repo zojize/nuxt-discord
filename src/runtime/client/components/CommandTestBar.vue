@@ -329,8 +329,8 @@ function setField(name: string, el: unknown) {
             <button v-if="remainingOptions.length" type="button" aria-haspopup="listbox" :aria-expanded="pickingOption" :aria-controls="pickingOption ? id : undefined" class="cursor-pointer rounded px-1 text-sm text-chat-muted hover:bg-chat-hover" @focus="showChoices = false" @click="pickingOption = !pickingOption; index = 0" @keydown="pickingOption && keydown($event)">
               +{{ remainingOptions.length }} optional
             </button>
-            <button ref="runButton" type="button" aria-label="Run command" class="grid size-11 shrink-0 cursor-pointer place-items-center rounded text-chat-muted hover:text-white sm:h-5 sm:w-px sm:rounded-none sm:px-0 sm:focus-visible:bg-chat-white sm:focus-visible:outline-none" @pointerdown.prevent @focus="focusIndex = -1; showChoices = false" @click="send" @keydown.esc="cancel">
-              <UIcon name="i-lucide-send-horizontal" class="size-4 sm:hidden" />
+            <button ref="runButton" type="button" aria-label="Run command" class="grid size-11 shrink-0 cursor-pointer place-items-center rounded text-chat-muted hover:text-white lg:pointer-fine:h-5 lg:pointer-fine:w-px lg:pointer-fine:rounded-none lg:pointer-fine:px-0 lg:pointer-fine:focus-visible:bg-chat-white lg:pointer-fine:focus-visible:outline-none" @pointerdown.prevent @focus="focusIndex = -1; showChoices = false" @click="send" @keydown.esc="cancel">
+              <UIcon name="i-lucide-send-horizontal" class="size-4 lg:pointer-fine:hidden" />
             </button>
           </div>
           <div class="flex shrink-0 items-center gap-3 text-chat-muted sm:gap-4">

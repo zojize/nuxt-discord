@@ -53,33 +53,40 @@ watchEffect((cleanup) => {
 .stack {
   --lift-x: -10%;
   display: grid;
-  perspective: 85rem;
-  transform-style: preserve-3d;
   padding: 2.25rem clamp(1.15rem, 3vw, 2rem) .75rem;
 }
 .card {
-  --front: translate3d(0, 0, 12px) rotateZ(-1.5deg);
-  --middle: translate3d(2%, -4%, 0) rotateZ(4deg) scale(.98);
-  --back: translate3d(-2%, -7%, -12px) rotateZ(-6deg) scale(.96);
+  --front: translate(0, 0) rotate(-1.5deg);
+  --middle: translate(2%, -4%) rotate(4deg) scale(.98);
+  --back: translate(-2%, -7%) rotate(-6deg) scale(.96);
   grid-area: 1 / 1;
+  z-index: 3;
   min-width: 0;
   transform-origin: 50% 70%;
   transform: var(--front);
 }
-.card[data-depth="1"] { transform: var(--middle); }
-.card[data-depth="2"] { transform: var(--back); }
+.card[data-depth="1"] { z-index: 2; transform: var(--middle); }
+.card[data-depth="2"] { z-index: 1; transform: var(--back); }
 figure :focus-visible { outline: 2px solid #9cf5bc; outline-offset: 3px; }
 @media (max-width: 48rem) {
   .stack { --lift-x: -2%; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .card { transition: transform 1100ms cubic-bezier(.35, 0, .2, 1); }
-  .shuffled .card[data-depth="2"] { animation: tuck-under 1100ms ease-in-out; }
-  /* The tilted card crosses the next card's plane progressively as it slips underneath. */
+  .shuffled .card[data-depth="2"] {
+    animation: tuck-under 1100ms ease-in-out, pass-behind 1100ms ease-in-out;
+  }
   @keyframes tuck-under {
     from { transform: var(--front); }
-    42% { transform: translate3d(var(--lift-x), -11%, 8px) rotateZ(-7deg) rotateY(9deg); }
+    42% { transform: translate(var(--lift-x), -11%) rotate(-7deg) scale(1.015); }
     to { transform: var(--back); }
+  }
+  /* Change layers while the outgoing face is invisible, including on narrow screens. */
+  @keyframes pass-behind {
+    0%, 12% { opacity: 1; z-index: 4; }
+    50% { opacity: 0; z-index: 4; }
+    51% { opacity: 0; z-index: 1; }
+    90%, 100% { opacity: 1; z-index: 1; }
   }
 }
 </style>
