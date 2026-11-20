@@ -129,6 +129,32 @@ describe('client', () => {
     expect(messageMock.edit).toHaveBeenCalledTimes(1)
   })
 
+  it('finishes reactive edits in order when Discord is slow', async () => {
+    const client = new DiscordClient()
+    void client.start({ intents: [] })
+    await vi.waitFor(() => expect(mockedClient.on).toHaveBeenCalled())
+    const content = ref('initial')
+    client.addSlashCommand({ ...ping, execute: () => content })
+    const { interaction, messageMock } = mockChatInputCommandInteraction('ping')
+    const slowEdit = Promise.withResolvers<void>()
+    const edits: string[] = []
+    const edit = vi.fn(async (payload: { content: string }) => {
+      if (payload.content === 'first')
+        await slowEdit.promise
+      edits.push(payload.content)
+      return messageMock
+    })
+    Object.assign(messageMock, { edit })
+    mockedClient.emit(Events.InteractionCreate, interaction)
+    await vi.waitFor(() => expect(interaction.reply).toHaveBeenCalledOnce())
+    content.value = 'first'
+    await vi.waitFor(() => expect(messageMock.edit).toHaveBeenCalledTimes(1))
+    content.value = 'latest'
+    await new Promise(resolve => setTimeout(resolve, 10))
+    slowEdit.resolve()
+    await vi.waitFor(() => expect(edits).toEqual(['first', 'latest']))
+  })
+
   it('should route to subcommand', async () => {
     const subExecute = vi.fn(() => 'sub result')
     const parentCommand: SlashCommandRuntime = {

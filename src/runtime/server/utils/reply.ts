@@ -16,7 +16,7 @@ import type {
 import type { MaybeRef } from 'vue'
 import type { SlashCommandCustomReturnHandler } from '../../../types'
 import { ActionRowBuilder, MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js'
-import { isRef } from 'vue'
+import { computed, isRef, toValue } from 'vue'
 import { logger } from '../../logger'
 import { sendReactiveMessage } from './messageSender'
 
@@ -87,7 +87,8 @@ export interface ModalFieldOptions {
 }
 
 function createReplyFunction(
-  defaultOptions: (InteractionReplyOptions & {
+  defaultOptions: (Omit<InteractionReplyOptions, 'files'> & {
+    files?: MaybeRef<MaybeRef<File>[]>
     buttons?: Parameters<ReplyFunction['button']>[]
   }) = {},
 ): ReplyFunction {
@@ -96,18 +97,21 @@ function createReplyFunction(
   const reply = ((...args) => {
     const { buttons, ...restOptions } = defaultOptions
 
-    const interactionConfig = (interaction: CommandInteraction) => ({
-      send: (opts: MessageCreateOptions) => {
-        const method = interaction.replied
-          ? 'followUp'
-          : interaction.deferred ? 'editReply' : 'reply'
-        return interaction[method](opts as InteractionReplyOptions & InteractionEditReplyOptions) as Promise<Msg>
-      },
-      edit: async (msg: Msg, opts: MessageCreateOptions) => {
-        const target = ('resource' in msg ? msg.resource!.message! : msg) as Message
-        return target.edit(opts as InteractionEditReplyOptions) as Promise<Msg>
-      },
-    })
+    const interactionConfig = (interaction: CommandInteraction) => {
+      const method = interaction.replied ? 'followUp' : interaction.deferred ? 'editReply' : 'reply'
+      return {
+        send: (opts: MessageCreateOptions) => interaction[method](opts as InteractionReplyOptions & InteractionEditReplyOptions) as Promise<Msg>,
+        edit: (msg: Msg, options: MessageCreateOptions) => {
+          const opts = options as InteractionEditReplyOptions
+          if (method === 'editReply' || 'resource' in msg)
+            return interaction.editReply(opts)
+          if (method === 'followUp' && 'id' in msg && interaction.webhook)
+            return interaction.webhook.editMessage(msg.id, opts)
+          // InteractionResponse.edit uses the original interaction webhook.
+          return msg.edit(opts)
+        },
+      }
+    }
 
     if (typeof args[0] === 'string' || typeof args[0] === 'undefined' || isRef(args[0])) {
       const [text, options] = args
@@ -120,7 +124,7 @@ function createReplyFunction(
           {
             buttons: buttons ?? [],
             flags: restOptions.flags as MessageCreateOptions['flags'],
-            files: restOptions.files as MessageCreateOptions['files'],
+            files: restOptions.files,
             ...(options ?? {}),
           } as Parameters<typeof sendReactiveMessage>[2],
         ) as Promise<Msg>
@@ -147,7 +151,7 @@ function createReplyFunction(
         {
           buttons: buttons ?? [],
           flags: restOptions.flags as MessageCreateOptions['flags'],
-          files: restOptions.files as MessageCreateOptions['files'],
+          files: restOptions.files,
         } as Parameters<typeof sendReactiveMessage>[2],
       ) as Promise<Msg>
 
@@ -158,6 +162,14 @@ function createReplyFunction(
       }
     }
   }) as ReplyFunction
+
+  function withFiles(files: MaybeRef<MaybeRef<File>[]>) {
+    const previous = defaultOptions.files
+    return createReplyFunction({
+      ...defaultOptions,
+      files: previous ? computed(() => [...toValue(previous), ...toValue(files)]) : files,
+    })
+  }
 
   Object.defineProperties(reply, {
     ephemeral: {
@@ -183,18 +195,8 @@ function createReplyFunction(
         flags,
       }),
     },
-    file: {
-      value: (file: File) => createReplyFunction({
-        ...defaultOptions,
-        files: defaultOptions.files != null ? [...defaultOptions.files, file] : [file],
-      }),
-    },
-    files: {
-      value: (files: File[]) => createReplyFunction({
-        ...defaultOptions,
-        files: defaultOptions.files != null ? [...defaultOptions.files, ...files] : files,
-      }),
-    },
+    file: { value: (file: MaybeRef<File>) => withFiles([file]) },
+    files: { value: withFiles },
     send: {
       value: reply,
     },
