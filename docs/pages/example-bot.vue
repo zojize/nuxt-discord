@@ -39,7 +39,7 @@ useSeoMeta({ title: 'Example bot command reference · Nuxt Discord', description
       <p v-if="cmd.middleware.length" class="mt-3 text-sm text-muted">
         Middleware <code>{{ cmd.middleware.join(', ') }}</code>
       </p>
-      <a class="mt-3 inline-block max-w-full text-sm wrap-anywhere text-primary underline-offset-4 hover:underline" :href="`https://github.com/zojize/nuxt-discord/blob/main/playground/${cmd.source}`">{{ cmd.source }}</a>
+      <a class="mt-3 inline-block max-w-full text-sm wrap-anywhere text-primary underline-offset-4 hover:underline" :href="`https://github.com/zojize/nuxt-discord/blob/${catalog.revision}/playground/${cmd.source}`">{{ cmd.source }}</a>
     </section>
     <section v-if="catalog.menus.length" class="border-t border-default py-6">
       <h2 class="text-xl font-semibold text-highlighted">
