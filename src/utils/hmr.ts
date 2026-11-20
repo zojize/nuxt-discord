@@ -21,7 +21,17 @@ type RollupConfig = InputOptions & {
 export function prepareHMR(ctx: NuxtDiscordContext) {
   const { nuxt, options } = ctx
 
-  if (nuxt.options.dev) {
+  // Compilation is needed by Nitro builds as well as the development watcher.
+  let rollupConfig: RollupConfig
+  nuxt.hook('nitro:init', (nitro) => {
+    nitro.hooks.hook('rollup:before', (_nitro, config) => {
+      config.plugins = [config.plugins, TransformPlugin(ctx)]
+      // Nitro exposes one plugin union for both bundlers. This watcher invokes Rollup.
+      rollupConfig = { ...config, plugins: config.plugins as InputOptions['plugins'] }
+    })
+  })
+
+  if (nuxt.options.dev && options.watch.enabled) {
     const commandsDir = ctx.resolve.root(options.dir, 'commands')
 
     const ignoreCommandsDir = (file: string) => {
@@ -32,7 +42,6 @@ export function prepareHMR(ctx: NuxtDiscordContext) {
     }
 
     // nitro dev server ignore discord commands directory
-    let rollupConfig: RollupConfig
 
     nuxt.hook('nitro:config', (nitroConfig) => {
       nitroConfig.watchOptions ??= {}
@@ -45,21 +54,6 @@ export function prepareHMR(ctx: NuxtDiscordContext) {
           nitroIgnored.push(existingNitroIgnored)
       }
       nitroConfig.watchOptions.ignored = nitroIgnored
-
-      // @ts-expect-error - i don't understand why ts complains about this
-      const originalBeforeHook = nitroConfig.hooks?.['rollup:before']
-      nitroConfig.hooks = {
-        ...nitroConfig.hooks,
-        'rollup:before': (nitroCtx, config) => {
-          originalBeforeHook?.(nitroCtx, config)
-          // TODO: might need to merge with user nuxt config.server.rollupConfig.plugins
-          config.plugins = [
-            config.plugins,
-            TransformPlugin(ctx),
-          ]
-          rollupConfig = { ...config, plugins: config.plugins as InputOptions['plugins'] }
-        },
-      }
     })
 
     // vite dev server ignore discord commands directory
