@@ -268,8 +268,8 @@ export class DiscordClient {
     try {
       if (interaction.isChatInputCommand() || interaction.isAutocomplete())
         command = this.resolveSlashCommand(interaction.commandName, interaction.options.getSubcommandGroup?.(false), interaction.options.getSubcommand?.(false))
-      if (!options.simulation && interaction.isChatInputCommand() && (command?.defer || this.#clientOptions?.deferOnPromise))
-        cancelAcknowledgement = scheduleAcknowledgement(interaction, command?.defer)
+      if (interaction.isChatInputCommand() && (command?.defer || (!options.simulation && this.#clientOptions?.deferOnPromise)))
+        cancelAcknowledgement = scheduleAcknowledgement(interaction, command?.defer, !options.simulation)
       await runInvocation(scope, { channel: interaction.channel as TextBasedChannel | null, interaction: interaction.isChatInputCommand() ? interaction : undefined, middleware }, async () => {
         if (!options.simulation && type !== 'autocomplete')
           await this.#nitro.hooks.callHook('discord:interaction:before', ctx)

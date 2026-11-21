@@ -28,7 +28,7 @@ export default () => reply.ephemeral('Only you can see this')
 
 Fast async commands send their result directly. With the default settings, a command still working about 1.8 seconds after the interaction began gets a private acknowledgement. A private result edits that response. A public result is sent as a public follow-up and the temporary acknowledgement is removed. Later reactive edits target the message containing the result.
 
-A command can declare its policy before it starts. This example makes the initial result private, including when the lookup finishes immediately.
+A command can declare its policy before it starts. This example makes the initial result private, including when the lookup finishes immediately. The private policy also applies to direct calls to `interaction.reply()` and `interaction.deferReply()`.
 
 ```ts
 export default async () => {
