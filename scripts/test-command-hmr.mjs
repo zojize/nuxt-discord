@@ -43,8 +43,25 @@ async function waitForVersion(version) {
   } while (Date.now() < deadline)
   throw new Error(`Timed out waiting for ${version}`)
 }
+async function checkDashboardStyles() {
+  const page = await fetch(`http://127.0.0.1:${port}/discord/slash-commands`)
+  assert.equal(page.status, 200)
+  const html = await page.text()
+  const href = html.match(/<link[^>]+href="([^"]*nuxt-discord[^"]*\/style\.css[^"]*)"/)?.[1]
+  assert.ok(href, 'Dashboard links the installed module stylesheet')
+  const response = await fetch(new URL(href, page.url), { headers: { Accept: 'text/css' } })
+  assert.equal(response.status, 200)
+  assert.match(response.headers.get('content-type') ?? '', /text\/css/)
+  const css = await response.text()
+  assert.match(css, /--color-chat-canvas:\s*#(?:ffffff|fff);/)
+  assert.match(css, /:root:where\(\.dark\)\s*\{[^}]*--color-chat-canvas:\s*#1b1b1f;/)
+  assert.match(css, /@media\s*\(prefers-color-scheme:\s*dark\)\s*\{\s*:root:where\(:not\(\.light,\s*\.dark\)\)\s*\{[^}]*--color-chat-canvas:\s*#1b1b1f;/)
+  assert.match(css, /@media\s*\(forced-colors:\s*active\)\s*\{\s*:root\s*\{[^}]*--color-chat-canvas:\s*Canvas;/)
+}
+
 try {
   await waitForVersion('First version')
+  await checkDashboardStyles()
   assert.equal(await probe('pull'), 'one/pool/1')
   assert.equal(await probe('ten'), '11')
   const command = join(app, 'discord/commands/pull.ts')
