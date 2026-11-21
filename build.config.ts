@@ -23,6 +23,10 @@ export default defineBuildConfig({
     inlineDependencies: true,
   },
   hooks: {
+    'mkdist:entry:options': function (_ctx, _entry, options) {
+      // Consumers compile the dashboard's Tailwind directives in their own app.
+      options.postcss = false
+    },
     // workaround until this gets fixed
     // https://github.com/nuxt/module-builder/issues/647
     'rollup:done': function (ctx) {
