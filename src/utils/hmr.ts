@@ -149,7 +149,7 @@ export function prepareHMR(ctx: NuxtDiscordContext) {
           const outputDir = path.join(hotDir, String(version))
           try {
             const snapshot = { ...ctx }
-            collectSlashCommands(snapshot)
+            collectSlashCommands(snapshot, changed)
             const source = getSlashCommandTemplateContent(snapshot, true)
             const additions = await buildCommandUpdate(rollupConfig, source, outputDir, initial, updated, changed)
             if (initial !== dependencies || closed) {
