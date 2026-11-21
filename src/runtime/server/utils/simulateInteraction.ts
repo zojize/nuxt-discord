@@ -51,27 +51,28 @@ export async function simulateInteraction(client: DiscordClient, request: Simula
   const [name, second, third] = parts
   const group = third ? second : null
   const leaf = third ?? second ?? null
-  const replies: RecordedReply[] = []
+  const messages = new Map<string, RecordedReply>()
+  let nextMessageId = 0
   const notices = new Set<string>()
   let choices: ApplicationCommandOptionChoiceData[] = []
   const command = name && parts.length <= 3 && client.resolveSlashCommand(name, group, leaf)
   if (!command)
-    return { ok: false, error: 'Unknown command.', replies, notices: [], choices }
+    return { ok: false, error: 'Unknown command.', replies: [], notices: [], choices }
 
-  function record(payload: string | Payload, index = replies.length, ephemeral?: boolean) {
+  function record(payload: string | Payload, id: string, ephemeral?: boolean) {
     const data = typeof payload === 'string' ? { content: payload } : payload
-    const previous = replies[index]
-    replies[index] = {
+    const previous = messages.get(id)
+    messages.set(id, {
       content: data.content ?? previous?.content ?? '',
       ephemeral: previous?.ephemeral ?? ephemeral ?? isPrivate(data),
-    }
+    })
     if (data.components?.length)
       notices.add('This reply has interactive controls. Use Discord to interact with them.')
     if (data.files?.length || data.embeds?.length)
       notices.add('This reply includes attachments or embeds. Open it in Discord to view them.')
     return {
-      id: String(index),
-      edit: async (update: Payload) => record(update, index),
+      id,
+      edit: async (update: Payload) => record(update, id),
       createMessageComponentCollector: () => ({ on() {}, stop() {} }),
     }
   }
@@ -105,10 +106,11 @@ export async function simulateInteraction(client: DiscordClient, request: Simula
     },
     replied: false,
     deferred: false,
+    get ephemeral() { return this.deferred ? deferredPrivate : messages.get('original')?.ephemeral ?? null },
     async respond(values: ApplicationCommandOptionChoiceData[]) { choices = values },
     async reply(payload: Payload) {
       this.replied = true
-      return record(payload)
+      return record(payload, 'original')
     },
     async deferReply(payload: Payload = {}) {
       this.deferred = true
@@ -116,15 +118,15 @@ export async function simulateInteraction(client: DiscordClient, request: Simula
     },
     async editReply(payload: Payload) {
       this.replied = true
-      return record(payload, 0, this.deferred ? deferredPrivate : undefined)
+      return record(payload, 'original', this.deferred ? deferredPrivate : undefined)
     },
-    async followUp(payload: Payload) { return record(payload) },
+    async followUp(payload: Payload) { return record(payload, String(++nextMessageId)) },
+    async deleteReply() { messages.delete('original') },
     webhook: {
       async editMessage(id: string, payload: Payload) {
-        const index = replies.findIndex((_, i) => String(i) === id)
-        if (index < 0)
+        if (!messages.has(id))
           throw new Error('The dashboard can only edit messages from this preview.')
-        return record(payload, index)
+        return record(payload, id)
       },
     },
     async showModal() { throw new Error('This command opens a modal. Submit it in Discord.') },
@@ -132,7 +134,7 @@ export async function simulateInteraction(client: DiscordClient, request: Simula
 
   const result = await client.dispatchInteraction(interaction as unknown as Interaction, { simulation: true })
   try {
-    return { ok: result.status === 'ok', error: result.detail, replies, notices: [...notices], choices }
+    return { ok: result.status === 'ok', error: result.detail, replies: [...messages.values()], notices: [...notices], choices }
   }
   finally { result.dispose() }
 }

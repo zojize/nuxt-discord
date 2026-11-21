@@ -45,7 +45,12 @@ try {
   cpSync(join(root, 'test/fixtures/packed/consumer-types.ts'), join(app, 'consumer-types.ts'))
   run(process.execPath, [join(root, 'scripts/check-package-types.mjs'), app], app)
   run(process.execPath, ['check.mjs'], app)
+  // The development fixture uses the example bot's ping, which has different exports.
+  rmSync(join(app, 'discord'), { recursive: true })
   cpSync(join(root, 'test/fixtures/hmr'), app, { recursive: true })
+  for (const name of ['group', 'owner']) {
+    cpSync(join(root, 'test/fixtures/basic/discord/commands', `${name}.ts`), join(app, 'discord/commands', `${name}.ts`))
+  }
   for (const name of ['ping', 'add', 'reverse', 'greet', 'counter', 'feedback', 'userinfo']) {
     cpSync(join(root, 'playground/discord/commands', `${name}.ts`), join(app, 'discord/commands', `${name}.ts`))
   }
