@@ -180,7 +180,6 @@ export function processCommandFile(ctx: CommandSourceContext, file: string, sour
   // @description tag takes priority, then JSDoc body text
   command.description = descriptionTag?.comment?.toString()
     ?? jsDocComment
-    ?? command.description
 
   // Command-level JSDoc tags
   const nsfwTag = jsDocTags.find(tag => tag.tagName.escapedText === 'nsfw')
@@ -366,6 +365,8 @@ export function processCommandFile(ctx: CommandSourceContext, file: string, sour
     const macroName = macroCall.expression.escapedText as keyof typeof macros
     macros[macroName](ctx, macroCall, command)
   }
+  // Discord requires a description even for commands declared without JSDoc.
+  command.description ||= command.name
 
   if (outOfRangMacroCalls.length > 0) {
     // TODO: warn specific macros and line numbers
