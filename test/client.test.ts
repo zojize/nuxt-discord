@@ -395,6 +395,65 @@ describe('client', () => {
     finally { vi.useRealTimers() }
   })
 
+  it.each(['reply', 'deferReply'] as const)('honors a declared private policy on a fast direct %s', async (method) => {
+    const bot = await startClient()
+    bot.addSlashCommand({ ...ping, defer: 'private', execute: async () => {
+      const interaction = useInteraction()!
+      if (method === 'reply')
+        await interaction.reply('private confirmation')
+      else
+        await interaction.deferReply()
+    } })
+    const { interaction } = mockChatInputCommandInteraction('ping')
+    const result = await bot.dispatchInteraction(interaction)
+    expect(result.status).toBe('ok')
+    expect(interaction[method]).toHaveBeenCalledWith(method === 'reply'
+      ? { content: 'private confirmation', flags: 64 }
+      : { flags: 64 })
+    result.dispose()
+    const simulated = mockChatInputCommandInteraction('ping').interaction
+    const preview = await bot.dispatchInteraction(simulated, { simulation: true })
+    expect(preview.status).toBe('ok')
+    expect(simulated[method]).toHaveBeenCalledWith(expect.objectContaining({ flags: 64 }))
+    preview.dispose()
+  })
+
+  it.each(['defer', 'modal', 'conflicting defer'] as const)('handles a direct %s after the automatic acknowledgement', async (operation) => {
+    vi.useFakeTimers()
+    try {
+      const bot = await startClient()
+      const gate = Promise.withResolvers<void>()
+      bot.addSlashCommand({ ...ping, defer: operation === 'conflicting defer' ? 'public' : undefined, execute: async () => {
+        const interaction = useInteraction()!
+        await gate.promise
+        if (operation === 'modal')
+          await interaction.showModal({ title: 'Late', customId: 'late', components: [] })
+        else
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral })
+      } })
+      const { interaction, messageMock } = mockChatInputCommandInteraction('ping')
+      const modal = vi.fn()
+      const edit = vi.fn(async () => messageMock)
+      Object.assign(interaction, { showModal: modal, editReply: edit, deleteReply: vi.fn(async () => {}) })
+      const run = bot.dispatchInteraction(interaction)
+      await vi.advanceTimersByTimeAsync(1900)
+      gate.resolve()
+      const result = await run
+      expect(interaction.deferReply).toHaveBeenCalledOnce()
+      expect(modal).not.toHaveBeenCalled()
+      if (operation === 'defer')
+        expect(result.status).toBe('ok')
+      else
+        expect(result).toMatchObject({ status: 'error', detail: expect.stringContaining('manual') })
+      if (operation === 'conflicting defer') {
+        expect(interaction.followUp).toHaveBeenCalledWith({ content: 'An error occurred.', flags: 64 })
+        expect(edit).toHaveBeenCalledWith({ content: 'Preparing reply…' })
+      }
+      result.dispose()
+    }
+    finally { vi.useRealTimers() }
+  })
+
   it('routes a late direct private reply through a safe automatic acknowledgement', async () => {
     vi.useFakeTimers()
     try {
