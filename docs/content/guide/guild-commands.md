@@ -72,4 +72,6 @@ When commands are registered:
 3. Commands with bare `@guild` are registered to all configured guilds
 4. Each guild receives only the commands targeting it
 
-If bare `@guild` commands exist but no guild IDs are configured, a warning is logged.
+Startup, hot reload and the dashboard use the same guild configuration. The dashboard reports the result for each registration scope. A bare `@guild` without a target is reported as a configuration error.
+
+With `watch.sync` enabled, edits to names, options and other registered metadata update Discord after the configured debounce. Editing only the handler keeps the existing registration. Removing the last command from a previously managed scope clears its registration. Nuxt Discord records managed scopes per application ID in Nitro’s `data` storage mount. Use persistent storage there to retain this history across deployments.

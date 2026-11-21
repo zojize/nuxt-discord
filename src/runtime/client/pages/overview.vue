@@ -1,20 +1,15 @@
 <script lang="ts" setup>
-import type { ContextMenu, Listener, SlashCommand } from '../../../types'
-import { useWebSocket } from '@vueuse/core'
+import type { ContextMenu, Listener } from '../../../types'
 import contextMenus from '#build/discord/contextMenus'
 import listeners from '#build/discord/listeners'
-import slashCommands from '#build/discord/slashCommands'
-import { computed, ref, useFetch, useRuntimeConfig, watchEffect } from '#imports'
+import { computed, ref } from '#imports'
 import TheHeader from '../components/TheHeader.vue'
 
-const commands = ref<SlashCommand[]>(slashCommands)
+import { useCommandRegistry } from '../useCommandRegistry'
+
+const { commands, diff, status } = useCommandRegistry()
 const menus = ref<ContextMenu[]>(contextMenus)
 const eventListeners = ref<Listener[]>(listeners)
-
-const { data: diff } = useFetch(
-  '/api/discord/slash-command/remote-diff',
-  { method: 'post', immediate: import.meta.dev },
-)
 
 const commandStats = computed(() => {
   if (!diff.value)
@@ -30,32 +25,11 @@ const commandStats = computed(() => {
 
 const allSynced = computed(() => {
   if (!commandStats.value)
-    return true
+    return false
   return commandStats.value.added === 0
     && commandStats.value.changed === 0
     && commandStats.value.removed === 0
     && commandStats.value.conflict === 0
-})
-
-const runtimeConfig = useRuntimeConfig()
-
-let ws: ReturnType<typeof useWebSocket> | undefined
-if (import.meta.dev && runtimeConfig.public.discord?.wsUrl) {
-  if (import.meta.client && 'WebSocket' in window) {
-    ws = useWebSocket(runtimeConfig.public.discord.wsUrl, {
-      autoReconnect: true,
-      onConnected: ws => ws.send(JSON.stringify({ event: 'full-update' })),
-    })
-  }
-}
-
-watchEffect(() => {
-  const message = ws?.data.value
-  if (!message)
-    return
-  const data = JSON.parse(message as string)
-  if (data.event === 'full-update' && data.commands)
-    commands.value = data.commands
 })
 
 const userMenus = computed(() => menus.value.filter(m => m.type === 'user'))
@@ -104,7 +78,10 @@ const uniqueEvents = computed(() => {
               </div>
             </div>
             <div class="mt-3 flex flex-wrap gap-1.5">
-              <template v-if="commandStats && !allSynced">
+              <UBadge v-if="!commandStats" color="neutral" variant="subtle" size="xs">
+                {{ status === 'pending' ? 'Checking Discord…' : 'Sync status unknown' }}
+              </UBadge>
+              <template v-else-if="!allSynced">
                 <UBadge v-if="commandStats.added" color="success" variant="subtle" size="xs">
                   {{ commandStats.added }} new
                 </UBadge>

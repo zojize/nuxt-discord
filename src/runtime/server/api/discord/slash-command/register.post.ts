@@ -3,5 +3,5 @@ import { useDiscordClient } from '../../../utils/useDiscordClient'
 
 export default defineEventHandler(async () => {
   const client = useDiscordClient()
-  return client.registerSlashCommands()
+  return client.syncCommandRegistrations()
 })

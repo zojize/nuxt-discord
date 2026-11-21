@@ -1,11 +1,10 @@
 <script lang="ts" setup>
-import type { WatchEvent } from 'nuxt/schema'
-import type { SlashCommand, SlashCommandOption } from '../../../types'
-import { useWebSocket } from '@vueuse/core'
-import slashCommands from '#build/discord/slashCommands'
-import { computed, ref, useFetch, useRuntimeConfig, useToast, watchEffect } from '#imports'
+import type { SlashCommandOption } from '../../../types'
+import { computed, ref, useToast } from '#imports'
 import CommandTestBar from '../components/CommandTestBar.vue'
 import TheHeader from '../components/TheHeader.vue'
+
+import { useCommandRegistry } from '../useCommandRegistry'
 
 enum ApplicationCommandOptionType {
   Subcommand = 1,
@@ -38,21 +37,14 @@ function getRemoteId(command: any): string | undefined {
     return command.remote.id
 }
 
-const commands = ref(slashCommands)
-
-const {
-  data: diff,
-  refresh: refreshDiff,
-} = useFetch(
-  '/api/discord/slash-command/remote-diff',
-  { method: 'post', immediate: import.meta.dev },
-)
+const { commands, diff, status, refresh: refreshDiff } = useCommandRegistry()
 
 const commandsWithStatus = computed(() => {
   if (!diff.value) {
     return commands.value.map(cmd => ({
       ...cmd,
-      status: 'synced' as const,
+      status: 'unknown' as const,
+      scope: '',
     }))
   }
 
@@ -62,7 +54,8 @@ const commandsWithStatus = computed(() => {
     ...diff.value.removed.map(cmd => ({
       name: cmd.name,
       description: cmd.description,
-      path: 'unknown',
+      path: '',
+      scope: cmd.scope,
       options: (cmd.options as SlashCommandOption[]) ?? [],
       status: 'removed' as const,
       remote: cmd,
@@ -76,35 +69,30 @@ const sortedCommands = computed(() =>
   commandsWithStatus.value.toSorted((a, b) => a.name.localeCompare(b.name)),
 )
 
-const allSynced = computed(() => commandsWithStatus.value.every(cmd => cmd.status === 'synced'))
+const allSynced = computed(() => diff.value && !diff.value.menuChanges && commandsWithStatus.value.every(cmd => cmd.status === 'synced'))
 const stats = computed(() => commandsWithStatus.value.reduce((acc, cmd) => {
   acc[cmd.status]++
   return acc
-}, { added: 0, removed: 0, changed: 0, synced: 0, conflict: 0 }))
-
-const runtimeConfig = useRuntimeConfig()
-
-let ws: ReturnType<typeof useWebSocket> | undefined
-if (import.meta.dev && runtimeConfig.public.discord?.wsUrl) {
-  if (import.meta.client && 'WebSocket' in window) {
-    ws = useWebSocket(runtimeConfig.public.discord.wsUrl, {
-      autoReconnect: true,
-      onConnected: (ws) => {
-        ws.send(JSON.stringify({ event: 'full-update' }))
-      },
-    })
-  }
-}
+}, { added: 0, removed: 0, changed: 0, synced: 0, conflict: 0, unknown: 0 }))
 
 const toast = useToast()
 const pendingSync = ref(false)
 async function syncCommands() {
   try {
     pendingSync.value = true
-    await $fetch('/api/discord/slash-command/register', { method: 'POST' })
+    const results = await $fetch('/api/discord/slash-command/register', { method: 'POST' })
     await refreshDiff()
-    ws?.send(JSON.stringify({ event: 'full-update' }))
-    toast.add({ title: 'Commands synced', color: 'success' })
+    const failed = results.filter(result => result.error)
+    if (failed.length) {
+      toast.add({
+        title: 'Command sync incomplete',
+        description: failed.map(result => `${result.scope}: ${result.error}`).join(' · '),
+        color: 'error',
+      })
+    }
+    else {
+      toast.add({ title: 'Commands synced', color: 'success' })
+    }
   }
   catch (error) {
     toast.add({ title: 'Sync failed', description: String(error), color: 'error' })
@@ -114,20 +102,8 @@ async function syncCommands() {
   }
 }
 
-watchEffect(() => {
-  const message = ws?.data.value
-  if (!message)
-    return
-  const data = JSON.parse(message as string) as
-    | { event: WatchEvent, path: string, command: SlashCommand | null }
-    | { event: 'full-update', commands: SlashCommand[] }
-  if (data.event === 'full-update')
-    commands.value = data.commands
-  else
-    ws?.send(JSON.stringify({ event: 'full-update' }))
-})
-
 const statusMeta = {
+  unknown: { color: 'neutral', classes: '' },
   synced: { color: 'primary', classes: '' },
   added: { color: 'success', classes: 'border-dashed border-emerald-500/40' },
   changed: { color: 'warning', classes: 'border-dashed border-amber-500/40' },
@@ -163,7 +139,7 @@ function constraintBadges(option: SlashCommandOption) {
             Slash Commands
           </h1>
           <p class="text-muted text-sm mt-1">
-            {{ commandsWithStatus.length }} command{{ commandsWithStatus.length === 1 ? '' : 's' }} registered
+            {{ commandsWithStatus.length }} command{{ commandsWithStatus.length === 1 ? '' : 's' }}
           </p>
         </div>
         <UButton
@@ -180,6 +156,9 @@ function constraintBadges(option: SlashCommandOption) {
       </div>
 
       <!-- Status pills -->
+      <p v-if="!diff || diff.menuChanges" role="status" class="mb-3 text-sm text-muted">
+        {{ !diff ? (status === 'pending' ? 'Checking Discord…' : 'Remote registration status is unknown.') : 'Context menu changes are ready to sync.' }}
+      </p>
       <div v-if="!allSynced" class="mb-6 flex flex-wrap gap-2">
         <template v-for="(count, key) in stats" :key="key">
           <UBadge
@@ -199,7 +178,7 @@ function constraintBadges(option: SlashCommandOption) {
       <div v-if="sortedCommands.length > 0" class="space-y-3">
         <UCard
           v-for="command in sortedCommands"
-          :key="command.name"
+          :key="command.scope + command.name"
           variant="outline"
           :class="statusMeta[command.status].classes"
           :ui="command.options.length === 0 ? { body: 'hidden' } : {}"
@@ -209,6 +188,7 @@ function constraintBadges(option: SlashCommandOption) {
               <div class="flex-1 min-w-0">
                 <div class="flex flex-wrap gap-2 items-center">
                   <code class="text-highlighted text-base font-semibold">/{{ command.name }}</code>
+                  <span v-if="command.scope" class="text-xs text-muted">{{ command.scope }}</span>
                   <UBadge
                     :color="statusMeta[command.status].color"
                     variant="subtle"
@@ -268,7 +248,7 @@ function constraintBadges(option: SlashCommandOption) {
 
           <template #footer>
             <div class="text-dimmed text-xs flex items-center justify-between">
-              <a :href="`vscode://file${command.path}`" class="font-mono truncate hover:text-highlighted transition-colors">{{ command.path.split('/discord/commands/').pop() }}</a>
+              <a v-if="command.path" :href="`vscode://file${command.path}`" class="font-mono truncate hover:text-highlighted transition-colors">{{ command.path.split('/discord/commands/').pop() }}</a>
               <span v-if="getRemoteId(command)" class="font-mono shrink-0">{{ getRemoteId(command) }}</span>
             </div>
           </template>

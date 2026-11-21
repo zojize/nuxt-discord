@@ -1,17 +1,18 @@
-import type { APIApplicationCommandOption, AutocompleteInteraction, ChatInputCommandInteraction, CommandInteraction, Interaction, Message, MessageReaction, RESTGetAPIApplicationCommandsResult, RESTPutAPIApplicationCommandsResult, TextBasedChannel, ThreadChannel, Typing, VoiceState } from 'discord.js'
+import type { AutocompleteInteraction, ChatInputCommandInteraction, CommandInteraction, Interaction, Message, MessageReaction, TextBasedChannel, ThreadChannel, Typing, VoiceState } from 'discord.js'
 import type { EffectScope } from 'vue'
-import type { MiddlewareEntry, NuxtDiscordOptions, SlashCommandOption, SlashCommandOptionType, SlashCommandRuntime, SlashCommandSubcommandGroupRuntime, SlashCommandSubcommandRuntime } from '../../../types'
+import type { MiddlewareEntry, NuxtDiscordOptions, SlashCommandOptionType, SlashCommandRuntime, SlashCommandSubcommandRuntime } from '../../../types'
 import type { ContextMenuDefinition } from './defineContextMenu'
 import type { ListenerDefinition } from './defineListener'
 import type { MiddlewareOpts } from './defineMiddleware'
 import process from 'node:process'
-import { ApplicationCommandOptionType, ApplicationCommandType, ContextMenuCommandBuilder, Events, Client as InternalClient, MessageFlags, REST, Routes, SlashCommandBuilder, SlashCommandSubcommandBuilder, SlashCommandSubcommandGroupBuilder } from 'discord.js'
-import { useNitroApp, useRuntimeConfig } from 'nitropack/runtime'
+import { ApplicationCommandOptionType, Events, Client as InternalClient, MessageFlags, REST } from 'discord.js'
+import { useNitroApp, useRuntimeConfig, useStorage } from 'nitropack/runtime'
 import { effectScope, isRef, onScopeDispose } from 'vue'
 import { interactionSender, scheduleAcknowledgement } from '../../acknowledgement'
 import { currentInvocation, runInvocation, setInvocationFields } from '../../discordInvocation'
 import { logger } from '../../logger'
 import { resolveMiddlewareTags } from '../../middleware'
+import { CommandRegistration, planRegistrations } from '../../registration'
 import { MiddlewareError } from './defineMiddleware'
 import { reply } from './reply'
 
@@ -135,20 +136,24 @@ export class DiscordClient {
   #onActivity?: (entry: ActivityLogEntry) => void
   #nitro: { hooks: { callHook: (name: string, ...args: any[]) => Promise<void>, hook: (name: string, fn: (...args: any[]) => any) => void } } = useNitroApp() as any
   #token: string
-  #clientId: string
-  #rest: REST
+  #registration: CommandRegistration
 
   constructor() {
     if (!process.env.DISCORD_TOKEN) {
       throw new Error('DISCORD_TOKEN environment variable is not set')
     }
     this.#token = process.env.DISCORD_TOKEN
-    this.#rest = new REST().setToken(this.#token)
 
     if (!process.env.DISCORD_CLIENT_ID) {
       throw new Error('DISCORD_CLIENT_ID environment variable is not set')
     }
-    this.#clientId = process.env.DISCORD_CLIENT_ID
+    const appId = process.env.DISCORD_CLIENT_ID
+    this.#registration = new CommandRegistration(new REST().setToken(this.#token), appId, {
+      load: () => useStorage('data').getItem<string[]>(`nuxt-discord:${appId}:registration-scopes`),
+      save: scopes => useStorage('data').setItem(`nuxt-discord:${appId}:registration-scopes`, scopes),
+    }, (error) => {
+      void this.#nitro.hooks.callHook('discord:client:error', { type: 'SlashCommandRegistrationError', client: this, error })
+    })
 
     // Nitro serializes an unset runtime config value as an empty string.
     const timeout = useRuntimeConfig().discord?.interactionTimeout
@@ -558,379 +563,31 @@ export class DiscordClient {
     await interaction.respond(await complete(String(focused.value), interaction))
   }
 
-  #getSlashCommandBuilder<Builder extends SlashCommandBuilder | SlashCommandSubcommandGroupBuilder | SlashCommandSubcommandBuilder>(
-    command: SlashCommandRuntime | SlashCommandSubcommandGroupRuntime | SlashCommandSubcommandRuntime,
-    builder?: Builder,
-  ): Builder {
-    builder ??= new SlashCommandBuilder() as Builder
-    builder
-      .setName(command.name)
-      .setDescription(command.description)
-
-    if (command.nameLocalizations)
-      builder.setNameLocalizations(command.nameLocalizations)
-    if (command.descriptionLocalizations)
-      builder.setDescriptionLocalizations(command.descriptionLocalizations)
-
-    // Command-level properties only apply to the top-level builder
-    if (builder instanceof SlashCommandBuilder) {
-      if (command.nsfw != null)
-        builder.setNSFW(command.nsfw)
-      if (command.contexts != null)
-        builder.setContexts(...command.contexts)
-      if (command.defaultMemberPermissions !== undefined)
-        builder.setDefaultMemberPermissions(command.defaultMemberPermissions)
-    }
-
-    if (command.subcommands != null && command.subcommands.length > 0) {
-      for (const subcommand of command.subcommands) {
-        if (builder instanceof SlashCommandBuilder) {
-          if ('subcommands' in subcommand && (subcommand.subcommands?.length ?? 0) > 0) {
-            builder.addSubcommandGroup(subcommandGroupBuilder => this.#getSlashCommandBuilder(subcommand, subcommandGroupBuilder))
-          }
-          else {
-            builder.addSubcommand(subcommandBuilder => this.#getSlashCommandBuilder(subcommand, subcommandBuilder))
-          }
-        }
-        else if (builder instanceof SlashCommandSubcommandGroupBuilder) {
-          builder.addSubcommand(subcommandBuilder => this.#getSlashCommandBuilder(subcommand, subcommandBuilder))
-        }
-        else {
-          // this should never happen, but just in case
-          throw new TypeError(`Unexpected builder type: ${builder.constructor.name}`)
-        }
-      }
-    }
-    else if (builder instanceof SlashCommandBuilder || builder instanceof SlashCommandSubcommandBuilder) {
-      for (const option of command.options) {
-        switch (option.type) {
-          case ApplicationCommandOptionType.String:
-            builder.addStringOption((opt) => {
-              setBasicOptionFields(opt, option)
-              if (option.minLength)
-                opt.setMinLength(option.minLength)
-              if (option.maxLength)
-                opt.setMaxLength(option.maxLength)
-              if (option.choices)
-                opt.addChoices(...option.choices)
-              if (option.hasAutocomplete)
-                opt.setAutocomplete(true)
-              return opt
-            })
-            break
-          case ApplicationCommandOptionType.Integer:
-            builder.addIntegerOption((opt) => {
-              setBasicOptionFields(opt, option)
-              if (option.min)
-                opt.setMinValue(option.min)
-              if (option.max)
-                opt.setMaxValue(option.max)
-              if (option.choices)
-                opt.addChoices(...option.choices)
-              if (option.hasAutocomplete)
-                opt.setAutocomplete(true)
-              return opt
-            })
-            break
-          case ApplicationCommandOptionType.Number:
-            builder.addNumberOption((opt) => {
-              setBasicOptionFields(opt, option)
-              if (option.min)
-                opt.setMinValue(option.min)
-              if (option.max)
-                opt.setMaxValue(option.max)
-              if (option.choices)
-                opt.addChoices(...option.choices)
-              if (option.hasAutocomplete)
-                opt.setAutocomplete(true)
-              return opt
-            })
-            break
-          case ApplicationCommandOptionType.Boolean:
-            builder.addBooleanOption(opt => setBasicOptionFields(opt, option))
-            break
-          case ApplicationCommandOptionType.User:
-            builder.addUserOption(opt => setBasicOptionFields(opt, option))
-            break
-          case ApplicationCommandOptionType.Role:
-            builder.addRoleOption(opt => setBasicOptionFields(opt, option))
-            break
-          case ApplicationCommandOptionType.Mentionable:
-            builder.addMentionableOption(opt => setBasicOptionFields(opt, option))
-            break
-          case ApplicationCommandOptionType.Attachment:
-            builder.addAttachmentOption(opt => setBasicOptionFields(opt, option))
-            break
-        }
-      }
-    }
-
-    return builder
+  public getRemoteSlashCommands() {
+    return this.#registration.read('global')
   }
 
-  #cachedRemoteSlashCommands: RESTGetAPIApplicationCommandsResult | null = null
-  public async getRemoteSlashCommands() {
-    this.#cachedRemoteSlashCommands = await this.#rest.get(Routes.applicationCommands(this.#clientId)) as RESTGetAPIApplicationCommandsResult
-    return this.#cachedRemoteSlashCommands
+  public diffRemoteSlashCommands(commands = this.#slashCommands, _forceRefresh = false) {
+    return this.#registration.diff(this.#registrationPlan(commands))
   }
 
-  public async diffRemoteSlashCommands(localCommands = this.#slashCommands, forceRefresh = false) {
-    if (!this.#cachedRemoteSlashCommands || forceRefresh) {
-      await this.getRemoteSlashCommands()
-    }
-
-    // Filter out context menu commands — they're managed separately
-    const remoteCommands = this.#cachedRemoteSlashCommands!.filter(
-      cmd => cmd.type === undefined || cmd.type === ApplicationCommandType.ChatInput,
-    )
-    const flattenedRemoteCommands = remoteCommands.flatMap((cmd) => {
-      const subcommands = cmd.options?.flatMap((option) => {
-        const name = `${cmd.name} ${option.name}`
-        if (option.type === ApplicationCommandOptionType.Subcommand) {
-          return [{ ...option, name, subcommands: [] }]
-        }
-        else if (option.type === ApplicationCommandOptionType.SubcommandGroup) {
-          const subcommands = option.options?.flatMap((suboption) => {
-            return suboption.type === ApplicationCommandOptionType.Subcommand
-              ? [{ ...suboption, name: `${name} ${suboption.name}`, subcommands: [] }]
-              : []
-          }) ?? []
-          return [
-            { ...option, name, subcommands },
-            ...subcommands,
-          ]
-        }
-        return []
-      }) ?? []
-
-      return [
-        { ...cmd, subcommands },
-        ...subcommands,
-      ]
-    })
-
-    type RemoteSlashCommand = typeof flattenedRemoteCommands[number]
-
-    type LocalSlashCommand = SlashCommandRuntime | SlashCommandSubcommandRuntime | SlashCommandSubcommandGroupRuntime
-    const flattenedLocalCommands = localCommands
-      .flatMap<LocalSlashCommand>(
-        cmd => [
-          cmd,
-          ...cmd.subcommands?.flatMap((subcmd) => {
-            const name = `${cmd.name} ${subcmd.name}`
-            return [
-              { ...subcmd, name },
-              ...(subcmd.subcommands?.map(subsubcmd => ({ ...subsubcmd, name: `${name} ${subsubcmd.name}` })) ?? []),
-            ]
-          }) ?? [],
-        ],
-      )
-
-    const nameToCommands = Object.groupBy(flattenedLocalCommands, command => command.name)
-
-    return flattenedLocalCommands.reduce((acc, command) => {
-      // if there are multiple commands with the same name
-      if (nameToCommands[command.name]!.length > 1) {
-        acc.conflict.push(command)
-        return acc
-      }
-
-      const remoteCommand = flattenedRemoteCommands.find(cmd => cmd.name === command.name)
-      // if the remote command does not exist
-      if (!remoteCommand) {
-        acc.added.push(command)
-      }
-      else if (
-        // if some properties are different
-        !propsEqual(command, remoteCommand, ['description'/* TODO: more */])
-        // if either command is not a subcommand
-        || (!((command.subcommands?.length ?? 0) > 0 && remoteCommand.subcommands.length > 0)
-          // and if the number of options is different
-          && ((command.options?.length ?? 0) !== (remoteCommand.options?.length ?? 0)
-            // or if the option details are different
-            || ((remoteCommand.options ?? []).some((opt, i) => !optionEqual(command.options![i]!, opt)))))
-      ) {
-        acc.changed.push({ local: command, remote: remoteCommand })
-      }
-      else {
-        if ('id' in remoteCommand && !command.id) {
-          // if the remote command has an ID but the local command does not, it means it was registered before
-          // and we need to update the local command with the remote ID
-          command.id = remoteCommand.id
-        }
-
-        acc.synced.push({ local: command, remote: remoteCommand })
-      }
-
-      return acc
-    }, {
-      added: [] as LocalSlashCommand[],
-      removed: flattenedRemoteCommands.filter(({ name }) => !(name in nameToCommands)),
-      changed: [] as { local: LocalSlashCommand, remote: RemoteSlashCommand }[],
-      synced: [] as { local: LocalSlashCommand, remote: RemoteSlashCommand }[],
-      conflict: [] as LocalSlashCommand[],
-    })
+  #registrationPlan(commands = this.#slashCommands, guilds?: string[]) {
+    const configured = useRuntimeConfig().discord?.guilds
+    const targets = guilds ?? (configured?.length ? configured : (process.env.DISCORD_GUILD_ID ?? '').split(',').map(id => id.trim()).filter(Boolean))
+    return planRegistrations(commands, this.#contextMenus, targets)
   }
 
-  public async registerSlashCommands(configGuildIds: string[] = []) {
-    const globalCommands = this.#slashCommands.filter(cmd => !cmd.guilds)
-    const guildCommands = this.#slashCommands.filter(cmd => cmd.guilds)
-
-    const results: RESTPutAPIApplicationCommandsResult = []
-
-    // Build context menu JSON for registration
-    const contextMenuJsons = this.#contextMenus.map((menu) => {
-      const builder = new ContextMenuCommandBuilder()
-        .setName(menu.name)
-        .setType(menu.type === 'user' ? ApplicationCommandType.User : ApplicationCommandType.Message)
-      return builder.toJSON()
-    })
-
-    // Register global commands + context menus
-    if (globalCommands.length > 0 || contextMenuJsons.length > 0) {
-      const globalResult = await this.#registerCommandsToRoute(
-        Routes.applicationCommands(this.#clientId),
-        globalCommands,
-        contextMenuJsons,
-      )
-      results.push(...globalResult)
-    }
-
-    // Collect all target guild IDs: per-command specific IDs + config-level IDs for `guilds: true`
-    const guildToCommands = new Map<string, SlashCommandRuntime[]>()
-
-    for (const cmd of guildCommands) {
-      const targetIds = cmd.guilds === true ? configGuildIds : cmd.guilds!
-      for (const id of targetIds) {
-        const list = guildToCommands.get(id)
-        if (list)
-          list.push(cmd)
-        else
-          guildToCommands.set(id, [cmd])
-      }
-    }
-
-    if (guildCommands.length > 0 && guildToCommands.size === 0) {
-      logger.warn(`${guildCommands.length} guild command(s) found but no guild IDs configured. Use @guild <id> or set DISCORD_GUILD_ID env var.`)
-    }
-
-    for (const [guildId, cmds] of guildToCommands) {
-      const guildResult = await this.#registerCommandsToRoute(
-        Routes.applicationGuildCommands(this.#clientId, guildId),
-        cmds,
-      )
-      results.push(...guildResult)
-    }
-
-    // nullify the cache to force a refresh on next diff
-    this.#cachedRemoteSlashCommands = null
-
-    return results
+  public async syncCommandRegistrations(options: { changedOnly?: boolean, guilds?: string[] } = {}) {
+    return this.#registration.sync(this.#registrationPlan(this.#slashCommands, options.guilds), options.changedOnly)
   }
 
-  async #registerCommandsToRoute(route: `/${string}`, commands: SlashCommandRuntime[], extraPayloads: unknown[] = []) {
-    try {
-      const body = [
-        ...commands.map(command => this.#getSlashCommandBuilder(command).toJSON()),
-        ...extraPayloads,
-      ]
-      const result = await this.#rest.put(route, { body }) as RESTPutAPIApplicationCommandsResult
-
-      result.forEach((command, i) => {
-        const localCommand = commands[i]
-        if (localCommand) {
-          localCommand.id = command.id
-        }
-      })
-
-      return result
-    }
-    catch (error) {
-      this.#nitro.hooks.callHook('discord:client:error', {
-        type: 'SlashCommandRegistrationError',
-        client: this,
-        error,
-      })
-      return []
-    }
+  public async registerSlashCommands(guilds?: string[]) {
+    const results = await this.syncCommandRegistrations({ guilds })
+    const errors = results.filter(result => result.error)
+    if (errors.length)
+      throw new Error(errors.map(result => `${result.scope}: ${result.error}`).join(', '))
+    return results.flatMap(result => result.commands)
   }
-}
-
-function setBasicOptionFields<T extends {
-  setName: (name: string) => T
-  setRequired: (required: boolean) => T
-  setDescription: (description: string) => T
-  setNameLocalizations: (map: import('discord.js').LocalizationMap | null) => T
-  setDescriptionLocalizations: (map: import('discord.js').LocalizationMap | null) => T
-}>(
-  opt: T,
-  option: { name: string, required: boolean, description: string, nameLocalizations?: import('discord.js').LocalizationMap, descriptionLocalizations?: import('discord.js').LocalizationMap },
-): T {
-  opt.setName(option.name).setRequired(option.required)
-  opt.setDescription(option.description || option.name)
-  if (option.nameLocalizations)
-    opt.setNameLocalizations(option.nameLocalizations)
-  if (option.descriptionLocalizations)
-    opt.setDescriptionLocalizations(option.descriptionLocalizations)
-  return opt
-}
-
-function propsEqual<const T, const U>(a: T, b: U, props: (keyof T & keyof U)[]): boolean
-function propsEqual(a: Record<PropertyKey, unknown>, b: Record<PropertyKey, unknown>, props: PropertyKey[]): boolean {
-  for (const prop of props) {
-    if (a[prop] !== b[prop]) {
-      return false
-    }
-  }
-  return true
-}
-
-function optionEqual(a: SlashCommandOption, b: APIApplicationCommandOption): boolean {
-  if (a.name !== b.name || a.description !== b.description || a.required !== !!b.required || a.type !== b.type) {
-    return false
-  }
-
-  if (!!('choices' in a && a.choices) !== !!('choices' in b && b.choices)) {
-    return false
-  }
-  else if ('choices' in a && a.choices && 'choices' in b && b.choices) {
-    // if both has choices, compare them
-    if (a.choices.length !== b.choices.length) {
-      return false
-    }
-
-    for (let i = 0; i < a.choices.length; i++) {
-      if (a.choices[i]!.name !== b.choices[i]!.name || a.choices[i]!.value !== b.choices[i]!.value) {
-        return false
-      }
-    }
-  }
-
-  if (a.type === ApplicationCommandOptionType.Integer || a.type === ApplicationCommandOptionType.Number) {
-    if ('min' in a !== 'min_value' in b) {
-      return false
-    }
-    else if ('min' in a && 'min_value' in b && a.min !== b.min_value) {
-      return false
-    }
-  }
-
-  if (a.type === ApplicationCommandOptionType.String) {
-    if ('minLength' in a !== 'min_length' in b) {
-      return false
-    }
-    else if ('minLength' in a && 'min_length' in b && a.minLength !== b.min_length) {
-      return false
-    }
-  }
-
-  if (a.hasAutocomplete !== !!('autocomplete' in b && b.autocomplete)) {
-    return false
-  }
-
-  // TODO: more
-
-  return true
 }
 
 // https://stackoverflow.com/a/53955664/14835397
