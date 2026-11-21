@@ -42,6 +42,8 @@ try {
   writeFileSync(join(app, 'app.vue'), '<template><main>Consumer app</main></template>')
   run('bun', ['install'], app)
   run('bun', ['run', 'nuxt', 'build'], app)
+  cpSync(join(root, 'test/fixtures/packed/consumer-types.ts'), join(app, 'consumer-types.ts'))
+  run(process.execPath, [join(root, 'scripts/check-package-types.mjs'), app], app)
   run(process.execPath, ['check.mjs'], app)
   cpSync(join(root, 'test/fixtures/hmr'), app, { recursive: true })
   run(process.execPath, [join(root, 'scripts/test-command-hmr.mjs'), app], app)

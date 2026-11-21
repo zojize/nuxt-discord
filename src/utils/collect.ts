@@ -146,7 +146,7 @@ function applyLocalizations(ctx: CommandSourceContext) {
 }
 
 export function processCommandFile(ctx: CommandSourceContext, file: string, sourceFile = ts.createSourceFile(file, readFileSync(file).toString(), ts.ScriptTarget.Latest, true)): SlashCommand | undefined {
-  const commandDefinition = extractCommandDefinition(sourceFile)
+  const commandDefinition = findCommandExport(sourceFile)?.handler
 
   if (!commandDefinition) {
     ctx.logger.warn(`No command definition found for ${file}`)
@@ -436,27 +436,23 @@ ${command.parents.map(p => `  - ${p}`).join('\n')}`)
   ctx.slashCommands = ctx.slashCommands.filter(c => c.parents.length === 0)
 }
 
-export function extractCommandDefinition(sourceFile: ts.SourceFile) {
-  let commandDefinition: ts.ArrowFunction | ts.FunctionDeclaration | ts.FunctionExpression | undefined
+export function findCommandExport(sourceFile: ts.SourceFile) {
+  for (const statement of sourceFile.statements) {
+    if (ts.isFunctionDeclaration(statement) && statement.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.DefaultKeyword))
+      return { statement, handler: statement }
 
-  ts.forEachChild(sourceFile, (node) => {
-    if (ts.isExportAssignment(node)) {
-      if (ts.isArrowFunction(node.expression)) {
-        commandDefinition = node.expression
-      }
-      else if (ts.isCallExpression(node.expression)
-        && ts.isIdentifier(node.expression.expression)
-        && node.expression.expression.escapedText === 'defineSlashCommand'
-        && (ts.isArrowFunction(node.expression.arguments[0]!) || ts.isFunctionExpression(node.expression.arguments[0]!))) {
-        commandDefinition = node.expression.arguments[0]!
-      }
-    }
-    else if (ts.isFunctionDeclaration(node) && !!(ts.getCombinedModifierFlags(node) & ts.ModifierFlags.ExportDefault)) {
-      commandDefinition = node
-    }
-  })
+    if (!ts.isExportAssignment(statement) || statement.isExportEquals)
+      continue
+    const expression = statement.expression
+    if (ts.isArrowFunction(expression) || ts.isFunctionExpression(expression))
+      return { statement, handler: expression }
 
-  return commandDefinition
+    if (ts.isCallExpression(expression) && ts.isIdentifier(expression.expression) && expression.expression.text === 'defineSlashCommand') {
+      const handler = expression.arguments[0]
+      if (handler && (ts.isArrowFunction(handler) || ts.isFunctionExpression(handler)))
+        return { statement, handler }
+    }
+  }
 }
 
 type MacroCall = ts.CallExpression & {
