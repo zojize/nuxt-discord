@@ -2,6 +2,9 @@ export interface DescribeCommandOptions {
   /** The name of the command. */
   name?: string
 
+  /** Visibility of a slow command's automatic acknowledgement, or manual to opt out. */
+  defer?: import('../../acknowledgement').DeferPolicy
+
   /** A brief description of the command. */
   description?: string
 }

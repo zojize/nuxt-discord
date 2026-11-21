@@ -125,7 +125,7 @@ declare module 'nitropack/types' {
     'discord:client:ready': (client: DiscordClient) => void
     'discord:client:error': (error: DiscordClientError) => void
     'discord:interaction:before': (ctx: { interaction: Interaction, type: 'command' | 'context-menu' }) => void
-    'discord:interaction:after': (ctx: { interaction: Interaction, type: 'command' | 'context-menu' }) => void
+    'discord:interaction:after': (ctx: { interaction: Interaction, type: 'command' | 'context-menu', status: 'ok' | 'denied' | 'error', detail?: string }) => void
     'discord:interaction:denied': (ctx: { interaction: Interaction, type: 'command' | 'context-menu', reason: string, middleware: string }) => void
   }
 }

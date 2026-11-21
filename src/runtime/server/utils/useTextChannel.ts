@@ -2,7 +2,8 @@ import type { MessageCreateOptions, TextBasedChannel } from 'discord.js'
 import type { MaybeRef, Ref } from 'vue'
 import type { File, SentMessage } from './messageSender'
 import { Events } from 'discord.js'
-import { getCurrentScope, onScopeDispose, ref, shallowRef, toValue } from 'vue'
+import { ref, shallowRef, toValue } from 'vue'
+import { onInvocationDispose } from '../../discordInvocation'
 import { getCurrentChannel } from './client'
 import { sendReactiveMessage } from './messageSender'
 
@@ -140,15 +141,13 @@ export function useTextChannel(idOrInstance?: string | TextBasedChannel): UseTex
     client.on(Events.GuildMemberUpdate, onMemberChange)
     client.on(Events.MessageCreate, onMessageCreate)
 
-    if (getCurrentScope()) {
-      onScopeDispose(() => {
-        client.off(Events.ChannelUpdate, onUpdate)
-        client.off(Events.GuildMemberAdd, onMemberChange)
-        client.off(Events.GuildMemberRemove, onMemberChange)
-        client.off(Events.GuildMemberUpdate, onMemberChange)
-        client.off(Events.MessageCreate, onMessageCreate)
-      })
-    }
+    onInvocationDispose(() => {
+      client.off(Events.ChannelUpdate, onUpdate)
+      client.off(Events.GuildMemberAdd, onMemberChange)
+      client.off(Events.GuildMemberRemove, onMemberChange)
+      client.off(Events.GuildMemberUpdate, onMemberChange)
+      client.off(Events.MessageCreate, onMessageCreate)
+    })
   }
 
   function send(content: MaybeRef<string>, options?: { files?: MaybeRef<File>[] }): SendHandle {

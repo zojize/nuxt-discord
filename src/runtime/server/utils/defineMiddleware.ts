@@ -1,6 +1,8 @@
 import type { Interaction } from 'discord.js'
 import type { SlashCommandRuntime, SlashCommandSubcommandRuntime } from '../../../types'
 
+import { currentInvocation, setInvocationFields } from '../../discordInvocation'
+
 export interface MiddlewareOpts {
   interaction: Interaction
   command?: SlashCommandRuntime | SlashCommandSubcommandRuntime
@@ -29,13 +31,12 @@ export function defineMiddleware(name: string, fn: MiddlewareFn): MiddlewareDefi
   return { name, fn }
 }
 
-let currentMiddlewareContext: Record<string, unknown> | null = null
-
 export function setMiddlewareContext(ctx: Record<string, unknown> | null) {
-  currentMiddlewareContext = ctx
+  setInvocationFields({ middleware: ctx })
 }
 
 export function useMiddlewareContext<T extends Record<string, unknown> = Record<string, unknown>>(): T {
+  const currentMiddlewareContext = currentInvocation()?.middleware
   if (!currentMiddlewareContext)
     throw new Error('useMiddlewareContext() called outside of a command execution context')
   return currentMiddlewareContext as T
@@ -49,5 +50,5 @@ export function useMiddlewareContext<T extends Record<string, unknown> = Record<
  * Usage: `useMiddleware(myMiddleware)` or `useMiddleware(cooldown, { seconds: 5 })`
  */
 export function useMiddleware<T extends MiddlewareDefinition>(_middleware: T, _options?: Record<string, unknown>): Record<string, unknown> {
-  return currentMiddlewareContext ?? {}
+  return currentInvocation()?.middleware ?? {}
 }

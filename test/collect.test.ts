@@ -473,13 +473,14 @@ export default (color: 'red' | 'green' | 'blue') => {
  * @description Fallback
  */
 export default () => {
-  describeCommand({ name: 'overridden', description: 'Overridden description' })
+  describeCommand({ name: 'overridden', description: 'Overridden description', defer: 'private' })
   return 'ok'
 }
 `)
       const command = processCommandFile(ctx, file)
       expect(command).toBeDefined()
       expect(command!.name).toBe('overridden')
+      expect(command!.defer).toBe('private')
       expect(command!.description).toBe('Overridden description')
     })
 

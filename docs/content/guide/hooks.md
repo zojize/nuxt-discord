@@ -61,6 +61,10 @@ nitro.hooks.hook('discord:client:error', (error) => {
 })
 ```
 
+### Interaction lifecycle
+
+`discord:interaction:before` runs before middleware on slash commands and context menus. `discord:interaction:denied` includes the reason when middleware stops execution. `discord:interaction:after` receives `status` (`ok`, `denied`, or `error`) and optional `detail`. The activity log reports the same outcome. Dashboard simulations run command middleware in isolation and omit these live lifecycle notifications.
+
 ## Server-Side Client Access
 
 Access the Discord client from any server route or plugin:

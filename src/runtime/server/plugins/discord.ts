@@ -63,6 +63,8 @@ export default defineNitroPlugin(async (nitro) => {
 
   client.addSlashCommands(slashCommands as SlashCommandRuntime[])
   client.addContextMenus(contextMenus)
+  client.registerListeners(listeners)
+  nitro.hooks.hook('close', () => client.stop())
 
   try {
     if (runtimeConfig.discord.sync) {
@@ -74,10 +76,8 @@ export default defineNitroPlugin(async (nitro) => {
       await client.registerSlashCommands(guildIds)
     }
 
-    if (runtimeConfig.discord.autoStart) {
+    if (runtimeConfig.discord.autoStart)
       await client.start(runtimeConfig.discord.client)
-      client.registerListeners(listeners)
-    }
   }
   catch (error) {
     logger.error('Failed to start Discord client:', error)

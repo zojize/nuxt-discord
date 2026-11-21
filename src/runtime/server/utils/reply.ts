@@ -17,6 +17,7 @@ import type { MaybeRef } from 'vue'
 import type { SlashCommandCustomReturnHandler } from '../../../types'
 import { ActionRowBuilder, MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js'
 import { computed, isRef, toValue } from 'vue'
+import { interactionSender } from '../../acknowledgement'
 import { logger } from '../../logger'
 import { sendReactiveMessage } from './messageSender'
 
@@ -97,29 +98,13 @@ function createReplyFunction(
   const reply = ((...args) => {
     const { buttons, ...restOptions } = defaultOptions
 
-    const interactionConfig = (interaction: CommandInteraction) => {
-      const method = interaction.replied ? 'followUp' : interaction.deferred ? 'editReply' : 'reply'
-      return {
-        send: (opts: MessageCreateOptions) => interaction[method](opts as InteractionReplyOptions & InteractionEditReplyOptions) as Promise<Msg>,
-        edit: (msg: Msg, options: MessageCreateOptions) => {
-          const opts = options as InteractionEditReplyOptions
-          if (method === 'editReply' || 'resource' in msg)
-            return interaction.editReply(opts)
-          if (method === 'followUp' && 'id' in msg && interaction.webhook)
-            return interaction.webhook.editMessage(msg.id, opts)
-          // InteractionResponse.edit uses the original interaction webhook.
-          return msg.edit(opts)
-        },
-      }
-    }
-
     if (typeof args[0] === 'string' || typeof args[0] === 'undefined' || isRef(args[0])) {
       const [text, options] = args
       let message: Promise<Msg> | undefined
 
       const handler = (interaction: CommandInteraction) => {
         message = sendReactiveMessage(
-          interactionConfig(interaction),
+          interactionSender(interaction),
           text,
           {
             buttons: buttons ?? [],
@@ -146,7 +131,7 @@ function createReplyFunction(
     else {
       const interaction = args[0] as CommandInteraction
       const messagePromise = sendReactiveMessage(
-        interactionConfig(interaction),
+        interactionSender(interaction),
         undefined,
         {
           buttons: buttons ?? [],

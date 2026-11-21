@@ -1,6 +1,6 @@
 import type { APIApplicationCommandOption, AutocompleteInteraction, ChatInputCommandInteraction, CommandInteraction, Interaction, Message, MessageReaction, RESTGetAPIApplicationCommandsResult, RESTPutAPIApplicationCommandsResult, TextBasedChannel, ThreadChannel, Typing, VoiceState } from 'discord.js'
 import type { EffectScope } from 'vue'
-import type { MiddlewareEntry, NuxtDiscordOptions, SlashCommandOption, SlashCommandOptionType, SlashCommandReturnType, SlashCommandRuntime, SlashCommandSubcommandGroupRuntime, SlashCommandSubcommandRuntime } from '../../../types'
+import type { MiddlewareEntry, NuxtDiscordOptions, SlashCommandOption, SlashCommandOptionType, SlashCommandRuntime, SlashCommandSubcommandGroupRuntime, SlashCommandSubcommandRuntime } from '../../../types'
 import type { ContextMenuDefinition } from './defineContextMenu'
 import type { ListenerDefinition } from './defineListener'
 import type { MiddlewareOpts } from './defineMiddleware'
@@ -8,9 +8,11 @@ import process from 'node:process'
 import { ApplicationCommandOptionType, ApplicationCommandType, ContextMenuCommandBuilder, Events, Client as InternalClient, MessageFlags, REST, Routes, SlashCommandBuilder, SlashCommandSubcommandBuilder, SlashCommandSubcommandGroupBuilder } from 'discord.js'
 import { useNitroApp, useRuntimeConfig } from 'nitropack/runtime'
 import { effectScope, isRef, onScopeDispose } from 'vue'
+import { interactionSender, scheduleAcknowledgement } from '../../acknowledgement'
+import { currentInvocation, runInvocation, setInvocationFields } from '../../discordInvocation'
 import { logger } from '../../logger'
 import { resolveMiddlewareTags } from '../../middleware'
-import { MiddlewareError, setMiddlewareContext } from './defineMiddleware'
+import { MiddlewareError } from './defineMiddleware'
 import { reply } from './reply'
 
 export interface DiscordClientErrorBase {
@@ -69,23 +71,33 @@ export interface ActivityLogEntry {
   guildName?: string
   channelId?: string
   duration?: number
-  status: 'ok' | 'error'
+  status: 'ok' | 'denied' | 'error'
   detail?: string
 }
 
-let currentInteraction: ChatInputCommandInteraction | null = null
+export interface DispatchResult {
+  status: ActivityLogEntry['status']
+  detail?: string
+  dispose: () => void
+}
+
 export function useInteraction(): ChatInputCommandInteraction | null {
-  return currentInteraction
+  return currentInvocation()?.interaction ?? null
 }
 
-let currentChannel: import('discord.js').TextBasedChannel | null = null
-
-export function setCurrentChannel(ch: import('discord.js').TextBasedChannel | null) {
-  currentChannel = ch
+export function setCurrentChannel(channel: TextBasedChannel | null) {
+  setInvocationFields({ channel })
 }
 
-export function getCurrentChannel(): import('discord.js').TextBasedChannel | null {
-  return currentChannel
+export function getCurrentChannel(): TextBasedChannel | null {
+  return currentInvocation()?.channel ?? null
+}
+
+class UnknownCommandError extends Error {}
+class MissingOptionError extends Error {
+  constructor(readonly option: string) {
+    super(`Missing required option "${option}"`)
+  }
 }
 
 /**
@@ -150,11 +162,26 @@ export class DiscordClient {
   }
 
   #clientOptions?: NuxtDiscordOptions['client']
-  public async start(options: NuxtDiscordOptions['client']): Promise<undefined> {
+  #listeners: ListenerDefinition[] = []
+  #starting?: Promise<undefined>
+
+  public start(options: NuxtDiscordOptions['client']): Promise<undefined> {
+    if (this.#starting)
+      return this.#starting
+    if (this.isReady())
+      return Promise.resolve(undefined)
+    this.#starting = this.#connect(options).catch(async (error) => {
+      await this.stop()
+      throw error
+    }).finally(() => { this.#starting = undefined })
+    return this.#starting
+  }
+
+  async #connect(options: NuxtDiscordOptions['client']): Promise<undefined> {
     this.#clientOptions = { ...options }
     await this.#nitro.hooks.callHook('discord:client:config', this.#clientOptions)
     this.#client = new InternalClient(this.#clientOptions)
-    this.#client.on(Events.InteractionCreate, interaction => this.#handleInteraction(interaction))
+    this.#client.on(Events.InteractionCreate, interaction => this.dispatchInteraction(interaction))
 
     this.startScope()
 
@@ -166,36 +193,34 @@ export class DiscordClient {
       resolve(undefined)
     })
 
+    this.#attachListeners(this.#listeners)
     await this.#client.login(this.#token)
 
     return promise
   }
 
   public registerListeners(listeners: ListenerDefinition[]) {
-    if (!this.#client) {
-      logger.warn('Cannot register listeners before client is started')
+    this.#listeners.push(...listeners)
+    if (this.#client)
+      this.#attachListeners(listeners)
+  }
+
+  #attachListeners(listeners: ListenerDefinition[]) {
+    if (!this.#client)
       return
-    }
     for (const listener of listeners) {
       const accessor = LISTENER_CHANNEL_ACCESSORS[listener.event]
       const handler = async (...args: unknown[]) => {
-        const previousChannel = currentChannel
-        if (accessor) {
-          try {
-            currentChannel = accessor(...args) ?? null
-          }
-          catch {
-            currentChannel = null
-          }
-        }
+        const scope = this.#createScope()
         try {
-          await (listener.execute as (...a: unknown[]) => void | Promise<void>)(...args)
+          const channel = accessor?.(...args) ?? null
+          await runInvocation(scope, { channel }, () => (listener.execute as (...a: unknown[]) => void | Promise<void>)(...args))
         }
         catch (error) {
           logger.error(`Listener error [${listener.event}]:`, error)
         }
         finally {
-          currentChannel = previousChannel
+          scope.stop()
         }
       }
       if (listener.once) {
@@ -218,171 +243,134 @@ export class DiscordClient {
     return this.#contextMenus
   }
 
-  async #handleInteraction(interaction: Interaction) {
-    if (interaction.isUserContextMenuCommand() || interaction.isMessageContextMenuCommand()) {
-      await this.#handleContextMenu(interaction)
-      return
-    }
-    if (!interaction.isAutocomplete() && !interaction.isChatInputCommand()) {
-      return
-    }
-
-    const activityStart = Date.now()
-
-    const commandName = interaction.commandName
-    let command: SlashCommandRuntime | SlashCommandSubcommandRuntime | undefined
-      = this.#slashCommands.find(cmd => cmd.name === commandName)
-    if (!command) {
-      logger.warn(`Unknown slash command: ${commandName}`)
-      this.#nitro.hooks.callHook('discord:client:error', {
-        type: 'UnknownSlashCommandError',
-        client: this,
-        interaction,
-      })
-      return
+  public async dispatchInteraction(interaction: Interaction, options: { simulation?: boolean } = {}): Promise<DispatchResult> {
+    const scope = this.#createScope()
+    const dispose = () => scope.stop()
+    const menu = interaction.isUserContextMenuCommand() || interaction.isMessageContextMenuCommand()
+    if (!menu && !interaction.isChatInputCommand() && !interaction.isAutocomplete()) {
+      dispose()
+      return { status: 'error', detail: 'Unsupported interaction type', dispose }
     }
 
-    if (command.subcommands != null && (command.subcommands?.length ?? 0) > 0) {
-      const group = interaction.options.getSubcommandGroup(false)
-      const subcommand = interaction.options.getSubcommand(false)
-      if (group && subcommand) {
-        command = command.subcommands
-          .find(subcmd => subcmd.name === group)
-          ?.subcommands
-          ?.find(subcmd => subcmd.name === subcommand)
-      }
-      else if (subcommand) {
-        command = command.subcommands.find(subcmd => subcmd.name === subcommand) as SlashCommandSubcommandRuntime | undefined
-      }
-      else {
-        logger.warn(`Unknown slash command subcommand: ${commandName} ${group ?? ''} ${subcommand}`)
-      }
-    }
-
-    if (!command) {
-      logger.warn(`Unknown slash command: ${commandName}`)
-      this.#nitro.hooks.callHook('discord:client:error', {
-        type: 'UnknownSlashCommandError',
-        client: this,
-        interaction,
-      })
-      return
-    }
-
-    if (!command.execute && command.load) {
-      try {
-        const dynamicCommand = await command.load()
-        Object.assign(command, dynamicCommand)
-      }
-      catch (error) {
-        this.#nitro.hooks.callHook('discord:client:error', {
-          type: 'SlashCommandExecutionError',
-          client: this,
-          interaction,
-          command,
-          error,
-        })
-        return
-      }
-    }
-
-    if (!command.execute && !command.load) {
-      this.#nitro.hooks.callHook('discord:client:error', {
-        type: 'SlashCommandExecutionError',
-        client: this,
-        interaction,
-        command,
-        error: new Error(`Slash command "${commandName}" cannot be executed or loaded`),
-      })
-      return
-    }
-
-    if (interaction.isAutocomplete()) {
-      await this.#handleAutocomplete(interaction, command)
-    }
-    else if (interaction.isChatInputCommand()) {
-      await this.#handleSlashCommand(interaction, command)
-      this.#logActivity({
-        type: 'command',
-        name: `/${commandName}`,
-        status: 'ok',
-        duration: Date.now() - activityStart,
-        userId: interaction.user?.id,
-        userName: interaction.user?.displayName,
-        guildId: interaction.guildId ?? undefined,
-        guildName: interaction.guild?.name,
-        channelId: interaction.channelId,
-      })
-    }
-  }
-
-  async #handleContextMenu(interaction: import('discord.js').UserContextMenuCommandInteraction | import('discord.js').MessageContextMenuCommandInteraction): Promise<void> {
+    const type = menu ? 'context-menu' : interaction.isAutocomplete() ? 'autocomplete' : 'command'
     const start = Date.now()
-    const menu = this.#contextMenus.find(m => m.name === interaction.commandName)
-    if (!menu) {
-      logger.warn(`Unknown context menu command: ${interaction.commandName}`)
-      return
-    }
-    // Run middleware
-    const middlewareEntries = [...resolveMiddlewareTags(menu.middleware, menu.name), ...menu.middlewareEntries ?? []]
-    if (middlewareEntries.length > 0) {
-      try {
-        await this.#runMiddleware(middlewareEntries, interaction, undefined, 'context-menu')
-      }
-      catch (error) {
-        if (error instanceof MiddlewareError) {
-          this.#nitro.hooks.callHook('discord:client:error', {
-            type: 'MiddlewareDeniedError',
-            client: this,
-            interaction,
-            middleware: error.identifier ?? 'unknown',
-            reason: error.reason,
-            identifier: error.identifier,
-          })
-          if (!interaction.replied && !interaction.deferred) {
-            await interaction.reply({ content: error.reason, flags: MessageFlags.Ephemeral }).catch(() => {})
-          }
-          return
-        }
-        throw error
-      }
-    }
-
-    const activityBase = {
-      type: 'context-menu' as const,
-      name: interaction.commandName,
-      userId: interaction.user?.id,
-      userName: interaction.user?.displayName,
-      guildId: interaction.guildId ?? undefined,
-      guildName: interaction.guild?.name,
-      channelId: interaction.channelId,
+    const ctx = { interaction, type }
+    const middleware: Record<string, unknown> = {}
+    const result: DispatchResult = { status: 'ok', dispose }
+    let command: SlashCommandRuntime | SlashCommandSubcommandRuntime | undefined
+    let cancelAcknowledgement: (() => void) | undefined
+    if (!options.simulation && this.#interactionTimeout !== 0) {
+      const timeout = this.#interactionTimeout ?? Math.max(0, DiscordClient.DISCORD_TOKEN_LIFETIME - (start - (interaction.createdTimestamp ?? start)))
+      const timer = setTimeout(dispose, timeout)
+      timer.unref()
+      scope.run(() => onScopeDispose(() => clearTimeout(timer)))
     }
     try {
-      currentChannel = (interaction.channel as TextBasedChannel) ?? null
-      const result: unknown = menu.type === 'user' && interaction.isUserContextMenuCommand()
-        ? await menu.execute(interaction)
-        : menu.type === 'message' && interaction.isMessageContextMenuCommand()
-          ? await menu.execute(interaction)
-          : undefined
-      // Support reply builder pattern: if execute returns a function, call it with the interaction
-      if (typeof result === 'function') {
-        await (result as (...args: unknown[]) => unknown)(interaction, this)
-      }
-      else if (typeof result === 'string') {
-        await (reply(result) as (...args: unknown[]) => unknown)(interaction, this)
-      }
-      this.#logActivity({ ...activityBase, status: 'ok', duration: Date.now() - start })
+      if (interaction.isChatInputCommand() || interaction.isAutocomplete())
+        command = this.resolveSlashCommand(interaction.commandName, interaction.options.getSubcommandGroup?.(false), interaction.options.getSubcommand?.(false))
+      if (!options.simulation && interaction.isChatInputCommand() && (command?.defer || this.#clientOptions?.deferOnPromise))
+        cancelAcknowledgement = scheduleAcknowledgement(interaction, command?.defer)
+      await runInvocation(scope, { channel: interaction.channel as TextBasedChannel | null, interaction: interaction.isChatInputCommand() ? interaction : undefined, middleware }, async () => {
+        if (!options.simulation && type !== 'autocomplete')
+          await this.#nitro.hooks.callHook('discord:interaction:before', ctx)
+        if (interaction.isUserContextMenuCommand() || interaction.isMessageContextMenuCommand()) {
+          const menuType = interaction.isUserContextMenuCommand() ? 'user' : 'message'
+          const menu = this.#contextMenus.find(m => m.name === interaction.commandName && m.type === menuType)
+          if (!menu)
+            throw new UnknownCommandError(`Unknown context menu "${interaction.commandName}"`)
+          const entries = [...resolveMiddlewareTags(menu.middleware, menu.name), ...menu.middlewareEntries ?? []]
+          await this.#runMiddleware(entries, interaction, undefined, 'context-menu', middleware, async () => {
+            const value = scope.run(() => {
+              if (menu.type === 'user' && interaction.isUserContextMenuCommand())
+                return menu.execute(interaction)
+              if (menu.type === 'message' && interaction.isMessageContextMenuCommand())
+                return menu.execute(interaction)
+            })
+            await this.#respond(value, interaction, scope)
+          })
+          return
+        }
+
+        if (!command)
+          throw new UnknownCommandError(`Unknown slash command "${interaction.commandName}"`)
+        if (!command.execute && command.load)
+          Object.assign(command, await command.load())
+        if (interaction.isAutocomplete()) {
+          await this.#handleAutocomplete(interaction, command)
+          return
+        }
+        const resolved = command
+        const entries = [...resolveMiddlewareTags(resolved.middleware, resolved.path), ...resolved.middlewareEntries ?? []]
+        await this.#runMiddleware(entries, interaction, resolved, 'command', middleware, async () => {
+          const args = this.#commandArgs(interaction, resolved)
+          if (!resolved.execute)
+            throw new Error(`Command "${interaction.commandName}" has no execute function`)
+          await this.#respond(scope.run(() => resolved.execute!(...args)), interaction, scope)
+        })
+      })
     }
     catch (error) {
-      logger.error(`Context menu error [${interaction.commandName}]:`, error)
-      this.#logActivity({ ...activityBase, status: 'error', duration: Date.now() - start, detail: String(error) })
-      if (!interaction.replied && !interaction.deferred) {
-        await interaction.reply({ content: 'An error occurred.', flags: MessageFlags.Ephemeral }).catch(() => {})
+      result.status = error instanceof MiddlewareError ? 'denied' : 'error'
+      result.detail = error instanceof Error ? error.message : String(error)
+      if (!options.simulation) {
+        let hookError
+        if (error instanceof MiddlewareError) {
+          const denied = { ...ctx, middleware: error.identifier ?? 'unknown', reason: error.reason }
+          hookError = { ...denied, type: 'MiddlewareDeniedError', identifier: error.identifier, client: this }
+          await this.#nitro.hooks.callHook('discord:interaction:denied', denied)
+        }
+        else if (error instanceof UnknownCommandError) {
+          hookError = { type: 'UnknownSlashCommandError', interaction, client: this }
+        }
+        else if (error instanceof MissingOptionError) {
+          hookError = { type: 'MissingRequiredOptionError', interaction, client: this, command, option: error.option }
+        }
+        else {
+          hookError = { type: 'SlashCommandExecutionError', interaction, client: this, command, error }
+        }
+        await this.#nitro.hooks.callHook('discord:client:error', hookError)
+      }
+      if (interaction.isAutocomplete()) {
+        if (!interaction.responded)
+          await interaction.respond([]).catch(() => {})
+      }
+      else if (!interaction.replied) {
+        const sender = interactionSender(interaction)
+        await sender.send({ content: result.status === 'denied' ? result.detail : 'An error occurred.', flags: MessageFlags.Ephemeral }).catch(() => {})
       }
     }
     finally {
-      currentChannel = null
+      cancelAcknowledgement?.()
+      if (!options.simulation && type !== 'autocomplete') {
+        this.#logActivity({
+          type,
+          name: menu ? interaction.commandName : `/${interaction.commandName}`,
+          status: result.status,
+          detail: result.detail,
+          duration: Date.now() - start,
+          userId: interaction.user?.id,
+          userName: interaction.user?.displayName,
+          guildId: interaction.guildId ?? undefined,
+          guildName: interaction.guild?.name,
+          channelId: interaction.channelId ?? undefined,
+        })
+        await this.#nitro.hooks.callHook('discord:interaction:after', { ...ctx, status: result.status, detail: result.detail })
+      }
+      if (result.status !== 'ok' || type === 'autocomplete')
+        dispose()
     }
+    return result
+  }
+
+  public resolveSlashCommand(name: string, group?: string | null, leaf?: string | null): SlashCommandRuntime | SlashCommandSubcommandRuntime | undefined {
+    const root = this.getSlashCommand(name)
+    if (!root?.subcommands?.length)
+      return group || leaf ? undefined : root
+    if (!leaf)
+      return undefined
+    if (group)
+      return root.subcommands.find(cmd => cmd.name === group)?.subcommands?.find(cmd => cmd.name === leaf)
+    return root.subcommands.find(cmd => cmd.name === leaf && !cmd.subcommands?.length) as SlashCommandSubcommandRuntime | undefined
   }
 
   #logActivity(entry: Omit<ActivityLogEntry, 'id' | 'timestamp'>): ActivityLogEntry {
@@ -407,27 +395,31 @@ export class DiscordClient {
     interaction: Interaction,
     command: SlashCommandRuntime | SlashCommandSubcommandRuntime | undefined,
     type: MiddlewareOpts['type'],
-  ): Promise<Record<string, unknown>> {
-    const context: Record<string, unknown> = {}
-
+    context: Record<string, unknown>,
+    execute: () => Promise<void>,
+  ): Promise<void> {
     const runChain = async (index: number): Promise<void> => {
-      if (index >= entries.length)
-        return
-      const entry = entries[index]!
+      const entry = entries[index]
+      if (!entry)
+        return execute()
+      let continuation: Promise<void> | undefined
       await entry.fn({
         interaction,
         command,
         type,
         next: async (ctx) => {
-          if (ctx)
-            Object.assign(context, ctx)
-          await runChain(index + 1)
+          if (continuation)
+            throw new Error(`Middleware ${entry.name} called next() twice`)
+          Object.assign(context, ctx)
+          continuation = runChain(index + 1)
+          await continuation
         },
       }, entry.options)
+      if (!continuation)
+        throw new MiddlewareError('Command was stopped by middleware.', entry.name)
+      await continuation
     }
-
     await runChain(0)
-    return context
   }
 
   public async stop(): Promise<void> {
@@ -492,25 +484,21 @@ export class DiscordClient {
     return this.#slashCommands.find(cmd => cmd.name === name)
   }
 
-  #interactionScopes: WeakMap<ChatInputCommandInteraction, EffectScope> = new WeakMap()
   #interactionTimeout?: number
-  static DISCORD_TOKEN_LIFETIME = 15 * 60 * 1000 // 15 minutes
-  async #handleSlashCommand(interaction: ChatInputCommandInteraction, command: SlashCommandRuntime | SlashCommandSubcommandRuntime): Promise<void> {
+  static DISCORD_TOKEN_LIFETIME = 15 * 60 * 1000
+
+  #createScope() {
+    return this.#scope?.run(() => effectScope()) ?? effectScope(true)
+  }
+
+  #commandArgs(interaction: ChatInputCommandInteraction, command: SlashCommandRuntime | SlashCommandSubcommandRuntime) {
     // discord.js option getters may return API types (e.g. APIRole) alongside class types,
     // but gateway bots always receive the class instances at runtime
     const args: (SlashCommandOptionType | undefined)[] = []
     for (const option of command.options) {
-      const opt = interaction.options.get(option.name, option.required)
-      if (option.required && opt == null) {
-        this.#nitro.hooks.callHook('discord:client:error', {
-          type: 'MissingRequiredOptionError',
-          client: this,
-          interaction,
-          command,
-          option: option.name,
-        })
-        return
-      }
+      const opt = interaction.options.get(option.name, false)
+      if (option.required && opt == null)
+        throw new MissingOptionError(option.name)
 
       switch (option.type) {
         case ApplicationCommandOptionType.User:
@@ -531,178 +519,43 @@ export class DiscordClient {
       }
     }
 
-    // Run middleware before execution
-    const middlewareEntries = [...resolveMiddlewareTags(command.middleware, command.path), ...command.middlewareEntries ?? []]
-    let middlewareContext: Record<string, unknown> = {}
-    if (middlewareEntries.length > 0) {
-      try {
-        middlewareContext = await this.#runMiddleware(middlewareEntries, interaction, command, 'command')
-      }
-      catch (error) {
-        if (error instanceof MiddlewareError) {
-          this.#nitro.hooks.callHook('discord:client:error', {
-            type: 'MiddlewareDeniedError',
-            client: this,
-            interaction,
-            middleware: error.identifier ?? 'unknown',
-            reason: error.reason,
-            identifier: error.identifier,
-          })
-          if (!interaction.replied && !interaction.deferred) {
-            await interaction.reply({ content: error.reason, flags: MessageFlags.Ephemeral }).catch(() => {})
-          }
-          return
-        }
-        throw error
-      }
-    }
-
-    let scope!: EffectScope
-    if (this.#scope) {
-      // this scope should be a child of the client scope
-      this.#scope.run(() => (scope = effectScope()))
-    }
-    else {
-      scope = effectScope()
-    }
-
-    this.#interactionScopes.set(interaction, scope)
-
-    try {
-      let result!: SlashCommandReturnType
-      scope.run(() => {
-        currentInteraction = interaction
-        currentChannel = (interaction.channel as TextBasedChannel) ?? null
-        setMiddlewareContext(middlewareContext)
-        result = command.execute!(...args)
-        currentInteraction = null
-        currentChannel = null
-        setMiddlewareContext(null)
-      })
-
-      if (this.#clientOptions?.deferOnPromise && isPromise(result)) {
-        await interaction.deferReply()
-      }
-
-      await this.#handleSlashCommandReturn(result, interaction, command)
-    }
-    catch (error) {
-      setMiddlewareContext(null)
-      this.#nitro.hooks.callHook('discord:client:error', {
-        type: 'SlashCommandExecutionError',
-        client: this,
-        interaction,
-        command,
-        error,
-      })
-    }
-
-    // Schedule scope disposal based on remaining interaction token lifetime
-    if (scope.active && this.#interactionTimeout !== 0) {
-      const timeout = this.#interactionTimeout
-        ?? Math.max(0, DiscordClient.DISCORD_TOKEN_LIFETIME - (Date.now() - interaction.createdTimestamp))
-      const timer = setTimeout(() => scope.stop(), timeout)
-      timer.unref()
-      scope.run(() => onScopeDispose(() => {
-        clearTimeout(timer)
-        this.#interactionScopes.delete(interaction)
-      }))
-    }
+    return args
   }
 
-  async #handleSlashCommandReturn(
-    // not sure why Awaited<SlashCommandReturnType> does't work here
-    result: SlashCommandReturnType,
-    interaction: ChatInputCommandInteraction,
-    command: SlashCommandRuntime | SlashCommandSubcommandRuntime,
-    // TODO: type this
-  ): Promise<unknown> {
-    // @ts-expect-error - i don't know why this error occurs
-    result = await result
-
-    if (!result) {
+  async #respond(value: unknown, interaction: CommandInteraction, scope: EffectScope): Promise<unknown> {
+    const result = await value
+    if (result == null || !scope.active)
       return
+    if (typeof result === 'string' || isRef<string>(result))
+      return this.#respond(reply(result), interaction, scope)
+    if (typeof result === 'function')
+      return scope.run(() => result.call(this, interaction, this))
+    if (typeof result !== 'object')
+      throw new TypeError(`Unexpected command return type: ${typeof result}`)
+    const generator = Symbol.asyncIterator in result
+      ? (result as AsyncIterable<unknown>)[Symbol.asyncIterator]()
+      : Symbol.iterator in result ? (result as Iterable<unknown>)[Symbol.iterator]() : undefined
+    if (!generator) {
+      if (interaction.replied || interaction.deferred)
+        return result
+      throw new Error('Unexpected command return value')
     }
-
-    try {
-      if (typeof result === 'string' || isRef(result)) {
-        return this.#handleSlashCommandReturn(reply(result), interaction, command)
-      }
-      else if (typeof result === 'function') {
-        const scope = this.#interactionScopes.get(interaction)
-        if (!scope) {
-          return result.call(this, interaction, this)
-        }
-        else {
-          return scope.run(() => result.call(this, interaction, this))
-        }
-      }
-      else if (Symbol.iterator in result && typeof result[Symbol.iterator] === 'function') {
-        const gen = result[Symbol.iterator]()
-        let next = gen.next()
-        while (!next.done) {
-          next = gen.next(await this.#handleSlashCommandReturn(await next.value, interaction, command))
-        }
-        if (next.value != null) {
-          return this.#handleSlashCommandReturn(next.value, interaction, command)
-        }
-      }
-      else if (Symbol.asyncIterator in result && typeof result[Symbol.asyncIterator] === 'function') {
-        const gen = result[Symbol.asyncIterator]()
-        let next = await gen.next()
-        while (!next.done) {
-          next = await gen.next(await this.#handleSlashCommandReturn(await next.value, interaction, command))
-        }
-        if (next.value != null) {
-          return this.#handleSlashCommandReturn(next.value, interaction, command)
-        }
-      }
-      else {
-        if (result != null) {
-          throw new Error(`Unexpected return type from slash command: ${typeof result}`)
-        }
-      }
+    let step = await scope.run(() => generator.next())
+    while (step && !step.done && scope.active) {
+      const response = await this.#respond(step.value, interaction, scope)
+      step = await scope.run(() => generator.next(response))
     }
-    catch (error) {
-      this.#nitro.hooks.callHook('discord:client:error', {
-        type: 'SlashCommandExecutionError',
-        client: this,
-        interaction,
-        command,
-        error,
-      })
-    }
+    if (step?.done && step.value != null)
+      return this.#respond(step.value, interaction, scope)
   }
 
   async #handleAutocomplete(interaction: AutocompleteInteraction, command: SlashCommandRuntime | SlashCommandSubcommandRuntime): Promise<void> {
-    const commandName = interaction.commandName
-
-    if (!command) {
-      logger.warn(`Unknown slash command: ${commandName}`)
-      this.#nitro.hooks.callHook('discord:client:error', {
-        type: 'UnknownSlashCommandError',
-        client: this,
-        interaction,
-      })
-      return
-    }
-
-    const focusedOption = interaction.options.getFocused(true)
-    const varname = command.options.find(opt => opt.name === focusedOption.name)?.varname
-    if (!varname) {
-      // TODO: error here
-      return
-    }
-
-    const autocompleteFunction = command.optionMacros?.[varname]?.autocomplete
-    if (!autocompleteFunction) {
-      // TODO: error here
-      return
-    }
-
-    const choices = await autocompleteFunction(focusedOption.value as string, interaction)
-
-    await interaction.respond(choices)
+    const focused = interaction.options.getFocused(true)
+    const varname = command.options.find(opt => opt.name === focused.name)?.varname
+    const complete = varname && command.optionMacros?.[varname]?.autocomplete
+    if (!complete)
+      throw new Error(`No autocomplete handler for "${focused.name}"`)
+    await interaction.respond(await complete(String(focused.value), interaction))
   }
 
   #getSlashCommandBuilder<Builder extends SlashCommandBuilder | SlashCommandSubcommandGroupBuilder | SlashCommandSubcommandBuilder>(
