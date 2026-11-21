@@ -29,6 +29,8 @@ interface TestResult {
   ok: boolean
   response?: string
   responses?: string[]
+  replies?: { content: string, ephemeral: boolean }[]
+  notices?: string[]
   error?: string
 }
 interface TestRequest {
@@ -106,7 +108,7 @@ watch([command, option, value], ([cmd, opt, search], _, cleanup) => {
     try {
       const result = await $fetch<NonNullable<Option['choices']>>('/api/discord/slash-command/autocomplete', {
         method: 'POST',
-        body: { command: cmd.name, option: opt.name, value: search },
+        body: { command: cmd.name, option: opt.name, value: search, options: values.value },
         signal: controller.signal,
       })
       if (!controller.signal.aborted)
@@ -227,9 +229,22 @@ async function send() {
       : await $fetch<TestResult>('/api/discord/slash-command/test', { method: 'POST', body })
     if (!result.ok)
       throw new Error(result.error || 'The application did not respond')
-    entry.messages = result.responses?.length ? result.responses : [result.response ?? 'Command completed without a reply.']
-    entry.ephemeral = result.ephemeral
+    const [initial, ...followUps] = result.replies ?? []
+    entry.messages = initial ? [initial.content] : result.responses?.length ? result.responses : [result.response ?? 'Command completed without a reply.']
+    entry.ephemeral = initial?.ephemeral ?? result.ephemeral
+    entry.notices = result.notices
     entry.state = 'sent'
+    const position = entries.value.findIndex(message => message.id === entry.id)
+    if (position >= 0 && followUps.length) {
+      entries.value.splice(position + 1, 0, ...followUps.map(reply => ({
+        id: ++sequence,
+        at: entry.at,
+        bot: true,
+        state: 'sent' as const,
+        messages: [reply.content],
+        ephemeral: reply.ephemeral,
+      })))
+    }
   }
   catch (error) {
     entry.messages = [error instanceof Error ? error.message : String(error)]

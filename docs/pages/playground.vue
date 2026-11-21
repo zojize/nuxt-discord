@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import catalog from '#build/example-bot.json'
 import CommandTestBar from '../../src/runtime/client/components/CommandTestBar.vue'
-import { demoCommands, demoSuggestions, runDemo } from '../utils/demo-commands'
+import { demoSuggestions, playableNames, runDemo } from '../utils/demo-commands'
+
+const demoCommands = catalog.commands.filter(command => playableNames.includes(command.name))
 
 definePageMeta({ layout: false })
 useHead({

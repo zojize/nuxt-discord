@@ -46,6 +46,9 @@ try {
   run(process.execPath, [join(root, 'scripts/check-package-types.mjs'), app], app)
   run(process.execPath, ['check.mjs'], app)
   cpSync(join(root, 'test/fixtures/hmr'), app, { recursive: true })
+  for (const name of ['ping', 'add', 'reverse', 'greet', 'counter', 'feedback', 'userinfo']) {
+    cpSync(join(root, 'playground/discord/commands', `${name}.ts`), join(app, 'discord/commands', `${name}.ts`))
+  }
   run(process.execPath, [join(root, 'scripts/test-command-hmr.mjs'), app], app)
 }
 finally {

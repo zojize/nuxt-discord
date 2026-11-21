@@ -1,7 +1,4 @@
-import catalog from '#build/example-bot.json'
-
-const playable = new Set(['ping', 'add', 'reverse', 'greet'])
-export const demoCommands = catalog.commands.filter(cmd => playable.has(cmd.name))
+export const playableNames = ['ping', 'add', 'reverse', 'greet']
 
 export function demoSuggestions(command: string, option: string, text: string) {
   if (command !== 'greet' || option !== 'name')

@@ -7,6 +7,8 @@ export interface ChatEntry {
   id: number
   at: Date
   ephemeral?: boolean
+  bot?: boolean
+  notices?: string[]
   invocation?: { name: string, options: Record<string, string> }
   messages: string[]
   state: 'pending' | 'sent' | 'error'
@@ -119,10 +121,10 @@ watch(() => props.entries.map(e => e.state), async (_, previous) => {
               </UPopover>
             </div>
             <div class="relative">
-              <ChatAvatar :user="!entry.invocation" class="absolute top-0 -left-14 size-10" />
+              <ChatAvatar :user="!entry.invocation && !entry.bot" class="absolute top-0 -left-14 size-10" />
               <div class="flex min-h-[1.375rem] flex-wrap items-center gap-x-1">
-                <b class="font-semibold">{{ entry.invocation ? 'nuxt-discord' : 'You' }}</b>
-                <span v-if="entry.invocation" class="inline-flex h-[.9375rem] items-center min-w-[2.125rem] justify-center rounded-[3px] bg-chat-brand px-1 text-[.8rem] leading-none font-semibold text-white">APP</span>
+                <b class="font-semibold">{{ entry.invocation || entry.bot ? 'nuxt-discord' : 'You' }}</b>
+                <span v-if="entry.invocation || entry.bot" class="inline-flex h-[.9375rem] items-center min-w-[2.125rem] justify-center rounded-[3px] bg-chat-brand px-1 text-[.8rem] leading-none font-semibold text-white">APP</span>
                 <NuxtTime :datetime="entry.at" hour="numeric" minute="2-digit" class="ml-1 text-xs font-medium text-chat-faint" />
               </div>
               <p v-if="entry.state === 'pending'" class="text-chat-muted italic">
@@ -130,6 +132,9 @@ watch(() => props.entries.map(e => e.state), async (_, previous) => {
               </p>
               <p v-for="(text, j) in entry.messages" :key="j" class="break-words whitespace-pre-wrap" :class="{ 'text-chat-error': entry.state === 'error', 'mt-1': j > 0 }">
                 {{ text }}
+              </p>
+              <p v-for="notice in entry.notices" :key="notice" class="mt-1 text-sm text-chat-muted">
+                {{ notice }}
               </p>
               <div v-if="entry.ephemeral" class="flex min-h-6 items-start gap-1 pt-1.5 text-xs leading-4 text-chat-muted">
                 <UIcon name="i-lucide-eye" class="size-4 shrink-0" /><span>Only you can see this</span>
