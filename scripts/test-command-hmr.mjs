@@ -6,6 +6,7 @@ import { createServer } from 'node:net'
 import { join } from 'node:path'
 import process from 'node:process'
 import { setTimeout } from 'node:timers/promises'
+import { checkDashboardCommands } from './test-dashboard.mjs'
 
 const app = process.argv[2]
 const socket = createServer().listen(0, '127.0.0.1')
@@ -62,6 +63,7 @@ async function checkDashboardStyles() {
 try {
   await waitForVersion('First version')
   await checkDashboardStyles()
+  await checkDashboardCommands(`http://127.0.0.1:${port}`)
   assert.equal(await probe('pull'), 'one/pool/1')
   assert.equal(await probe('ten'), '11')
   const command = join(app, 'discord/commands/pull.ts')

@@ -24,6 +24,8 @@ Detailed command management with:
 - **Sync status** — Whether each command matches Discord's registry
 - **Command test bar** — A floating input to test commands directly from the browser
 
+The tester runs commands and middleware in your local development bot using a simulated direct message from a preview user. It records text, follow-ups, and private replies. Buttons, modal submissions, real Discord users and roles, file transfers, and changes that happen after a command finishes need a Discord interaction. Command code can still perform its own database writes or external calls.
+
 ### Context Menus (`/discord/context-menus`)
 
 Lists all user and message context menus, grouped by type.
