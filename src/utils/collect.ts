@@ -34,13 +34,40 @@ export interface CommandSourceContext {
   contextMenus: NuxtDiscordContext['contextMenus']
 }
 
-export default function collectSlashCommands(ctx: CommandSourceContext) {
+type Command = SlashCommand | SlashCommandSubcommand | SlashCommandSubcommandGroup
+
+function containsCommandFile(commands: Command[], file: string): boolean {
+  return commands.some(command => command.path === file || containsCommandFile(command.subcommands, file))
+}
+
+export default function collectSlashCommands(ctx: CommandSourceContext, changed?: ReadonlySet<string>) {
   const commandFiles = globSync(`${ctx.resolve.root(ctx.options.dir, 'commands')}/**/*.ts`)
+  const previous = ctx.slashCommands
+  // During HMR check syntax before TypeScript's recovering parser can turn an
+  // unfinished save into a valid, but incomplete, command registry.
+  const options: ts.CompilerOptions = { noLib: true, noResolve: true, types: [] }
+  const changes = changed && ts.createProgram(
+    commandFiles.filter(file => changed.has(file.split(path.sep).join('/'))),
+    options,
+    ts.createCompilerHost(options, true),
+  )
+  const problem = changes?.getSyntacticDiagnostics()[0]
+  if (problem) {
+    throw new SyntaxError(ts.formatDiagnostic(problem, {
+      getCanonicalFileName: file => file,
+      getCurrentDirectory: ts.sys.getCurrentDirectory,
+      getNewLine: () => '\n',
+    }))
+  }
   ctx.slashCommands = []
   for (const file of commandFiles) {
-    const command = processCommandFile(ctx, file)
+    const checkedSource = changes?.getSourceFile(file)
+    const command = processCommandFile(ctx, file, checkedSource)
     if (command) {
       ctx.slashCommands.push(command)
+    }
+    else if (checkedSource && containsCommandFile(previous, file)) {
+      throw new Error(`Edited command has no supported default handler in ${file}`)
     }
   }
 
@@ -118,8 +145,7 @@ function applyLocalizations(ctx: CommandSourceContext) {
   }
 }
 
-export function processCommandFile(ctx: CommandSourceContext, file: string): SlashCommand | undefined {
-  const sourceFile = ts.createSourceFile(file, readFileSync(file).toString(), ts.ScriptTarget.Latest, /* setParentNodes */ true)
+export function processCommandFile(ctx: CommandSourceContext, file: string, sourceFile = ts.createSourceFile(file, readFileSync(file).toString(), ts.ScriptTarget.Latest, true)): SlashCommand | undefined {
   const commandDefinition = extractCommandDefinition(sourceFile)
 
   if (!commandDefinition) {

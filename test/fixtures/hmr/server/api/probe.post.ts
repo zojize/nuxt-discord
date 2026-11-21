@@ -4,7 +4,7 @@ export default defineEventHandler(async (event) => {
   const { name, user = 'member' } = await readBody(event)
   const bot = useDiscordClient()
   if (name === 'version')
-    return bot.getSlashCommand('pull')?.description
+    return bot.getSlashCommand('pull')?.description ?? '(removed)'
   if (!bot.internalClient) {
     Client.prototype.login = async function () {
       this.emit(Events.ClientReady, this)

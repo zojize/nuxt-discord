@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, unlink, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { join } from 'node:path'
 import process from 'node:process'
@@ -57,16 +57,22 @@ try {
   assert.equal(await probe('pull'), 'edited/pool/12')
   assert.equal(await probe('ten'), '22')
   // A broken edit must leave the running commands intact and allow the next save.
-  await writeFile(command, `import './missing-helper'\n${edited}`)
-  const until = Date.now() + 15000
-  while (!log.includes('Could not reload slash commands:') && Date.now() < until)
-    await setTimeout(100)
-  assert.match(log, /Could not reload slash commands:/)
-  assert.equal(await probe('version'), 'Edited version')
+  for (const broken of [`import './missing-helper'\n${edited}`, 'export default =', 'export {}']) {
+    log = ''
+    await writeFile(command, broken)
+    const until = Date.now() + 15000
+    while (!log.includes('Could not reload slash commands:') && Date.now() < until)
+      await setTimeout(100)
+    assert.match(log, /Could not reload slash commands:/)
+    assert.equal(await probe('version'), 'Edited version')
+  }
   assert.equal(await probe('pull'), 'edited/pool/23')
   await writeFile(command, source.replace('First version', 'Recovered version'))
   await waitForVersion('Recovered version')
   assert.equal(await probe('pull'), 'one/pool/24')
+  await unlink(command)
+  await waitForVersion('(removed)')
+  assert.equal(await probe('ten'), '34')
   console.log('Gacha command HMR passed: 1 → 11 → edit → 12 → 22')
 }
 catch (error) {
