@@ -30,5 +30,5 @@ export function useCommandRegistry() {
       }
     })
   }
-  return { commands, diff, status, refresh }
+  return { commands, diff, status, refresh: () => refresh() }
 }

@@ -211,6 +211,15 @@ type LocalRow = LocalCommand & { scope: string }
 interface RemoteRow { name: string, description: string, scope: string, id?: string, options: APIApplicationCommandOption[] }
 interface Match { local: LocalRow, remote: RemoteRow }
 
+export interface RegistrationDiff {
+  added: LocalRow[]
+  removed: RemoteRow[]
+  changed: Match[]
+  synced: Match[]
+  conflict: LocalRow[]
+  menuChanges: number
+}
+
 function schemaRows(command: Payload | APIApplicationCommand, scope: string) {
   const rows = new Map<string, { row: RemoteRow, schema: object }>()
   function visit(row: RemoteRow, schema: object) {
@@ -277,7 +286,7 @@ export class CommandRegistration {
     return await this.rest.get(this.route(scope), { query }) as APIApplicationCommand[]
   }
 
-  async diff(plan: Plan) {
+  async diff(plan: Plan): Promise<RegistrationDiff> {
     const added: LocalRow[] = []
     const removed: RemoteRow[] = []
     const changed: Match[] = []
