@@ -39,6 +39,7 @@ async function check() {
   }
   try {
     assert.equal((await dispatch('ping'))?.content, 'pong', 'production /ping replies through the Discord event handler')
+    assert.equal((await dispatch('named'))?.content, 'ngpo', 'commands can use named exports from another command file')
     assert.equal((await dispatch('owner'))?.flags, 64)
     assert.equal(globalThis.ownerExecutions, undefined)
     assert.equal((await dispatch('owner', 'owner'))?.content, 'owner action')

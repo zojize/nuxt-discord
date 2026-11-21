@@ -1,141 +1,91 @@
 import type { InputPluginOption } from 'rollup'
 import type { NuxtDiscordContext } from '../types'
 import fs from 'node:fs'
-import ts, { isArrowFunction, isFunctionExpression } from 'typescript'
-import { extractCommandDefinition, extractMacroCalls, isMacroCallExpression } from './collect'
+import path from 'node:path'
+import ts from 'typescript'
+import { extractMacroCalls, findCommandExport, isMacroCallExpression } from './collect'
 
 export default (ctx: NuxtDiscordContext): InputPluginOption => {
-  const commandsDir = ctx.resolve.root(ctx.options.dir, 'commands')
+  const commandsDir = `${ctx.resolve.root(ctx.options.dir, 'commands').split(path.sep).join('/')}/`
+  const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed })
 
   return {
     name: 'transform-slash-commands',
-    async load(id) {
-      if (!id.startsWith(commandsDir)) {
+    load(id) {
+      if (!id.split(path.sep).join('/').startsWith(commandsDir) || !id.endsWith('.ts'))
         return
-      }
-      try {
-        const sourceFile = ts.createSourceFile(id, fs.readFileSync(id, 'utf-8'), ts.ScriptTarget.Latest, /* setParentNodes */ true)
-        let commandDefinition = extractCommandDefinition(sourceFile)
-        if (!commandDefinition || !commandDefinition.body) {
-          return
-        }
+      const source = ts.createSourceFile(id, fs.readFileSync(id, 'utf-8'), ts.ScriptTarget.Latest, true)
+      const command = findCommandExport(source)
+      if (!command || !command.handler.body)
+        return
 
-        const transformer: ts.TransformerFactory<ts.SourceFile> = (context) => {
-          return (sourceFile) => {
-            const visitor = (node: ts.Node): ts.Node => {
-              if (
-                ts.isExportAssignment(node)
-                || (ts.isFunctionDeclaration(node) && !!(ts.getCombinedModifierFlags(node) & ts.ModifierFlags.ExportDefault))
-              ) {
-                if (ts.isFunctionDeclaration(commandDefinition!)) {
-                  commandDefinition = ts.factory.createFunctionExpression(
-                    ts.getModifiers(commandDefinition)
-                      ?.filter(m => m.kind !== ts.SyntaxKind.ExportKeyword && m.kind !== ts.SyntaxKind.DefaultKeyword),
-                    commandDefinition.asteriskToken,
-                    commandDefinition.name,
-                    commandDefinition.typeParameters,
-                    commandDefinition.parameters,
-                    commandDefinition.type,
-                    commandDefinition.body!,
-                  )
-                }
-
-                // ts should really be smarter than this...
-                commandDefinition = commandDefinition as Exclude<typeof commandDefinition, ts.FunctionDeclaration | undefined>
-
-                const [macroCalls] = extractMacroCalls(commandDefinition.body)
-
-                if (ts.isBlock(commandDefinition.body)) {
-                // Remove macro calls from the command body
-                  if (isFunctionExpression(commandDefinition)) {
-                    commandDefinition = ts.factory.createFunctionExpression(
-                      commandDefinition.modifiers,
-                      commandDefinition.asteriskToken,
-                      commandDefinition.name,
-                      commandDefinition.typeParameters,
-                      commandDefinition.parameters,
-                      commandDefinition.type,
-                      ts.factory.createBlock(
-                        commandDefinition.body.statements.filter(s => !isMacroCallExpression(s)),
-                        true,
-                      ),
-                    )
-                  }
-                  else if (isArrowFunction(commandDefinition)) {
-                    commandDefinition = ts.factory.createArrowFunction(
-                      commandDefinition.modifiers,
-                      commandDefinition.typeParameters,
-                      commandDefinition.parameters,
-                      commandDefinition.type,
-                      commandDefinition.equalsGreaterThanToken,
-                      ts.factory.createBlock(
-                        commandDefinition.body.statements.filter(s => !isMacroCallExpression(s)),
-                        true,
-                      ),
-                    )
-                  }
-                }
-
-                // Build middlewareEntries from useMiddleware calls:
-                // useMiddleware(ref) → { name: ref.name, fn: ref.fn }
-                // useMiddleware(ref, opts) → { name: ref.name, fn: ref.fn, options: opts }
-                const middlewareCalls = macroCalls
-                  .filter(m => m.expression.escapedText === 'useMiddleware' && m.arguments.length >= 1)
-                const middlewareEntries = middlewareCalls.map((m) => {
-                  const ref = m.arguments[0]!
-                  const props: ts.PropertyAssignment[] = [
-                    ts.factory.createPropertyAssignment('name', ts.factory.createPropertyAccessExpression(ref, 'name')),
-                    ts.factory.createPropertyAssignment('fn', ts.factory.createPropertyAccessExpression(ref, 'fn')),
-                  ]
-                  if (m.arguments.length > 1) {
-                    props.push(ts.factory.createPropertyAssignment('options', m.arguments[1]!))
-                  }
-                  return ts.factory.createObjectLiteralExpression(props)
-                })
-
-                return ts.factory.createExportAssignment(
-                  [],
-                  false,
-                  ts.factory.createObjectLiteralExpression([
-                    ts.factory.createPropertyAssignment('execute', commandDefinition),
-                    ts.factory.createPropertyAssignment(
-                      'optionMacros',
-                      ts.factory.createObjectLiteralExpression(
-                        macroCalls
-                          .filter(m => m.expression.escapedText === 'describeOption' && ts.isIdentifier(m.arguments[0]!) && m.arguments.length > 1)
-                          .map(m => ts.factory.createPropertyAssignment((m.arguments[0] as ts.Identifier).escapedText!, m.arguments[1]!)),
-                      ),
-                    ),
-                    ...(middlewareEntries.length > 0
-                      ? [ts.factory.createPropertyAssignment(
-                          'middlewareEntries',
-                          ts.factory.createArrayLiteralExpression(middlewareEntries),
-                        )]
-                      : []),
-                  ]),
-                )
-              }
-              return ts.visitEachChild(node, visitor, context)
-            }
-            return ts.visitNode(sourceFile, visitor) as ts.SourceFile
-          }
-        }
-
-        const res = ts.transform(sourceFile, [transformer])
-
-        const printer = ts.createPrinter({
-          newLine: ts.NewLineKind.LineFeed,
-          removeComments: false,
-        })
-
-        const transformed = printer.printFile(res.transformed[0]!)
-
-        // no source map but this shouldn't cause issues
-        return transformed
-      }
-      catch {
-        return null
-      }
+      const runtime = createRuntimeExport(command.handler, command.handler.body)
+      const statements = source.statements.map(statement => statement === command.statement ? runtime : statement)
+      return printer.printFile(ts.factory.updateSourceFile(source, statements))
     },
   }
+}
+
+function createRuntimeExport(
+  handler: ts.FunctionDeclaration | ts.FunctionExpression | ts.ArrowFunction,
+  originalBody: ts.ConciseBody,
+) {
+  const [macroCalls] = extractMacroCalls(originalBody)
+  const body = ts.isBlock(originalBody)
+    ? ts.factory.updateBlock(originalBody, originalBody.statements.filter(statement => !isMacroCallExpression(statement)))
+    : originalBody
+  let execute: ts.Expression
+  if (ts.isArrowFunction(handler)) {
+    execute = ts.factory.updateArrowFunction(handler, handler.modifiers, handler.typeParameters, handler.parameters, handler.type, handler.equalsGreaterThanToken, body)
+  }
+  else {
+    execute = ts.factory.createFunctionExpression(
+      ts.getModifiers(handler)?.filter(modifier => modifier.kind !== ts.SyntaxKind.ExportKeyword && modifier.kind !== ts.SyntaxKind.DefaultKeyword),
+      handler.asteriskToken,
+      handler.name,
+      handler.typeParameters,
+      handler.parameters,
+      handler.type,
+      body as ts.Block, // Function declarations and function expressions always have a block body.
+    )
+  }
+
+  // Build middlewareEntries from useMiddleware calls:
+  // useMiddleware(ref) → { name: ref.name, fn: ref.fn }
+  // useMiddleware(ref, opts) → { name: ref.name, fn: ref.fn, options: opts }
+  const middlewareCalls = macroCalls
+    .filter(m => m.expression.escapedText === 'useMiddleware' && m.arguments.length >= 1)
+  const middlewareEntries = middlewareCalls.map((m) => {
+    const ref = m.arguments[0]!
+    const props: ts.PropertyAssignment[] = [
+      ts.factory.createPropertyAssignment('name', ts.factory.createPropertyAccessExpression(ref, 'name')),
+      ts.factory.createPropertyAssignment('fn', ts.factory.createPropertyAccessExpression(ref, 'fn')),
+    ]
+    if (m.arguments.length > 1) {
+      props.push(ts.factory.createPropertyAssignment('options', m.arguments[1]!))
+    }
+    return ts.factory.createObjectLiteralExpression(props)
+  })
+
+  return ts.factory.createExportAssignment(
+    [],
+    false,
+    ts.factory.createObjectLiteralExpression([
+      ts.factory.createPropertyAssignment('execute', execute),
+      ts.factory.createPropertyAssignment(
+        'optionMacros',
+        ts.factory.createObjectLiteralExpression(
+          macroCalls
+            .filter(m => m.expression.escapedText === 'describeOption' && m.arguments.length > 1 && ts.isIdentifier(m.arguments[0]!))
+            .map(m => ts.factory.createPropertyAssignment((m.arguments[0] as ts.Identifier).escapedText!, m.arguments[1]!)),
+        ),
+      ),
+      ...(middlewareEntries.length > 0
+        ? [ts.factory.createPropertyAssignment(
+            'middlewareEntries',
+            ts.factory.createArrayLiteralExpression(middlewareEntries),
+          )]
+        : []),
+    ]),
+  )
 }

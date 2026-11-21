@@ -114,6 +114,13 @@ export default () => {
     expect(result).toBeUndefined()
   })
 
+  it('leaves named helper functions inside the commands directory untouched', async () => {
+    const file = path.join(commandsDir, 'helpers.ts')
+    fs.writeFileSync(file, 'export function format(value: number) { return String(value) }')
+    const plugin = createTransformPlugin(ctx) as any
+    expect(await plugin.load(file)).toBeUndefined()
+  })
+
   it('should handle function declaration exports', async () => {
     const filePath = path.join(commandsDir, 'hello.ts')
     fs.writeFileSync(filePath, `

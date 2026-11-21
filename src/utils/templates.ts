@@ -1,6 +1,5 @@
 import type { NuxtDiscordContext, SlashCommand, SlashCommandSubcommand, SlashCommandSubcommandGroup } from '../types'
 import { addServerTemplate, addTemplate, addTypeTemplate } from '@nuxt/kit'
-import defu from 'defu'
 import { genArrayFromRaw, genImport, genSafeVariableName, genString } from 'knitwork'
 
 export function prepareTemplates(ctx: NuxtDiscordContext) {
@@ -77,71 +76,70 @@ export function prepareTemplates(ctx: NuxtDiscordContext) {
     },
   })
 
-  const typesTemplateDst = addTypeTemplate({
+  addTypeTemplate({
     filename: 'discord/types.d.ts',
-    // proposal-string-dedent when?
     getContents: () => `
 declare module 'discord/slashCommands' {
-  declare const slashCommands: import('nuxt-discord').SlashCommandRuntime[]
+  const slashCommands: import('nuxt-discord').SlashCommandRuntime[]
   export default slashCommands
 }
 
 declare module '#build/discord/slashCommands' {
-  declare const slashCommands: import('nuxt-discord').SlashCommand[]
+  const slashCommands: import('nuxt-discord').SlashCommand[]
   export default slashCommands
 }
 
 declare module '#build/discord/contextMenus' {
-  declare const contextMenus: import('nuxt-discord').ContextMenu[]
+  const contextMenus: import('nuxt-discord').ContextMenu[]
   export default contextMenus
 }
 
 declare module '#build/discord/listeners' {
-  declare const listeners: import('nuxt-discord').Listener[]
+  const listeners: import('nuxt-discord').Listener[]
   export default listeners
 }
 
 declare module 'discord/contextMenus' {
-  declare const contextMenus: (import(${genString(ctx.resolve.module('runtime/server/utils/defineContextMenu'))}).ContextMenuDefinition & { name: string, path: string })[]
+  const contextMenus: (import('nuxt-discord/types').ContextMenuDefinition & { name: string, path: string })[]
   export default contextMenus
 }
 
 declare module 'discord/listeners' {
-  declare const listeners: import('nuxt-discord/types').ListenerDefinition[]
+  const listeners: import('nuxt-discord/types').ListenerDefinition[]
   export default listeners
 }
 
 type integer = import('nuxt-discord').integer
+`,
+  }, { nuxt: true, nitro: true })
 
-declare global {
-  declare module 'nitropack/types' {
-    interface NitroRuntimeHooks {
-      'discord:client:config': (options: import('nuxt-discord').NuxtDiscordOptions['client']) => void
-      'discord:client:ready': (client: DiscordClient) => void
-      'discord:client:error': (error: DiscordClientError) => void
-      'discord:interaction:before': (ctx: { interaction: import('discord.js').Interaction, type: 'command' | 'context-menu' }) => void
-      'discord:interaction:after': (ctx: { interaction: import('discord.js').Interaction, type: 'command' | 'context-menu' }) => void
-      'discord:interaction:denied': (ctx: { interaction: import('discord.js').Interaction, type: 'command' | 'context-menu', reason: string, middleware: string }) => void
-    }
+  addTypeTemplate({
+    filename: 'discord/augmentations.d.ts',
+    getContents: () => `
+import type { DiscordClient, DiscordClientError, DiscordRuntimeConfig, NuxtDiscordOptions } from 'nuxt-discord/types'
+import type { Interaction } from 'discord.js'
+
+declare module 'nitropack/types' {
+  interface NitroRuntimeHooks {
+    'discord:client:config': (options: NuxtDiscordOptions['client']) => void
+    'discord:client:ready': (client: DiscordClient) => void
+    'discord:client:error': (error: DiscordClientError) => void
+    'discord:interaction:before': (ctx: { interaction: Interaction, type: 'command' | 'context-menu' }) => void
+    'discord:interaction:after': (ctx: { interaction: Interaction, type: 'command' | 'context-menu' }) => void
+    'discord:interaction:denied': (ctx: { interaction: Interaction, type: 'command' | 'context-menu', reason: string, middleware: string }) => void
   }
+}
 
-  declare module '@nuxt/schema' {
-    interface RuntimeConfig {
-      discord: import('nuxt-discord').DiscordRuntimeConfig
-    }
-    interface PublicRuntimeConfig {
-      discord: {
-        wsUrl?: string
-      }
-    }
+declare module '@nuxt/schema' {
+  interface RuntimeConfig {
+    discord: DiscordRuntimeConfig
+  }
+  interface PublicRuntimeConfig {
+    discord: { wsUrl?: string }
   }
 }
 `,
-  }).dst
-  ctx.nuxt.options.nitro.typescript ||= {}
-  ctx.nuxt.options.nitro.typescript.tsConfig = defu(ctx.nuxt.options.nitro.typescript.tsConfig, {
-    include: [typesTemplateDst],
-  })
+  }, { nuxt: true, nitro: true })
 }
 
 export function getSlashCommandTemplateContent(ctx: NuxtDiscordContext, commandRuntime: boolean) {

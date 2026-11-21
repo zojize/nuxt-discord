@@ -264,7 +264,7 @@ export interface Listener {
   once?: boolean
 }
 
-export type { ActivityLogEntry } from './runtime/server/utils/client'
+export type { ActivityLogEntry, DiscordClient, DiscordClientError } from './runtime/server/utils/client'
 export type { ContextMenuDefinition } from './runtime/server/utils/defineContextMenu'
 export type { ListenerDefinition } from './runtime/server/utils/defineListener'
 export type { MiddlewareDefinition, MiddlewareFn, MiddlewareOpts } from './runtime/server/utils/defineMiddleware'
