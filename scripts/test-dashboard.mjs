@@ -48,6 +48,9 @@ export async function checkDashboardCommands(baseURL) {
     assert.equal(actual.ok, false)
     assert.match(actual.error, expected)
   }
+  const deferred = await run('deferred')
+  assert.equal(deferred.ok, true, deferred.error)
+  assert.deepEqual(deferred.replies, [{ content: 'Private result', ephemeral: true }])
   const sequence = await run('sequence')
   assert.deepEqual(sequence.replies, [
     { content: 'First', ephemeral: false },
