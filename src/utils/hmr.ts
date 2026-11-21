@@ -118,6 +118,8 @@ export function prepareHMR(ctx: NuxtDiscordContext) {
           client.send(JSON.stringify({ event: 'command-revision', revision }))
       })
 
+      websocket.on('registration-updated', () => websocket.broadcast({ event: 'registration-updated' }))
+
       // Relay activity events from server plugin to all browser clients
       websocket.on('activity', (_client, message) => {
         websocket.broadcast(message)

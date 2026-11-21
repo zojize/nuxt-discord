@@ -1,6 +1,5 @@
 import type { SlashCommandRuntime } from '../../../types'
 import { join } from 'node:path'
-import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import contextMenus from 'discord/contextMenus'
 import listeners from 'discord/listeners'
@@ -38,6 +37,20 @@ export default defineNitroPlugin(async (nitro) => {
       console.error('WebSocket error:', error)
     })
 
+    let syncTimer: ReturnType<typeof setTimeout>
+    let closed = false
+    const sync = runtimeConfig.discord.sync
+    function scheduleSync() {
+      if (!sync || closed)
+        return
+      clearTimeout(syncTimer)
+      syncTimer = setTimeout(() => {
+        void client.syncCommandRegistrations({ changedOnly: true }).then((results) => {
+          if (results.length && socket.readyState === WebSocket.OPEN)
+            socket.send(JSON.stringify({ event: 'registration-updated' }))
+        }).catch(error => logger.error('Command sync failed:', error))
+      }, sync.debounce ?? 1000)
+    }
     let requested = 0
     socket.addEventListener('open', () => socket.send(JSON.stringify({ event: 'command-revision' })))
     socket.addEventListener('message', async (event) => {
@@ -51,6 +64,7 @@ export default defineNitroPlugin(async (nitro) => {
         if (revision === requested) {
           client.clearSlashCommands()
           client.addSlashCommands(commands)
+          scheduleSync()
         }
       }
       catch (error) {
@@ -58,7 +72,11 @@ export default defineNitroPlugin(async (nitro) => {
       }
     })
 
-    nitro.hooks.hook('close', () => socket.close())
+    nitro.hooks.hook('close', () => {
+      closed = true
+      clearTimeout(syncTimer)
+      socket.close()
+    })
   }
 
   client.addSlashCommands(slashCommands as SlashCommandRuntime[])
@@ -67,14 +85,8 @@ export default defineNitroPlugin(async (nitro) => {
   nitro.hooks.hook('close', () => client.stop())
 
   try {
-    if (runtimeConfig.discord.sync) {
-      // Support DISCORD_GUILD_ID env var (comma-separated) as fallback for guild IDs
-      const envGuilds = process.env.DISCORD_GUILD_ID?.split(',').map(id => id.trim()).filter(Boolean) ?? []
-      const guildIds = runtimeConfig.discord.guilds.length > 0
-        ? runtimeConfig.discord.guilds
-        : envGuilds
-      await client.registerSlashCommands(guildIds)
-    }
+    if (runtimeConfig.discord.sync)
+      await client.syncCommandRegistrations().catch(error => logger.error('Command sync failed:', error))
 
     if (runtimeConfig.discord.autoStart)
       await client.start(runtimeConfig.discord.client)
