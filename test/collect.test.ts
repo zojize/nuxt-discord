@@ -50,6 +50,13 @@ describe('collect', () => {
   })
 
   describe('processCommandFile', () => {
+    it('uses the final command name as its registration description when omitted', () => {
+      const file = writeCommand(commandsDir, 'plain.ts', 'export default () => "ok"')
+      expect(processCommandFile(ctx, file)?.description).toBe('plain')
+      const renamed = writeCommand(commandsDir, 'another.ts', 'export default () => { describeCommand({ name: "renamed" }); return "ok" }')
+      expect(processCommandFile(ctx, renamed)?.description).toBe('renamed')
+    })
+
     it('rejects unknown guards even in an earlier JSDoc block', () => {
       const file = writeCommand(commandsDir, 'protected.ts', '/** @middleware missing */\n/** @middleware ownerOnly */\nexport default () => 1')
       expect(() => processCommandFile(ctx, file)).toThrow(`Unknown @middleware "missing" in ${file}`)
