@@ -24,6 +24,21 @@ Only visible to the user who ran the command:
 export default () => reply.ephemeral('Only you can see this')
 ```
 
+### Asynchronous commands
+
+Fast async commands send their result directly. With the default settings, a command still working about 1.8 seconds after the interaction began gets a private acknowledgement. A private result edits that response. A public result is sent as a public follow-up and the temporary acknowledgement is removed. Later reactive edits target the message containing the result.
+
+A command can declare its policy before it starts. This example makes the initial result private, including when the lookup finishes immediately.
+
+```ts
+export default async () => {
+  describeCommand({ defer: 'private' })
+  return await lookupStatus()
+}
+```
+
+Use `defer: 'public'` for a command with a public loading indicator. An explicit `reply.ephemeral(...)` still delivers its content privately. Use `defer: 'manual'` if the command manages its own acknowledgement or needs to open a modal as its first response. Discord requires that first response within three seconds. The client option `deferOnPromise: false` disables the automatic deadline for commands without an explicit policy.
+
 ## Files
 
 Attach files to the response:

@@ -12,7 +12,8 @@ import type {
 import type { MaybeRef } from 'vue'
 import { randomUUID } from 'node:crypto'
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } from 'discord.js'
-import { computed, getCurrentScope, isRef, onScopeDispose, reactive, toRaw, toValue, watch } from 'vue'
+import { computed, isRef, reactive, toRaw, toValue, watch } from 'vue'
+import { bindInvocation, onInvocationDispose } from '../../discordInvocation'
 import { logger } from '../../logger'
 
 export type File = NonNullable<BaseMessageOptions['files']>[number]
@@ -117,11 +118,11 @@ function registerButtonCollectors(
         && !toValue(options.hide) && (filter?.(click, ...args) ?? true),
     })
     newCollectors.push(collector)
-    collector.on('collect', async (buttonInteraction) => {
+    collector.on('collect', bindInvocation(async (buttonInteraction: ButtonInteraction) => {
       if (options.defer ?? true)
         await buttonInteraction.deferUpdate()
       await buttonHandler(buttonInteraction)
-    })
+    }))
   }
   return newCollectors
 }
@@ -166,8 +167,7 @@ export function sendReactiveMessage(
     for (const collector of collectors)
       collector.stop()
   }
-  if (getCurrentScope())
-    onScopeDispose(dispose)
+  onInvocationDispose(dispose)
 
   const messagePromise = config.send(snapshot.value).then((msg) => {
     if (active)

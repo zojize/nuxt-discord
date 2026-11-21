@@ -15,8 +15,8 @@ export interface NuxtDiscordOptions {
    */
   client: ClientOptions & {
     /**
-     * Whether to automatically defer the interaction reply
-     * on slash command execution if the command returns a promise.
+     * Automatically acknowledge a slash command whose reply approaches Discord’s deadline.
+     * The default acknowledgement is private. Fast commands reply directly.
      *
      * @default true
      */
@@ -211,6 +211,7 @@ export interface MiddlewareEntry {
 export interface SlashCommand {
   name: string
   description: string
+  defer?: import('./runtime/acknowledgement').DeferPolicy
   nsfw?: boolean
   /** Middleware names from @middleware JSDoc tags */
   middleware?: string[]

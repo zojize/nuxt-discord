@@ -1,10 +1,15 @@
 import type { ChatInputCommandInteraction, InteractionCallbackResponse, InteractionResponse, Message } from 'discord.js'
 import type { SlashCommandRuntime } from '../src/types'
-import { ApplicationCommandOptionType, Client, Events, REST } from 'discord.js'
+import { EventEmitter } from 'node:events'
+import { ApplicationCommandOptionType, Client, Events, MessageFlags, REST } from 'discord.js'
 import { useNitroApp } from 'nitropack/runtime'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
-import { DiscordClient } from '../src/runtime/server/utils/client'
+import { DiscordClient, getCurrentChannel, useInteraction } from '../src/runtime/server/utils/client'
+
+import { MiddlewareError, useMiddlewareContext } from '../src/runtime/server/utils/defineMiddleware'
+import { reply } from '../src/runtime/server/utils/reply'
+import { useTextChannel } from '../src/runtime/server/utils/useTextChannel'
 
 vi.mock('discord.js', async (importOriginal) => {
   const { EventEmitter } = await import('node:events')
@@ -321,29 +326,212 @@ describe('client', () => {
     await expect.poll(() => interaction.reply).toHaveBeenCalledWith({ content: 'Alice' })
   })
 
-  it('should auto-defer when deferOnPromise is enabled', async () => {
-    const slowCommand: SlashCommandRuntime = {
-      name: 'slow',
-      description: 'Slow',
-      options: [],
-      path: 'slow.ts',
-      parents: [],
-      subcommands: [],
-      execute: vi.fn(() => new Promise<string>(resolve => setTimeout(resolve, 50, 'done'))),
+  async function startClient() {
+    const bot = new DiscordClient()
+    const started = bot.start({ intents: [], deferOnPromise: true })
+    await Promise.resolve()
+    mockedClient.emit(Events.ClientReady, mockedClient)
+    await started
+    return bot
+  }
+
+  it.each([false, true])('sends fast asynchronous replies directly (private %s)', async (privateReply) => {
+    const bot = await startClient()
+    bot.addSlashCommand({ ...ping, execute: async () => privateReply ? reply.ephemeral('done') : 'done' })
+    const { interaction } = mockChatInputCommandInteraction('ping')
+    const result = await bot.dispatchInteraction(interaction)
+    expect(result.status).toBe('ok')
+    expect(interaction.deferReply).not.toHaveBeenCalled()
+    expect(interaction.reply).toHaveBeenCalledWith(privateReply ? { content: 'done', flags: 64 } : { content: 'done' })
+    result.dispose()
+  })
+
+  it.each([
+    [undefined, true, true, false],
+    [undefined, false, true, true],
+    ['public', false, false, false],
+    ['public', true, false, true],
+    ['private', false, true, false],
+  ] as const)('respects slow reply visibility (policy %s, private result %s)', async (policy, privateResult, privatelyDeferred, needsFollowup) => {
+    vi.useFakeTimers()
+    try {
+      const bot = await startClient()
+      const ready = Promise.withResolvers<void>()
+      bot.addSlashCommand({
+        ...ping,
+        defer: policy,
+        execute: async () => {
+          await ready.promise
+          return privateResult ? reply.ephemeral('done') : 'done'
+        },
+      })
+      const { interaction, messageMock } = mockChatInputCommandInteraction('ping')
+      let ephemeral = false
+      Object.defineProperty(interaction, 'ephemeral', { get: () => ephemeral })
+      const defer = vi.fn(async (opts: { flags?: number }) => {
+        ephemeral = !!(opts.flags && (opts.flags & MessageFlags.Ephemeral))
+        Object.defineProperty(interaction, 'deferred', { value: true })
+      })
+      const edit = vi.fn(async () => messageMock)
+      Object.assign(interaction, { deferReply: defer, editReply: edit, deleteReply: vi.fn(async () => {}) })
+      const dispatch = bot.dispatchInteraction(interaction)
+      await vi.advanceTimersByTimeAsync(1900)
+      expect(defer).toHaveBeenCalledOnce()
+      expect(ephemeral).toBe(privatelyDeferred)
+      ready.resolve()
+      const result = await dispatch
+      expect(result.status).toBe('ok')
+      if (needsFollowup) {
+        expect(edit).toHaveBeenCalledWith({ content: 'Preparing reply…' })
+        expect(interaction.followUp).toHaveBeenCalledWith(privateResult ? { content: 'done', flags: 64 } : { content: 'done' })
+        expect(interaction.deleteReply).toHaveBeenCalledOnce()
+      }
+      else {
+        expect(edit).toHaveBeenCalledWith(expect.objectContaining({ content: 'done' }))
+        expect(interaction.followUp).not.toHaveBeenCalled()
+      }
+      result.dispose()
     }
+    finally { vi.useRealTimers() }
+  })
 
-    const client = new DiscordClient()
-    client.start({ intents: [], deferOnPromise: true })
-    await expect.poll(() => mockedClient.on)
-      .toHaveBeenCalledWith(Events.InteractionCreate, expect.any(Function))
+  it('routes a late direct private reply through a safe automatic acknowledgement', async () => {
+    vi.useFakeTimers()
+    try {
+      const bot = await startClient()
+      const gate = Promise.withResolvers<void>()
+      bot.addSlashCommand({ ...ping, execute: async () => {
+        const interaction = useInteraction()!
+        await gate.promise
+        await interaction.reply({ content: 'private', flags: MessageFlags.Ephemeral })
+      } })
+      const { interaction, messageMock } = mockChatInputCommandInteraction('ping')
+      const edit = vi.fn(async () => messageMock)
+      Object.assign(interaction, { editReply: edit })
+      const result = bot.dispatchInteraction(interaction)
+      await vi.advanceTimersByTimeAsync(2000)
+      gate.resolve()
+      expect((await result).status).toBe('ok')
+      expect(edit).toHaveBeenCalledWith({ content: 'private', flags: MessageFlags.Ephemeral })
+      expect(interaction.reply).not.toHaveBeenCalled()
+    }
+    finally { vi.useRealTimers() }
+  })
 
-    client.addSlashCommand(slowCommand)
+  it('owns resources created after await in a context menu and matches menus by type', async () => {
+    const bot = await startClient()
+    const bus = new EventEmitter()
+    const wrong = vi.fn()
+    bot.addContextMenus([
+      { name: 'Inspect', type: 'message', execute: wrong },
+      { name: 'Inspect', type: 'user', execute: async () => {
+        await Promise.resolve()
+        return useTextChannel().id
+      } },
+    ])
+    const { interaction } = mockChatInputCommandInteraction('Inspect')
+    Object.assign(interaction, {
+      channel: { id: 'channel', client: bus },
+      isChatInputCommand: () => false,
+      isUserContextMenuCommand: () => true,
+    })
+    const result = await bot.dispatchInteraction(interaction, { simulation: true })
+    expect(result.status).toBe('ok')
+    expect(wrong).not.toHaveBeenCalled()
+    expect(interaction.reply).toHaveBeenCalledWith({ content: 'channel' })
+    expect(bus.eventNames()).toHaveLength(5)
+    result.dispose()
+    expect(bus.eventNames()).toEqual([])
+  })
 
-    const { interaction } = mockChatInputCommandInteraction('slow')
-    mockedClient.emit(Events.InteractionCreate, interaction)
+  it('leaves a direct acknowledgement in flight and supports manual deferral', async () => {
+    vi.useFakeTimers()
+    try {
+      const bot = await startClient()
+      for (const policy of [undefined, 'manual'] as const) {
+        const network = Promise.withResolvers<void>()
+        const { interaction } = mockChatInputCommandInteraction('ping')
+        const direct = vi.fn(() => network.promise)
+        Object.assign(interaction, { reply: direct })
+        bot.addSlashCommand({ ...ping, defer: policy, execute: async () => {
+          await useInteraction()!.reply('handled')
+        } })
+        const dispatch = bot.dispatchInteraction(interaction)
+        await vi.advanceTimersByTimeAsync(2500)
+        expect(direct).toHaveBeenCalledOnce()
+        expect(interaction.deferReply).not.toHaveBeenCalled()
+        network.resolve()
+        ;(await dispatch).dispose()
+      }
+    }
+    finally { vi.useRealTimers() }
+  })
 
-    await expect.poll(() => interaction.deferReply).toHaveBeenCalled()
-    await expect.poll(() => slowCommand.execute).toHaveBeenCalled()
+  it('isolates overlapping listeners and removes subscriptions created after await', async () => {
+    const bot = await startClient()
+    const bus = new EventEmitter()
+    const gates = [Promise.withResolvers<void>(), Promise.withResolvers<void>()]
+    const results: string[] = []
+    bot.registerListeners([{ event: Events.MessageCreate, async execute(...args) {
+      const { index } = args[0] as unknown as { index: number }
+      await gates[index]!.promise
+      results.push(useTextChannel().id)
+    } }])
+    const run = mockedClient.listeners(Events.MessageCreate)[0]!
+    const a = run({ channel: { id: 'a', client: bus }, index: 0 })
+    const b = run({ channel: { id: 'b', client: bus }, index: 1 })
+    gates[0]!.resolve()
+    await a
+    gates[1]!.resolve()
+    await b
+    expect(results).toEqual(['a', 'b'])
+    expect(bus.eventNames()).toEqual([])
+    expect(getCurrentChannel()).toBeNull()
+  })
+
+  it('registers file listeners before login, including the first ready event', async () => {
+    const bot = new DiscordClient()
+    const ready = vi.fn()
+    bot.registerListeners([{ event: Events.ClientReady, once: true, execute: ready }])
+    const started = bot.start({ intents: [] })
+    await Promise.resolve()
+    mockedClient.emit(Events.ClientReady, mockedClient)
+    await started
+    expect(ready).toHaveBeenCalledOnce()
+  })
+
+  it('runs hooks and activity from the same outcome and isolates simulations', async () => {
+    const bot = await startClient()
+    const calls = mockedNitroApp.hooks.callHook
+    for (const status of ['ok', 'denied', 'error'] as const) {
+      calls.mockClear()
+      bot.addSlashCommand({ ...ping, middlewareEntries: [{ name: 'guard', fn: ({ next }) => {
+        if (status === 'denied')
+          throw new MiddlewareError('stop', 'guard')
+        return next({ value: 5 })
+      } }], execute: async () => {
+        await Promise.resolve()
+        expect(useMiddlewareContext()).toEqual({ value: 5 })
+        expect(useInteraction()?.commandName).toBe('ping')
+        if (status === 'error')
+          throw new Error('failed')
+        return 'done'
+      } })
+      const { interaction } = mockChatInputCommandInteraction('ping')
+      const result = await bot.dispatchInteraction(interaction)
+      expect(result.status).toBe(status)
+      expect(bot.getActivityLog().at(-1)?.status).toBe(status)
+      expect(calls.mock.calls.map(([name]) => name)).toEqual(status === 'ok'
+        ? ['discord:interaction:before', 'discord:interaction:after']
+        : ['discord:interaction:before', ...(status === 'denied' ? ['discord:interaction:denied'] : []), 'discord:client:error', 'discord:interaction:after'])
+      result.dispose()
+    }
+    calls.mockClear()
+    const { interaction } = mockChatInputCommandInteraction('ping')
+    const result = await bot.dispatchInteraction(interaction, { simulation: true })
+    expect(result).toMatchObject({ status: 'error', detail: 'failed' })
+    expect(calls).not.toHaveBeenCalled()
+    expect(bot.getActivityLog()).toHaveLength(3)
   })
 
   it('should dynamically load command via load()', async () => {

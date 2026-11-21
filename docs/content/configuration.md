@@ -38,7 +38,7 @@ Options passed to the Discord.js `Client` constructor.
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
 | `intents` | `GatewayIntentBits[]` | `['Guilds']` | Gateway intents for the bot |
-| `deferOnPromise` | `boolean` | `true` | Auto-defer reply when command returns a promise |
+| `deferOnPromise` | `boolean` | `true` | Automatically acknowledge slow slash commands before the response deadline |
 
 Use the `discord:client:config` runtime hook for dynamic configuration like presence and activity.
 

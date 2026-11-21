@@ -10,7 +10,7 @@ export const macros = {
       return
     }
 
-    const describeCommandOptions = ['name', 'description']
+    const describeCommandOptions = ['name', 'description', 'defer']
     const isValidOption = (key: string): key is keyof DescribeCommandOptions =>
       describeCommandOptions.includes(key)
 
@@ -34,6 +34,11 @@ export const macros = {
     }
 
     command.description = options.description ?? command.description
+    if (options.defer !== undefined) {
+      if (!['public', 'private', 'manual'].includes(options.defer))
+        throw new Error(`Invalid describeCommand defer policy in ${command.path}`)
+      command.defer = options.defer
+    }
   },
   describeOption(ctx, node, command) {
     if (node.arguments.length !== 2) {
