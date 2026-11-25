@@ -6,10 +6,9 @@ import type { Attachment } from 'discord.js'
  * @dm false
  */
 export default (file: Attachment) => {
-  return [
+  return reply.ephemeral([
     `**${file.name}**`,
     `Size: ${(file.size / 1024).toFixed(1)} KB`,
     `Type: ${file.contentType ?? 'unknown'}`,
-    `URL: ${file.url}`,
-  ].join('\n')
+  ].join('\n'), { allowedMentions: { parse: [] } })
 }
