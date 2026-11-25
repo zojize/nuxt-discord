@@ -4,6 +4,7 @@ import { inspect } from 'node:util'
 import { ApplicationCommandOptionType, ApplicationCommandType, AutocompleteInteraction, ButtonInteraction, ChatInputCommandInteraction, Client, ComponentType, EmbedBuilder, Events, InteractionResponseType, InteractionType, MessageFlags, ModalSubmitInteraction, SnowflakeUtil, UserContextMenuCommandInteraction } from 'discord.js'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { effectScope, ref } from 'vue'
+import inspectUpload from '../playground/discord/commands/upload'
 import { DiscordClient } from '../src/runtime/server/utils/client'
 import { MiddlewareError } from '../src/runtime/server/utils/defineMiddleware'
 import { cooldown } from '../src/runtime/server/utils/middleware/cooldown'
@@ -79,6 +80,34 @@ describe('discord gateway interaction contracts', () => {
       options: [{ name: 'query', type: ApplicationCommandOptionType.String, value: 'a', focused: true }],
     })
   }
+
+  it('inspects a resolved example attachment privately without sharing its URL', async () => {
+    const fileId = '100000000000000012'
+    vi.stubGlobal('reply', reply)
+    try {
+      bot.addSlashCommand({
+        ...command,
+        name: 'upload',
+        options: [{ type: ApplicationCommandOptionType.Attachment, name: 'file', varname: 'file', required: true, description: 'File', hasAutocomplete: false }],
+        execute: inspectUpload,
+      })
+      const interaction = incoming(ChatInputCommandInteraction, InteractionType.ApplicationCommand, {
+        name: 'upload',
+        options: [{ type: ApplicationCommandOptionType.Attachment, name: 'file', value: fileId }],
+        resolved: { attachments: { [fileId]: { id: fileId, filename: 'fixture.txt', size: 2048, content_type: 'text/plain', url: 'https://example.invalid/private-attachment' } } },
+      })
+      const result = await bot.dispatchInteraction(interaction)
+      expect(result.status).toBe('ok')
+      expect(sdk.rest.post).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ body: {
+        type: InteractionResponseType.ChannelMessageWithSource,
+        data: expect.objectContaining({ content: '**fixture.txt**\nSize: 2.0 KB\nType: text/plain', flags: MessageFlags.Ephemeral, allowed_mentions: { parse: [] } }),
+      } }))
+      result.dispose()
+    }
+    finally {
+      vi.unstubAllGlobals()
+    }
+  })
 
   it('retains supported reply fields when discord.js serializes the callback', async () => {
     bot.addSlashCommand({ ...command, execute: () => reply('hello', {
