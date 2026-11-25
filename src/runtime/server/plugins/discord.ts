@@ -7,7 +7,7 @@ import contextMenus from 'discord/contextMenus'
 import listeners from 'discord/listeners'
 import slashCommands from 'discord/slashCommands'
 import { defineNitroPlugin, useRuntimeConfig } from 'nitropack/runtime'
-import { logger } from '../../logger'
+import { logDiscordFailure } from '../../diagnostics'
 import { DiscordClient } from '../utils/client'
 
 export default defineNitroPlugin(async (nitro) => {
@@ -16,8 +16,8 @@ export default defineNitroPlugin(async (nitro) => {
 
   const runtimeConfig = useRuntimeConfig()
   let closed = false
-  function fail(message: string, error: unknown) {
-    logger.error(message, error)
+  function fail(message: string, error?: unknown) {
+    logDiscordFailure(message, error)
     if (!import.meta.dev && runtimeConfig.discord.autoStart && !closed)
       process.exit(1)
   }
@@ -45,7 +45,7 @@ export default defineNitroPlugin(async (nitro) => {
     })
 
     socket.addEventListener('error', (error) => {
-      console.error('WebSocket error:', error)
+      logDiscordFailure('Dashboard WebSocket error:', error)
     })
 
     let syncTimer: ReturnType<typeof setTimeout>
@@ -58,7 +58,7 @@ export default defineNitroPlugin(async (nitro) => {
         void client.syncCommandRegistrations({ changedOnly: true }).then((results) => {
           if (results.length && socket.readyState === WebSocket.OPEN)
             socket.send(JSON.stringify({ event: 'registration-updated' }))
-        }).catch(error => logger.error('Command sync failed:', error))
+        }).catch(error => logDiscordFailure('Command sync failed:', error))
       }, sync.debounce ?? 1000)
     }
     let requested = 0
@@ -78,7 +78,7 @@ export default defineNitroPlugin(async (nitro) => {
         }
       }
       catch (error) {
-        logger.error('Could not load updated slash commands:', error)
+        logDiscordFailure('Could not load updated slash commands:', error)
       }
     })
 
@@ -108,7 +108,7 @@ export default defineNitroPlugin(async (nitro) => {
       const gateway = client.internalClient
       gateway?.on(Events.ShardDisconnect, (event, shard) => {
         if (client.internalClient === gateway && !closed)
-          fail(`Discord shard ${shard} disconnected and cannot reconnect. Close code:`, event.code)
+          fail(`Discord shard ${shard} disconnected and cannot reconnect. Close code: ${event.code}`)
       })
     }
     catch (error) {
@@ -123,7 +123,7 @@ export default defineNitroPlugin(async (nitro) => {
       await client.syncCommandRegistrations()
     }
     catch (error) {
-      logger.error('Command sync failed:', error)
+      logDiscordFailure('Command sync failed:', error)
     }
   }
 })
