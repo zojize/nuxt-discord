@@ -85,7 +85,8 @@ async function checkServer(mode) {
       const [code, signal] = await closed
       assert.equal(signal, null, `Server did not exit on ${mode} credentials: ${log}`)
       assert.ok(code && code > 0, log)
-      assert.match(log, mode === 'missing' ? /DISCORD_TOKEN/ : /fixture gateway rejected login/)
+      assert.match(log, mode === 'missing' ? /DISCORD_TOKEN/ : /TokenInvalid/)
+      assert.doesNotMatch(log, /fixture-private-login-error/)
     }
   }
   finally {

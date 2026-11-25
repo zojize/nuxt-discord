@@ -14,8 +14,8 @@ import type { MaybeRef } from 'vue'
 import { randomUUID } from 'node:crypto'
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType, MessageFlags } from 'discord.js'
 import { computed, isRef, reactive, toRaw, toValue, watch } from 'vue'
+import { logDiscordFailure } from '../../diagnostics'
 import { bindInvocation, onInvocationDispose } from '../../discordInvocation'
-import { logger } from '../../logger'
 
 export type File = NonNullable<BaseMessageOptions['files']>[number]
 export type ButtonCollectorOptions = Partial<Omit<MessageCollectorOptionsParams<ComponentType.Button>, 'componentType'>>
@@ -123,7 +123,7 @@ function registerButtonCollectors(
           return await filter?.(click, ...args) ?? true
         }
         catch (error) {
-          logger.error('Discord button filter failed:', error)
+          logDiscordFailure('Discord button filter failed:', error)
           return false
         }
       },
@@ -137,12 +137,12 @@ function registerButtonCollectors(
         await invoke(buttonInteraction)
       }
       catch (error) {
-        logger.error('Discord button handler failed:', error)
+        logDiscordFailure('Discord button handler failed:', error)
         const payload = { content: 'An error occurred.', flags: MessageFlags.Ephemeral } as const
         const report = buttonInteraction.deferred || buttonInteraction.replied
           ? buttonInteraction.followUp(payload)
           : buttonInteraction.reply(payload)
-        await report.catch(error => logger.error('Could not acknowledge failed button:', error))
+        await report.catch(error => logDiscordFailure('Could not acknowledge failed button:', error))
       }
     })
   }
@@ -217,7 +217,7 @@ export function sendReactiveMessage(
           await config.edit(msg, snapshot.value)
         }
         catch (error) {
-          logger.error(error)
+          logDiscordFailure('Could not edit reactive Discord message:', error)
         }
       }
     }

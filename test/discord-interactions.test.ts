@@ -1,9 +1,11 @@
 import type { ApplicationCommandOptionChoiceData, Interaction } from 'discord.js'
 import type { SlashCommandRuntime } from '../src/types'
+import { inspect } from 'node:util'
 import { ApplicationCommandOptionType, ApplicationCommandType, AutocompleteInteraction, ButtonInteraction, ChatInputCommandInteraction, Client, ComponentType, EmbedBuilder, Events, InteractionResponseType, InteractionType, MessageFlags, ModalSubmitInteraction, SnowflakeUtil, UserContextMenuCommandInteraction } from 'discord.js'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { effectScope, ref } from 'vue'
 import { DiscordClient } from '../src/runtime/server/utils/client'
+import { MiddlewareError } from '../src/runtime/server/utils/defineMiddleware'
 import { cooldown } from '../src/runtime/server/utils/middleware/cooldown'
 import { requireRole } from '../src/runtime/server/utils/middleware/requireRole'
 import { reply } from '../src/runtime/server/utils/reply'
@@ -25,6 +27,7 @@ describe('discord gateway interaction contracts', () => {
     vi.stubEnv('DISCORD_TOKEN', 'offline-test')
     vi.stubEnv('DISCORD_CLIENT_ID', '100000000000000001')
     hooks.callHook.mockReset()
+    hooks.hook.mockClear()
     sdk = new Client({ intents: [] })
     vi.spyOn(sdk.rest, 'post').mockResolvedValue(undefined)
     vi.spyOn(sdk.rest, 'get').mockRejectedValue(new Error('Unexpected offline GET'))
@@ -88,6 +91,67 @@ describe('discord gateway interaction contracts', () => {
       body: { type: InteractionResponseType.ChannelMessageWithSource, data: expect.objectContaining({ content: 'hello', embeds: [{ description: 'first frame' }], allowed_mentions: { parse: [] } }) },
     }))
     result.dispose()
+  })
+
+  it('keeps raw interaction data and REST failures out of console and activity history', async () => {
+    const output = vi.spyOn(console, 'error').mockImplementation(() => {})
+    hooks.callHook.mockImplementation(async (name, event) => {
+      for (const [hookName, handler] of hooks.hook.mock.calls) {
+        if (name === hookName)
+          await handler(event)
+      }
+    })
+    const failure = Object.assign(new Error('fixture-exception-content'), {
+      code: 50035,
+      status: 400,
+      url: 'https://discord.invalid/webhooks/id/fixture-webhook-token',
+      requestBody: { json: { content: 'fixture-private-reply' } },
+    })
+    bot.addSlashCommand({ ...command, execute: () => {
+      throw failure
+    } })
+    const result = await bot.dispatchInteraction(incoming(ChatInputCommandInteraction, InteractionType.ApplicationCommand, {
+      options: [{ type: ApplicationCommandOptionType.String, name: 'query', value: 'fixture-private-argument' }],
+    }, { token: 'fixture-interaction-token' }))
+    expect(result).toMatchObject({ status: 'error', detail: 'fixture-exception-content' })
+    expect(hooks.callHook).toHaveBeenCalledWith('discord:client:error', expect.objectContaining({ error: failure }))
+    const log = inspect(output.mock.calls, { depth: 8 })
+    const exposed = [...log.matchAll(/fixture-[\w-]+/g)].map(match => match[0])
+    expect(exposed).toEqual([])
+    expect(log).toContain('50035')
+    expect(log).toContain('400')
+    const activity = inspect(bot.getActivityLog())
+    expect(activity).not.toContain('fixture-')
+    expect(activity).toContain('HTTP 400, code 50035')
+  })
+
+  it('returns the specific denial to the user without copying it to activity or console', async () => {
+    const output = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const reason = 'fixture-private-denial'
+    bot.addSlashCommand({ ...command, middlewareEntries: [{ name: 'check', fn: () => {
+      throw new MiddlewareError(reason)
+    } }] })
+    const result = await bot.dispatchInteraction(incoming(ChatInputCommandInteraction, InteractionType.ApplicationCommand))
+    expect(result).toMatchObject({ status: 'denied', detail: reason })
+    expect(sdk.rest.post).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      body: { type: InteractionResponseType.ChannelMessageWithSource, data: expect.objectContaining({ content: reason, flags: MessageFlags.Ephemeral }) },
+    }))
+    expect(bot.getActivityLog().at(-1)).toMatchObject({ status: 'denied', detail: 'Denied by middleware' })
+    expect(inspect(output.mock.calls)).not.toContain(reason)
+  })
+
+  it('releases a command’s actual SDK collector when the started client stops', async () => {
+    vi.spyOn(Client.prototype, 'login').mockImplementation(async function (this: Client<true>) {
+      this.emit(Events.ClientReady, this)
+      return 'offline'
+    })
+    await bot.start({ intents: [], deferOnPromise: false })
+    bot.addSlashCommand({ ...command, execute: () => reply.button('Open', () => {}, { customId: 'open' }).send('Press') })
+    const before = sdk.listenerCount(Events.InteractionCreate)
+    await bot.dispatchInteraction(incoming(ChatInputCommandInteraction, InteractionType.ApplicationCommand))
+    expect(sdk.listenerCount(Events.InteractionCreate)).toBe(before + 1)
+    await bot.stop()
+    expect(sdk.listenerCount(Events.InteractionCreate)).toBe(before)
   })
 
   it('resolves role ids from uncached interaction members', async () => {

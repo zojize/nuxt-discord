@@ -13,7 +13,7 @@ REST.prototype.put = async (_route, { body }) => body.map((command, index) => ({
 Client.prototype.login = async function (token) {
   assert.equal(token, 'fixture-only')
   if (process.env.TEST_GATEWAY === 'rejected')
-    throw new Error('fixture gateway rejected login')
+    throw Object.assign(new Error('fixture-private-login-error'), { code: 'TokenInvalid' })
   this.emit(Events.ClientReady, this)
   setImmediate(() => this.emit(Events.InteractionCreate, {
     commandName: 'ping',

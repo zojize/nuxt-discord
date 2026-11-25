@@ -40,7 +40,7 @@ nitro.hooks.hook('discord:client:ready', (client) => {
 
 ### `discord:client:error`
 
-Fired on various error conditions. The error object includes a `type` field:
+The built-in logger records the event type and available Discord or HTTP error codes. Custom server hooks receive the original error and interaction, which can include private command arguments, reply content and interaction tokens. Select the fields your own logger needs.
 
 ```ts
 nitro.hooks.hook('discord:client:error', (error) => {
@@ -49,10 +49,10 @@ nitro.hooks.hook('discord:client:error', (error) => {
       console.warn('Unknown command:', error.interaction.commandName)
       break
     case 'SlashCommandExecutionError':
-      console.error('Command failed:', error.command.name, error.error)
+      console.error('Command failed:', error.interaction.commandName)
       break
     case 'SlashCommandRegistrationError':
-      console.error('Registration failed:', error.error)
+      console.error('Registration failed')
       break
     case 'MissingRequiredOptionError':
       console.warn('Missing option:', error.option)
@@ -63,7 +63,7 @@ nitro.hooks.hook('discord:client:error', (error) => {
 
 ### Interaction lifecycle
 
-`discord:interaction:before` runs before middleware on slash commands and context menus. `discord:interaction:denied` includes the reason when middleware stops execution. `discord:interaction:after` receives `status` (`ok`, `denied`, or `error`) and optional `detail`. The activity log reports the same outcome. Dashboard simulations run command middleware in isolation and omit these live lifecycle notifications.
+`discord:interaction:before` runs before middleware on slash commands and context menus. `discord:interaction:denied` includes the reason when middleware stops execution. `discord:interaction:after` receives `status` (`ok`, `denied`, or `error`) and optional `detail`. The activity log records the status and available error codes. Free-form error messages and denial reasons are available to the server hook. Dashboard simulations run command middleware in isolation and omit these live lifecycle notifications.
 
 ## Server-Side Client Access
 

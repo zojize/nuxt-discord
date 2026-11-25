@@ -1,7 +1,7 @@
 import type { CommandInteraction, InteractionDeferReplyOptions, InteractionEditReplyOptions, InteractionReplyOptions, MessageCreateOptions, MessageFlagsResolvable, ModalSubmitInteraction } from 'discord.js'
 import type { MessageSenderConfig, SentMessage } from './server/utils/messageSender'
 import { MessageFlags, MessageFlagsBitField, MessagePayload } from 'discord.js'
-import { logger } from './logger'
+import { logDiscordFailure } from './diagnostics'
 
 type ReplyInteraction = CommandInteraction | ModalSubmitInteraction
 
@@ -29,7 +29,7 @@ export function scheduleAcknowledgement(interaction: ReplyInteraction, policy?: 
           return
         const pending = originalDefer.call(interaction, policy === 'public' ? {} : { flags: MessageFlags.Ephemeral })
         automatic.set(interaction, { policy, pending })
-        void pending.catch(error => logger.error('Could not defer interaction:', error))
+        void pending.catch(error => logDiscordFailure('Could not defer interaction:', error))
       }, Math.max(0, 1800 - elapsed))
     : undefined
   timer?.unref()
@@ -132,7 +132,7 @@ export function interactionSender(interaction: ReplyInteraction): Omit<MessageSe
           await interaction.editReply({ content: 'Preparing reply…' })
           method = 'followUp'
           const message = await interaction.followUp(opts)
-          await interaction.deleteReply().catch(error => logger.error('Could not remove acknowledgement:', error))
+          await interaction.deleteReply().catch(error => logDiscordFailure('Could not remove acknowledgement:', error))
           return message
         }
         return interaction.editReply(editOptions(opts))

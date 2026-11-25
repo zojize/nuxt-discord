@@ -10,6 +10,7 @@ import { ApplicationCommandOptionType, Events, Client as InternalClient, Message
 import { useNitroApp, useRuntimeConfig, useStorage } from 'nitropack/runtime'
 import { effectScope, isRef, onScopeDispose } from 'vue'
 import { interactionSender, scheduleAcknowledgement } from '../../acknowledgement'
+import { DiscordConfigurationError, discordDiagnostic, logDiscordFailure } from '../../diagnostics'
 import { currentInvocation, runInvocation, setInvocationFields } from '../../discordInvocation'
 import { logger } from '../../logger'
 import { resolveMiddlewareTags } from '../../middleware'
@@ -135,37 +136,33 @@ export class DiscordClient {
   #activityLog: ActivityLogEntry[] = []
   #activityId = 0
   #onActivity?: (entry: ActivityLogEntry) => void
-  #nitro: { hooks: { callHook: (name: string, ...args: any[]) => Promise<void>, hook: (name: string, fn: (...args: any[]) => any) => void } } = useNitroApp() as any
+  #nitro: { hooks: { callHook: (name: string, ...args: any[]) => Promise<void> } } = useNitroApp() as any
   #token: string
   #registration: CommandRegistration
   #registeredGuildOverrides = new Map<string, boolean>()
 
   constructor() {
     if (!process.env.DISCORD_TOKEN) {
-      throw new Error('DISCORD_TOKEN environment variable is not set')
+      throw new DiscordConfigurationError('DISCORD_TOKEN environment variable is not set')
     }
     this.#token = process.env.DISCORD_TOKEN
 
     if (!process.env.DISCORD_CLIENT_ID) {
-      throw new Error('DISCORD_CLIENT_ID environment variable is not set')
+      throw new DiscordConfigurationError('DISCORD_CLIENT_ID environment variable is not set')
     }
     const appId = process.env.DISCORD_CLIENT_ID
     this.#registration = new CommandRegistration(new REST().setToken(this.#token), appId, {
       load: () => useStorage('data').getItem<string[]>(`nuxt-discord:${appId}:registration-scopes`),
       save: scopes => useStorage('data').setItem(`nuxt-discord:${appId}:registration-scopes`, scopes),
     }, (error) => {
-      void this.#nitro.hooks.callHook('discord:client:error', { type: 'SlashCommandRegistrationError', client: this, error })
+      logDiscordFailure('SlashCommandRegistrationError', error)
+      void this.#notify('discord:client:error', { type: 'SlashCommandRegistrationError', client: this, error })
     })
 
     // Nitro serializes an unset runtime config value as an empty string.
     const timeout = useRuntimeConfig().discord?.interactionTimeout
     if (typeof timeout === 'number' && Number.isFinite(timeout) && timeout >= 0)
       this.#interactionTimeout = timeout
-
-    // default print errors to console
-    this.#nitro.hooks.hook('discord:client:error', (error: unknown) => {
-      logger.error(error)
-    })
   }
 
   #clientOptions?: NuxtDiscordOptions['client']
@@ -203,7 +200,7 @@ export class DiscordClient {
     signal.throwIfAborted()
     logger.log(`Discord client is ready! Logged in as ${client.user?.tag}`)
     void this.#nitro.hooks.callHook('discord:client:ready', this)
-      ?.catch(error => logger.error('Discord ready hook failed:', error))
+      ?.catch(error => logDiscordFailure('Discord ready hook failed:', error))
   }
 
   public registerListeners(listeners: ListenerDefinition[]) {
@@ -224,7 +221,7 @@ export class DiscordClient {
           await runInvocation(scope, { channel }, () => (listener.execute as (...a: unknown[]) => void | Promise<void>)(...args))
         }
         catch (error) {
-          logger.error(`Listener error [${listener.event}]:`, error)
+          logDiscordFailure(`Listener error [${listener.event}]:`, error)
         }
         finally {
           scope.stop()
@@ -265,6 +262,7 @@ export class DiscordClient {
     const middleware: Record<string, unknown> = {}
     const result: DispatchResult = { status: 'ok', dispose }
     let command: SlashCommandRuntime | SlashCommandSubcommandRuntime | undefined
+    let activityDetail: string | undefined
     let cancelAcknowledgement: (() => void) | undefined
     if (!options.simulation && this.#interactionTimeout !== 0) {
       const timeout = this.#interactionTimeout ?? Math.max(0, DiscordClient.DISCORD_TOKEN_LIFETIME - (start - (interaction.createdTimestamp ?? start)))
@@ -345,6 +343,8 @@ export class DiscordClient {
         else {
           hookError = { type: 'SlashCommandExecutionError', interaction, client: this, command, error }
         }
+        logDiscordFailure(hookError.type, error)
+        activityDetail = result.status === 'denied' ? 'Denied by middleware' : discordDiagnostic(error)
         await this.#notify('discord:client:error', hookError)
       }
     }
@@ -355,7 +355,7 @@ export class DiscordClient {
           type,
           name: menu ? interaction.commandName : `/${interaction.commandName}`,
           status: result.status,
-          detail: result.detail,
+          detail: activityDetail,
           duration: Date.now() - start,
           userId: interaction.user?.id,
           userName: interaction.user?.displayName,
@@ -387,7 +387,7 @@ export class DiscordClient {
       await this.#nitro.hooks.callHook(name, event)
     }
     catch (error) {
-      logger.error(`Discord observer failed [${name}]`, error)
+      logDiscordFailure(`Discord observer failed [${name}]`, error)
     }
   }
 
@@ -400,7 +400,7 @@ export class DiscordClient {
       this.#onActivity?.(full)
     }
     catch (error) {
-      logger.error('Discord activity observer failed:', error)
+      logDiscordFailure('Discord activity observer failed:', error)
     }
     return full
   }
