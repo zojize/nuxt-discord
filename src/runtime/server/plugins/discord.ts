@@ -1,6 +1,8 @@
 import type { SlashCommandRuntime } from '../../../types'
 import { join } from 'node:path'
+import process from 'node:process'
 import { pathToFileURL } from 'node:url'
+import { Events } from 'discord.js'
 import contextMenus from 'discord/contextMenus'
 import listeners from 'discord/listeners'
 import slashCommands from 'discord/slashCommands'
@@ -9,14 +11,23 @@ import { logger } from '../../logger'
 import { DiscordClient } from '../utils/client'
 
 export default defineNitroPlugin(async (nitro) => {
+  if (import.meta.prerender)
+    return
+
   const runtimeConfig = useRuntimeConfig()
+  let closed = false
+  function fail(message: string, error: unknown) {
+    logger.error(message, error)
+    if (!import.meta.dev && runtimeConfig.discord.autoStart && !closed)
+      process.exit(1)
+  }
 
   let client: DiscordClient
   try {
     client = new DiscordClient()
   }
   catch (error) {
-    logger.error('Failed to initialize Discord client:', error)
+    fail('Failed to initialize Discord client:', error)
     return
   }
   ;(globalThis as any)[Symbol.for('discord-client')] = client
@@ -38,7 +49,6 @@ export default defineNitroPlugin(async (nitro) => {
     })
 
     let syncTimer: ReturnType<typeof setTimeout>
-    let closed = false
     const sync = runtimeConfig.discord.sync
     function scheduleSync() {
       if (!sync || closed)
@@ -82,16 +92,37 @@ export default defineNitroPlugin(async (nitro) => {
   client.addSlashCommands(slashCommands as SlashCommandRuntime[])
   client.addContextMenus(contextMenus)
   client.registerListeners(listeners)
-  nitro.hooks.hook('close', () => client.stop())
+  nitro.hooks.hook('close', () => {
+    closed = true
+    return client.stop()
+  })
 
-  try {
-    if (runtimeConfig.discord.sync)
-      await client.syncCommandRegistrations().catch(error => logger.error('Command sync failed:', error))
+  // Let the application's Nitro plugins register their configuration and ready hooks.
+  await Promise.resolve()
+  if (closed)
+    return
 
-    if (runtimeConfig.discord.autoStart)
+  if (runtimeConfig.discord.autoStart) {
+    try {
       await client.start(runtimeConfig.discord.client)
+      client.internalClient?.on(Events.ShardDisconnect, (event, shard) => {
+        if (client.internalClient && !closed)
+          fail(`Discord shard ${shard} disconnected and cannot reconnect. Close code:`, event.code)
+      })
+    }
+    catch (error) {
+      if (!closed)
+        fail('Failed to start Discord client:', error)
+      return
+    }
   }
-  catch (error) {
-    logger.error('Failed to start Discord client:', error)
+
+  if (!closed && runtimeConfig.discord.sync) {
+    try {
+      await client.syncCommandRegistrations()
+    }
+    catch (error) {
+      logger.error('Command sync failed:', error)
+    }
   }
 })

@@ -21,7 +21,7 @@ Use the `once` option for events that should only fire once:
 
 ```ts
 // discord/listeners/ready.ts
-export default defineListener('ready', (client) => {
+export default defineListener('clientReady', (client) => {
   console.log(`Logged in as ${client.user.tag}`)
 }, { once: true })
 ```
@@ -32,7 +32,7 @@ All discord.js `ClientEvents` are supported. Common examples:
 
 | Event | Args | Description |
 | --- | --- | --- |
-| `ready` | `(client)` | Bot connected and ready |
+| `clientReady` | `(client)` | Bot connected and ready |
 | `messageCreate` | `(message)` | New message received |
 | `guildMemberAdd` | `(member)` | User joined a server |
 | `guildMemberRemove` | `(member)` | User left a server |

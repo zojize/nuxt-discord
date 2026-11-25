@@ -52,7 +52,21 @@ Your bot will connect and the `/ping` command will be available. Visit `http://l
 
 ## Deployment
 
-Build and run the Nuxt app on one always-on Node process that owns the Discord Gateway connection. Supply the bot token and application ID to that process at runtime.
+Build for a long-running Node.js server and deploy the entire `.output` directory.
+
+```bash
+NITRO_PRESET=node-server bunx nuxt build
+```
+
+Set `DISCORD_TOKEN` and `DISCORD_CLIENT_ID` in the service environment, then start one bot process:
+
+```bash
+node .output/server/index.mjs
+```
+
+For a local production run with credentials in a file, use `node --env-file=.env .output/server/index.mjs`. Nuxt loads `.env` during development. The built Node process reads the environment it receives at launch.
+
+Wait for `Discord client is ready!` before sending a command. With `autoStart` enabled, a production process exits with an error if it cannot initialize or log in. Configure your process supervisor to restart failed runs with backoff. If the web app scales to multiple replicas or uses static hosting, run the gateway in a separate, always-on service with a single replica.
 
 ## Project Structure
 

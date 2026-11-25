@@ -17,7 +17,7 @@ export interface ListenerDefinition<E extends keyof ClientEvents = keyof ClientE
  *
  * @example
  * // discord/listeners/ready.ts
- * export default defineListener('ready', (client) => {
+ * export default defineListener('clientReady', (client) => {
  *   console.log(`Logged in as ${client.user.tag}`)
  * }, { once: true })
  */

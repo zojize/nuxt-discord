@@ -4,6 +4,7 @@ import type { MiddlewareEntry, NuxtDiscordOptions, SlashCommandOptionType, Slash
 import type { ContextMenuDefinition } from './defineContextMenu'
 import type { ListenerDefinition } from './defineListener'
 import type { MiddlewareOpts } from './defineMiddleware'
+import { once } from 'node:events'
 import process from 'node:process'
 import { ApplicationCommandOptionType, Events, Client as InternalClient, MessageFlags, REST } from 'discord.js'
 import { useNitroApp, useRuntimeConfig, useStorage } from 'nitropack/runtime'
@@ -168,40 +169,40 @@ export class DiscordClient {
 
   #clientOptions?: NuxtDiscordOptions['client']
   #listeners: ListenerDefinition[] = []
+  #connection?: AbortController
   #starting?: Promise<undefined>
+  #stopping?: Promise<void>
 
   public start(options: NuxtDiscordOptions['client']): Promise<undefined> {
+    if (this.#stopping)
+      return this.#stopping.then(() => this.start(options))
     if (this.#starting)
       return this.#starting
-    if (this.isReady())
-      return Promise.resolve(undefined)
-    this.#starting = this.#connect(options).catch(async (error) => {
-      await this.stop()
+
+    const connection = new AbortController()
+    this.#connection = connection
+    this.#starting = this.#connect(options, connection.signal).catch(async (error) => {
+      if (!connection.signal.aborted)
+        await this.stop()
       throw error
-    }).finally(() => { this.#starting = undefined })
+    })
     return this.#starting
   }
 
-  async #connect(options: NuxtDiscordOptions['client']): Promise<undefined> {
+  async #connect(options: NuxtDiscordOptions['client'], signal: AbortSignal): Promise<undefined> {
     this.#clientOptions = { ...options }
     await this.#nitro.hooks.callHook('discord:client:config', this.#clientOptions)
-    this.#client = new InternalClient(this.#clientOptions)
-    this.#client.on(Events.InteractionCreate, interaction => this.dispatchInteraction(interaction))
-
+    signal.throwIfAborted()
+    const client = new InternalClient(this.#clientOptions)
+    this.#client = client
+    client.on(Events.InteractionCreate, interaction => this.dispatchInteraction(interaction))
     this.startScope()
-
-    const { resolve, promise } = Promise.withResolvers<undefined>()
-
-    this.#client.once(Events.ClientReady, (readyClient) => {
-      logger.log(`Discord client is ready! Logged in as ${readyClient.user?.tag}`)
-      this.#nitro.hooks.callHook('discord:client:ready', this)
-      resolve(undefined)
-    })
-
     this.#attachListeners(this.#listeners)
-    await this.#client.login(this.#token)
-
-    return promise
+    await Promise.all([once(client, Events.ClientReady, { signal }), client.login(this.#token)])
+    signal.throwIfAborted()
+    logger.log(`Discord client is ready! Logged in as ${client.user?.tag}`)
+    void this.#nitro.hooks.callHook('discord:client:ready', this)
+      ?.catch(error => logger.error('Discord ready hook failed:', error))
   }
 
   public registerListeners(listeners: ListenerDefinition[]) {
@@ -427,12 +428,21 @@ export class DiscordClient {
     await runChain(0)
   }
 
-  public async stop(): Promise<void> {
-    if (this.#client) {
-      await this.#client.destroy()
-      this.#client = null
-    }
+  public stop(): Promise<void> {
+    if (this.#stopping)
+      return this.#stopping
+    this.#connection?.abort()
+    this.#connection = undefined
+    this.#starting = undefined
+    const client = this.#client
+    this.#client = null
     this.stopScope()
+    if (!client)
+      return Promise.resolve()
+    this.#stopping = Promise.resolve().then(() => client.destroy()).finally(() => {
+      this.#stopping = undefined
+    })
+    return this.#stopping
   }
 
   #scope?: EffectScope
