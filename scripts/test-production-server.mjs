@@ -17,11 +17,11 @@ delete env.NITRO_PRESET
 delete env.SERVER_PRESET
 delete env.DISCORD_TOKEN
 delete env.DISCORD_CLIENT_ID
+delete env.FIXTURE_RUNTIME_REPLY
 
 try {
   cpSync(source, app, { recursive: true })
   cpSync(join(consumer, 'app.vue'), join(app, 'app.vue'))
-  cpSync(new URL('../test/fixtures/basic/discord/commands/ping.ts', import.meta.url), join(app, 'discord/commands/ping.ts'))
   const build = spawnSync(process.execPath, [join(consumer, 'node_modules/nuxt/bin/nuxt.mjs'), 'build'], {
     cwd: app,
     env,
@@ -48,7 +48,7 @@ finally {
 }
 
 async function checkServer(mode) {
-  const runtimeEnv = { ...env, NODE_ENV: 'production', NITRO_PORT: '0', NITRO_HOST: '127.0.0.1', TEST_GATEWAY: mode }
+  const runtimeEnv = { ...env, NODE_ENV: 'production', NITRO_PORT: '0', NITRO_HOST: '127.0.0.1', TEST_GATEWAY: mode, FIXTURE_RUNTIME_REPLY: 'pong' }
   if (mode !== 'missing')
     Object.assign(runtimeEnv, { DISCORD_TOKEN: 'fixture-only', DISCORD_CLIENT_ID: '100000000000000001' })
   const child = spawn(process.execPath, ['--import', join(source, 'transport.mjs'), 'server/index.mjs'], {
