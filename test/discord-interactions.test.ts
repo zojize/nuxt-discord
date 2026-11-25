@@ -4,6 +4,7 @@ import { ApplicationCommandOptionType, ApplicationCommandType, AutocompleteInter
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { effectScope, ref } from 'vue'
 import { DiscordClient } from '../src/runtime/server/utils/client'
+import { cooldown } from '../src/runtime/server/utils/middleware/cooldown'
 import { requireRole } from '../src/runtime/server/utils/middleware/requireRole'
 import { reply } from '../src/runtime/server/utils/reply'
 
@@ -98,6 +99,32 @@ describe('discord gateway interaction contracts', () => {
       expect(result.status).toBe(status)
       result.dispose()
     }
+  })
+
+  it('limits each context menu independently and releases expired cooldowns', async () => {
+    vi.useFakeTimers()
+    const middlewareEntries = [{ ...cooldown, options: { seconds: 5 } }]
+    bot.addContextMenus([
+      { name: 'Inspect', type: 'user', middlewareEntries, execute: () => 'inspected' },
+      { name: 'Lookup', type: 'user', middlewareEntries, execute: () => 'found' },
+    ])
+    const run = async (name: string) => {
+      const result = await bot.dispatchInteraction(incoming(UserContextMenuCommandInteraction, InteractionType.ApplicationCommand, {
+        type: ApplicationCommandType.User,
+        name,
+        target_id: user.id,
+        resolved: { users: { [user.id]: user } },
+      }))
+      result.dispose()
+      return result.status
+    }
+    expect(await run('Inspect')).toBe('ok')
+    expect(await run('Inspect')).toBe('denied')
+    expect(await run('Lookup')).toBe('ok')
+    await vi.advanceTimersByTimeAsync(60_100)
+    expect(vi.getTimerCount()).toBe(0)
+    expect(await run('Inspect')).toBe('ok')
+    await vi.advanceTimersByTimeAsync(60_100)
   })
 
   it('returns at most 25 choices for a single autocomplete interaction', async () => {
