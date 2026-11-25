@@ -1,10 +1,9 @@
 import type { ApplicationCommandOptionChoiceData, Interaction } from 'discord.js'
-import type { SlashCommandRuntime } from '../src/types'
+import type { SlashCommandReturnType, SlashCommandRuntime } from '../src/types'
 import { inspect } from 'node:util'
-import { ApplicationCommandOptionType, ApplicationCommandType, AutocompleteInteraction, ButtonInteraction, ChatInputCommandInteraction, Client, ComponentType, EmbedBuilder, Events, InteractionResponseType, InteractionType, MessageFlags, ModalSubmitInteraction, SnowflakeUtil, UserContextMenuCommandInteraction } from 'discord.js'
+import { ApplicationCommandOptionType, ApplicationCommandType, Attachment, AutocompleteInteraction, ButtonInteraction, ChatInputCommandInteraction, Client, ComponentType, EmbedBuilder, Events, InteractionResponseType, InteractionType, MessageFlags, ModalSubmitInteraction, SnowflakeUtil, UserContextMenuCommandInteraction } from 'discord.js'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { effectScope, ref } from 'vue'
-import inspectUpload from '../playground/discord/commands/upload'
 import { DiscordClient } from '../src/runtime/server/utils/client'
 import { MiddlewareError } from '../src/runtime/server/utils/defineMiddleware'
 import { cooldown } from '../src/runtime/server/utils/middleware/cooldown'
@@ -85,11 +84,17 @@ describe('discord gateway interaction contracts', () => {
     const fileId = '100000000000000012'
     vi.stubGlobal('reply', reply)
     try {
+      // The example uses the playground's Nitro auto-imports, supplied above for this test.
+      const { default: inspectUpload } = await vi.importActual<{ default: (file: Attachment) => SlashCommandReturnType }>('../playground/discord/commands/upload')
       bot.addSlashCommand({
         ...command,
         name: 'upload',
         options: [{ type: ApplicationCommandOptionType.Attachment, name: 'file', varname: 'file', required: true, description: 'File', hasAutocomplete: false }],
-        execute: inspectUpload,
+        execute(file) {
+          if (!(file instanceof Attachment))
+            throw new TypeError('Expected a resolved Discord attachment')
+          return inspectUpload(file)
+        },
       })
       const interaction = incoming(ChatInputCommandInteraction, InteractionType.ApplicationCommand, {
         name: 'upload',
