@@ -8,6 +8,8 @@ import process from 'node:process'
 import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 
+import { testGatewayResume } from './test-gateway-resume.mjs'
+
 const consumer = process.argv[2]
 const source = fileURLToPath(new URL('../test/fixtures/production/', import.meta.url))
 const app = join(consumer, 'standalone')
@@ -18,6 +20,7 @@ delete env.SERVER_PRESET
 delete env.DISCORD_TOKEN
 delete env.DISCORD_CLIENT_ID
 delete env.FIXTURE_RUNTIME_REPLY
+delete env.FIXTURE_DISCORD_API
 
 try {
   cpSync(source, app, { recursive: true })
@@ -41,6 +44,7 @@ try {
   await checkServer('ready')
   await checkServer('missing')
   await checkServer('rejected')
+  await testGatewayResume(deployment, env)
   console.log('Standalone production server passed credential-free build, Discord dispatch, startup failures and graceful shutdown.')
 }
 finally {
