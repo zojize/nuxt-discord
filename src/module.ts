@@ -45,7 +45,15 @@ export default defineNuxtModule<NuxtDiscordOptions>({
       prepareClient(ctx)
     }
     else {
-      addServerPlugin(ctx.resolve.module('runtime/server/plugins/discord'))
+      const plugin = ctx.resolve.module('runtime/server/plugins/discord')
+      addServerPlugin(plugin)
+      // The prerenderer builds a separate Nitro app. Importing the bot plugin
+      // there would evaluate every command and its runtime-only dependencies.
+      nuxt.hook('nitro:init', (nitro) => {
+        nitro.hooks.hook('prerender:config', (config) => {
+          config.plugins = config.plugins?.filter(entry => entry !== plugin)
+        })
+      })
       addServerImportsDir(ctx.resolve.module('runtime/server/utils'))
       addServerImportsDir(ctx.resolve.module('runtime/server/utils/middleware'))
     }
