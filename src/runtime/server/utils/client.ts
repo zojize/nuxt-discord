@@ -13,7 +13,7 @@ import { interactionSender, scheduleAcknowledgement } from '../../acknowledgemen
 import { currentInvocation, runInvocation, setInvocationFields } from '../../discordInvocation'
 import { logger } from '../../logger'
 import { resolveMiddlewareTags } from '../../middleware'
-import { CommandRegistration, planRegistrations } from '../../registration'
+import { CommandRegistration, commandScopes, planRegistrations } from '../../registration'
 import { MiddlewareError } from './defineMiddleware'
 import { reply } from './reply'
 
@@ -138,6 +138,7 @@ export class DiscordClient {
   #nitro: { hooks: { callHook: (name: string, ...args: any[]) => Promise<void>, hook: (name: string, fn: (...args: any[]) => any) => void } } = useNitroApp() as any
   #token: string
   #registration: CommandRegistration
+  #registeredGuildOverrides = new Map<string, boolean>()
 
   constructor() {
     if (!process.env.DISCORD_TOKEN) {
@@ -273,7 +274,7 @@ export class DiscordClient {
     }
     try {
       if (interaction.isChatInputCommand() || interaction.isAutocomplete())
-        command = this.resolveSlashCommand(interaction.commandName, interaction.options.getSubcommandGroup?.(false), interaction.options.getSubcommand?.(false))
+        command = this.resolveSlashCommand(interaction.commandName, interaction.options.getSubcommandGroup?.(false), interaction.options.getSubcommand?.(false), interaction.commandGuildId)
       if (!interaction.isAutocomplete() && (command?.defer || (!options.simulation && this.#clientOptions?.deferOnPromise))) {
         cancelAcknowledgement = scheduleAcknowledgement(interaction, command?.defer, !options.simulation)
         scope.run(() => onScopeDispose(cancelAcknowledgement!))
@@ -283,7 +284,7 @@ export class DiscordClient {
           await this.#nitro.hooks.callHook('discord:interaction:before', ctx)
         if (interaction.isUserContextMenuCommand() || interaction.isMessageContextMenuCommand()) {
           const menuType = interaction.isUserContextMenuCommand() ? 'user' : 'message'
-          const menu = this.#contextMenus.find(m => m.name === interaction.commandName && m.type === menuType)
+          const menu = this.#contextMenus.find(m => m.name === interaction.commandName && m.type === menuType && this.#matchesScope(m, interaction.commandGuildId))
           if (!menu)
             throw new UnknownCommandError(`Unknown context menu "${interaction.commandName}"`)
           const entries = [...resolveMiddlewareTags(menu.middleware, menu.name), ...menu.middlewareEntries ?? []]
@@ -370,8 +371,8 @@ export class DiscordClient {
     return result
   }
 
-  public resolveSlashCommand(name: string, group?: string | null, leaf?: string | null): SlashCommandRuntime | SlashCommandSubcommandRuntime | undefined {
-    const root = this.getSlashCommand(name)
+  public resolveSlashCommand(name: string, group?: string | null, leaf?: string | null, commandGuildId?: string | null): SlashCommandRuntime | SlashCommandSubcommandRuntime | undefined {
+    const root = this.getSlashCommand(name, commandGuildId)
     if (!root?.subcommands?.length)
       return group || leaf ? undefined : root
     if (!leaf)
@@ -480,7 +481,7 @@ export class DiscordClient {
   }
 
   public addSlashCommand(command: SlashCommandRuntime) {
-    const existingCommandIndex = this.#slashCommands.findIndex(cmd => cmd.name === command.name)
+    const existingCommandIndex = this.#slashCommands.findIndex(cmd => cmd.name === command.name && cmd.path === command.path)
     if (existingCommandIndex !== -1) {
       // replace existing command
       this.#slashCommands[existingCommandIndex] = command
@@ -496,8 +497,8 @@ export class DiscordClient {
     }
   }
 
-  public removeSlashCommand(name: string) {
-    const index = this.#slashCommands.findIndex(cmd => cmd.name === name)
+  public removeSlashCommand(name: string, commandGuildId?: string | null) {
+    const index = this.#slashCommands.findIndex(cmd => cmd.name === name && this.#matchesScope(cmd, commandGuildId))
     if (index !== -1) {
       this.#slashCommands.splice(index, 1)
     }
@@ -511,8 +512,22 @@ export class DiscordClient {
     return this.#slashCommands
   }
 
-  public getSlashCommand(name: string): SlashCommandRuntime | undefined {
-    return this.#slashCommands.find(cmd => cmd.name === name)
+  #configuredGuilds(): string[] {
+    const configured = useRuntimeConfig().discord?.guilds
+    return configured?.length ? configured : (process.env.DISCORD_GUILD_ID ?? '').split(',').map(id => id.trim()).filter(Boolean)
+  }
+
+  #matchesScope(command: { guilds?: true | string[] }, commandGuildId?: string | null) {
+    // Real Discord interactions identify the command's registration guild separately from the invoking guild.
+    if (commandGuildId === undefined)
+      return true
+    if (command.guilds === true && commandGuildId != null)
+      return this.#registeredGuildOverrides.get(commandGuildId) ?? this.#configuredGuilds().includes(commandGuildId)
+    return commandScopes(command.guilds, []).includes(commandGuildId ?? 'global')
+  }
+
+  public getSlashCommand(name: string, commandGuildId?: string | null): SlashCommandRuntime | undefined {
+    return this.#slashCommands.find(cmd => cmd.name === name && this.#matchesScope(cmd, commandGuildId))
   }
 
   #interactionTimeout?: number
@@ -532,6 +547,9 @@ export class DiscordClient {
         throw new MissingOptionError(option.name)
 
       switch (option.type) {
+        case ApplicationCommandOptionType.Channel:
+          args.push(opt?.channel ?? undefined)
+          break
         case ApplicationCommandOptionType.User:
           args.push(opt?.user ?? undefined)
           break
@@ -617,13 +635,24 @@ export class DiscordClient {
   }
 
   #registrationPlan(commands = this.#slashCommands, guilds?: string[]) {
-    const configured = useRuntimeConfig().discord?.guilds
-    const targets = guilds ?? (configured?.length ? configured : (process.env.DISCORD_GUILD_ID ?? '').split(',').map(id => id.trim()).filter(Boolean))
-    return planRegistrations(commands, this.#contextMenus, targets)
+    return planRegistrations(commands, this.#contextMenus, guilds ?? this.#configuredGuilds())
   }
 
   public async syncCommandRegistrations(options: { changedOnly?: boolean, guilds?: string[] } = {}) {
-    return this.#registration.sync(this.#registrationPlan(this.#slashCommands, options.guilds), options.changedOnly)
+    const configured = this.#configuredGuilds()
+    const guilds = options.guilds ?? configured
+    const results = await this.#registration.sync(this.#registrationPlan(this.#slashCommands, guilds), options.changedOnly)
+    // Manual registration may target other guilds. Route successfully reconciled scopes
+    // by that choice even when another scope in the same sync failed.
+    for (const { scope, error } of results) {
+      if (scope === 'global' || error)
+        continue
+      if (guilds.includes(scope) === configured.includes(scope))
+        this.#registeredGuildOverrides.delete(scope)
+      else
+        this.#registeredGuildOverrides.set(scope, guilds.includes(scope))
+    }
+    return results
   }
 
   public async registerSlashCommands(guilds?: string[]) {

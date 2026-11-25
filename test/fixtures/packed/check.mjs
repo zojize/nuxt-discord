@@ -15,6 +15,7 @@ async function check() {
   await import('./.output/server/index.mjs')
   const bot = globalThis[Symbol.for('discord-client')]
   assert.ok(bot, 'Nitro initialized the packed module')
+  assert.deepEqual(bot.getContextMenus().find(menu => menu.name === 'Save Message')?.guilds, ['100000000000000002'], 'packed menu retains its registration scope')
   await bot.start({ intents: [] })
   async function dispatch(name, userId = 'member', userMenu = false, onReply) {
     let response

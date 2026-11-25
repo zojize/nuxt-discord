@@ -9,12 +9,16 @@ Parameter types are inferred from TypeScript type annotations. All Discord slash
 ## Supported Types
 
 ```ts
+import type { Attachment, Channel, Role, User } from 'discord.js'
+import type { integer, Mentionable } from 'nuxt-discord/types'
+
 export default (
   name: string,
   count: number,
   sides: integer,
   verbose: boolean,
   user: User,
+  channel: Channel,
   role: Role,
   target: Mentionable,
   file: Attachment,
@@ -30,6 +34,7 @@ export default (
 | `integer` | Integer | `int` |
 | `boolean` | Boolean | `bool` |
 | `User` | User | `user` |
+| `Channel` | Channel | `chan` |
 | `Role` | Role | `role` |
 | `Mentionable` | Mentionable | `@` |
 | `Attachment` | Attachment | `file` |
@@ -65,7 +70,7 @@ export default (message: string, loud?: boolean) => {
 }
 ```
 
-Optional parameters are not marked as `required` in Discord.
+Parameters marked with `?` or given a TypeScript default are optional in Discord. Discord lists required options first. The handler receives arguments in its declared parameter order.
 
 ## Constraints with `describeOption`
 

@@ -10,7 +10,7 @@ export type ContextMenuDefinition = ({
   type: 'message'
   name?: string
   execute: (interaction: MessageContextMenuCommandInteraction) => unknown
-}) & { middlewareEntries?: MenuOptions['middleware'] }
+}) & { guilds?: true | string[], middlewareEntries?: MenuOptions['middleware'] }
 
 /**
  * Define a user context menu command (right-click on a user).

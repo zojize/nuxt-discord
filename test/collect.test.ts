@@ -433,6 +433,24 @@ export default (file: Attachment) => {
       expect(command!.options[0]!.type).toBe(ApplicationCommandOptionType.Attachment)
     })
 
+    it('preserves a defaulted parameter before a required channel and recognizes imported autocomplete shorthand', () => {
+      const file = writeCommand(commandsDir, 'search.ts', `
+import type { Channel } from 'discord.js'
+import { autocomplete } from './suggest'
+export default (limit = 5, channel: Channel, query?: string, verbose = false) => {
+  describeOption(query, { autocomplete })
+  return channel.id
+}
+`)
+      const command = processCommandFile(ctx, file)!
+      expect(command.options.map(({ name, type, required, hasAutocomplete }) => [name, type, required, hasAutocomplete])).toEqual([
+        ['limit', ApplicationCommandOptionType.Number, false, false],
+        ['channel', ApplicationCommandOptionType.Channel, true, false],
+        ['query', ApplicationCommandOptionType.String, false, true],
+        ['verbose', ApplicationCommandOptionType.Boolean, false, false],
+      ])
+    })
+
     it('should parse optional parameters', () => {
       const file = writeCommand(commandsDir, 'say.ts', `
 /**

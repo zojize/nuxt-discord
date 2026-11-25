@@ -1,4 +1,4 @@
-import type { APIInteractionDataResolvedGuildMember, APIRole, Attachment, ChatInputCommandInteraction, ClientOptions, GuildMember, LocalizationMap, Role, User } from 'discord.js'
+import type { APIInteractionDataResolvedGuildMember, APIRole, Attachment, ChatInputCommandInteraction, ClientOptions, CommandInteractionOption, GuildMember, LocalizationMap, Role, User } from 'discord.js'
 import type { ListenOptions } from 'listhen'
 import type { MaybeRef } from 'vue'
 import type { DiscordClient } from './runtime/server/utils/client'
@@ -101,6 +101,7 @@ export const slashCommandOptionTypeIdentifiers = [
   'string',
   'boolean',
   'User',
+  'Channel',
   'Role',
   'Mentionable',
   'Attachment',
@@ -112,6 +113,7 @@ export const typeIdentifierToEnum = {
   string: ApplicationCommandOptionType.String,
   boolean: ApplicationCommandOptionType.Boolean,
   User: ApplicationCommandOptionType.User,
+  Channel: ApplicationCommandOptionType.Channel,
   Role: ApplicationCommandOptionType.Role,
   Mentionable: ApplicationCommandOptionType.Mentionable,
   Attachment: ApplicationCommandOptionType.Attachment,
@@ -127,6 +129,9 @@ declare const integerLabel: unique symbol
  */
 export type integer = number & { [integerLabel]: never }
 
+/** A Discord mentionable option resolves to a user, guild member, or role. */
+export type Mentionable = NonNullable<CommandInteractionOption['user' | 'member' | 'role']>
+
 export type SlashCommandOptionType
   = | number
     | integer
@@ -138,6 +143,7 @@ export type SlashCommandOptionType
     | GuildMember
     | APIInteractionDataResolvedGuildMember
     | Attachment
+    | NonNullable<CommandInteractionOption['channel']>
 
 export interface SlashCommandOptionBase {
   name: string
@@ -169,6 +175,10 @@ export interface SlashCommandUserOption extends SlashCommandOptionBase {
   type: ApplicationCommandOptionType.User
 }
 
+export interface SlashCommandChannelOption extends SlashCommandOptionBase {
+  type: ApplicationCommandOptionType.Channel
+}
+
 export interface SlashCommandRoleOption extends SlashCommandOptionBase {
   type: ApplicationCommandOptionType.Role
 }
@@ -187,6 +197,7 @@ export type SlashCommandOption
     | SlashCommandStringOption
     | SlashCommandBooleanOption
     | SlashCommandUserOption
+    | SlashCommandChannelOption
     | SlashCommandRoleOption
     | SlashCommandMentionableOption
     | SlashCommandAttachmentOption

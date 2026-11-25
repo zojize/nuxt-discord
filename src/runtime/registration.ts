@@ -22,11 +22,17 @@ function getSlashCommandBuilder<Builder extends SlashCommandBuilder | SlashComma
   if (builder instanceof SlashCommandBuilder) {
     if (command.nsfw != null)
       builder.setNSFW(command.nsfw)
-    if (command.contexts != null)
+    if (!command.guilds && command.contexts != null)
       builder.setContexts(...command.contexts)
     if (command.defaultMemberPermissions !== undefined)
       builder.setDefaultMemberPermissions(command.defaultMemberPermissions)
   }
+
+  const children = command.subcommands?.length ? command.subcommands : command.options
+  if (new Set(children.map(child => child.name)).size !== children.length)
+    throw new Error(`Duplicate option or subcommand name in ${command.path}`)
+  if (command.subcommands?.length && command.options.length)
+    throw new Error(`Discord commands with subcommands cannot also declare parameters: ${command.path}`)
 
   if (command.subcommands != null && command.subcommands.length > 0) {
     for (const subcommand of command.subcommands) {
@@ -48,7 +54,8 @@ function getSlashCommandBuilder<Builder extends SlashCommandBuilder | SlashComma
     }
   }
   else if (builder instanceof SlashCommandBuilder || builder instanceof SlashCommandSubcommandBuilder) {
-    for (const option of command.options) {
+    // Discord requires mandatory options first. Keep the handler’s parameter order intact.
+    for (const option of command.options.toSorted((a, b) => Number(b.required) - Number(a.required))) {
       switch (option.type) {
         case ApplicationCommandOptionType.String:
           builder.addStringOption((opt) => {
@@ -95,6 +102,9 @@ function getSlashCommandBuilder<Builder extends SlashCommandBuilder | SlashComma
         case ApplicationCommandOptionType.Boolean:
           builder.addBooleanOption(opt => setBasicOptionFields(opt, option))
           break
+        case ApplicationCommandOptionType.Channel:
+          builder.addChannelOption(opt => setBasicOptionFields(opt, option))
+          break
         case ApplicationCommandOptionType.User:
           builder.addUserOption(opt => setBasicOptionFields(opt, option))
           break
@@ -138,16 +148,21 @@ type LocalCommand = SlashCommandRuntime | SlashCommandSubcommandRuntime | SlashC
 interface Entry { body: Payload, local?: SlashCommandRuntime }
 type ScopePlan = Map<string, Entry[]>
 
+export function commandScopes(targets: true | string[] | undefined, guilds: string[]) {
+  return targets === true ? guilds : targets ?? ['global']
+}
+
 export function planRegistrations(commands: SlashCommandRuntime[], menus: (ContextMenuDefinition & { name: string })[], guilds: string[]) {
   const scopes: ScopePlan = new Map()
   const unassigned = []
+  const unassignedMenus: string[] = []
   function add(scope: string, entry: Entry) {
     const entries = scopes.get(scope) ?? []
     entries.push(entry)
     scopes.set(scope, entries)
   }
   for (const command of commands) {
-    const targets = command.guilds === true ? guilds : command.guilds || ['global']
+    const targets = commandScopes(command.guilds, guilds)
     if (!targets.length) {
       unassigned.push(command)
       continue
@@ -158,12 +173,28 @@ export function planRegistrations(commands: SlashCommandRuntime[], menus: (Conte
   }
   for (const menu of menus) {
     const type = menu.type === 'user' ? ApplicationCommandType.User : ApplicationCommandType.Message
-    add('global', { body: new ContextMenuCommandBuilder().setName(menu.name).setType(type).toJSON() })
+    const targets = commandScopes(menu.guilds, guilds)
+    if (!targets.length) {
+      unassignedMenus.push(menu.name)
+      continue
+    }
+    const body = new ContextMenuCommandBuilder().setName(menu.name).setType(type).toJSON()
+    for (const scope of new Set(targets))
+      add(scope, { body })
   }
-  return { scopes, unassigned }
+  return { scopes, unassigned, unassignedMenus }
 }
 
 type Plan = ReturnType<typeof planRegistrations>
+
+function scopesToReconcile(plan: Plan, managed: string[]) {
+  const scopes = new Set([...plan.scopes.keys(), ...managed])
+  // An unresolved @guild might belong to any previously managed guild. An empty
+  // bulk overwrite would remove it before the missing configuration is fixed.
+  if (plan.unassigned.length || plan.unassignedMenus.length)
+    return [...scopes].filter(scope => scope === 'global')
+  return [...scopes]
+}
 
 function identity(command: { name: string, type?: number }) {
   return `${command.type ?? ApplicationCommandType.ChatInput}:${command.name}`
@@ -292,8 +323,8 @@ export class CommandRegistration {
     const changed: Match[] = []
     const synced: Match[] = []
     const conflict: LocalRow[] = plan.unassigned.map(command => ({ ...command, scope: 'unconfigured guild' }))
-    let menuChanges = 0
-    for (const scope of new Set([...plan.scopes.keys(), ...await this.store.load() ?? []])) {
+    let menuChanges = plan.unassignedMenus.length
+    for (const scope of scopesToReconcile(plan, await this.store.load() ?? [])) {
       const desired = plan.scopes.get(scope) ?? []
       const remote = await this.read(scope)
       const existing = new Map(remote.map(cmd => [identity(cmd), cmd]))
@@ -351,16 +382,22 @@ export class CommandRegistration {
   private async apply(plan: Plan, changedOnly: boolean) {
     const managed = new Set(await this.store.load() ?? [])
     const results: RegistrationResult[] = []
-    if (plan.unassigned.length) {
-      const error = new Error(`Set discord.guilds or DISCORD_GUILD_ID for ${plan.unassigned.map(cmd => `/${cmd.name}`).join(', ')}`)
+    const missingTargets = [...plan.unassigned.map(cmd => `/${cmd.name}`), ...plan.unassignedMenus]
+    if (missingTargets.length) {
+      const error = new Error(`Set discord.guilds or DISCORD_GUILD_ID for ${missingTargets.join(', ')}`)
       this.onError(error)
       results.push({ scope: 'unconfigured guild', commands: [], error: error.message })
     }
-    for (const scope of new Set([...plan.scopes.keys(), ...managed])) {
+    for (const scope of scopesToReconcile(plan, [...managed])) {
       const desired = plan.scopes.get(scope) ?? []
       try {
         if (duplicates(desired).size)
           throw new Error('Duplicate command names in this scope')
+        // Discord applies these maxima per command type, separately in each scope.
+        for (const [type, max] of [[ApplicationCommandType.ChatInput, 100], [ApplicationCommandType.User, 15], [ApplicationCommandType.Message, 15]] as const) {
+          if (desired.filter(({ body }) => (body.type ?? ApplicationCommandType.ChatInput) === type).length > max)
+            throw new Error(`Discord allows up to ${max} ${ApplicationCommandType[type]} commands per scope`)
+        }
         const body = desired.map(entry => entry.body)
         const schema = body.map(comparable)
         if (changedOnly && isDeepStrictEqual(this.confirmed.get(scope), schema))

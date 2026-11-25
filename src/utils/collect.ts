@@ -21,6 +21,7 @@ const modifiersMap: Record<SlashCommandOptionTypeIdentifier, string[]> = {
   integer: ['min', 'max', 'choices'],
   boolean: [],
   User: [],
+  Channel: [],
   Role: [],
   Mentionable: [],
   Attachment: [],
@@ -145,6 +146,14 @@ function applyLocalizations(ctx: CommandSourceContext) {
   }
 }
 
+export function readGuildTags(tags: readonly ts.JSDocTag[]): true | string[] | undefined {
+  const guildTags = tags.filter(tag => tag.tagName.text === 'guild')
+  if (!guildTags.length)
+    return undefined
+  const ids = guildTags.flatMap(tag => tag.comment?.toString().trim() || [])
+  return ids.length ? ids : true
+}
+
 export function processCommandFile(ctx: CommandSourceContext, file: string, sourceFile = ts.createSourceFile(file, readFileSync(file).toString(), ts.ScriptTarget.Latest, true)): SlashCommand | undefined {
   const commandDefinition = findCommandExport(sourceFile)?.handler
 
@@ -199,14 +208,7 @@ export function processCommandFile(ctx: CommandSourceContext, file: string, sour
     command.defaultMemberPermissions = permissionsTag.comment.toString().trim()
   }
 
-  // @guild (all configured guilds) or @guild <id> (specific guild)
-  const guildTags = jsDocTags.filter(tag => tag.tagName.escapedText === 'guild')
-  if (guildTags.length > 0) {
-    const specificIds = guildTags
-      .map(tag => tag.comment?.toString().trim())
-      .filter((id): id is string => !!id && id.length > 0)
-    command.guilds = specificIds.length > 0 ? specificIds : true
-  }
+  command.guilds = readGuildTags(jsDocTags)
 
   // @middleware tags
   const middleware = readMiddlewareTags(sourceFile, commandDefinition)
@@ -252,11 +254,19 @@ export function processCommandFile(ctx: CommandSourceContext, file: string, sour
     }
   }
 
-  const getType = (type: ts.TypeNode | undefined): {
+  const getType = (type: ts.TypeNode | undefined, initializer?: ts.Expression): {
     type: SlashCommandOptionTypeIdentifier
     choices?: (string | number)[]
   } => {
     if (!type) {
+      if (initializer) {
+        if (ts.isNumericLiteral(initializer) || (ts.isPrefixUnaryExpression(initializer) && [ts.SyntaxKind.MinusToken, ts.SyntaxKind.PlusToken].includes(initializer.operator) && ts.isNumericLiteral(initializer.operand)))
+          return { type: 'number' }
+        if (initializer.kind === ts.SyntaxKind.TrueKeyword || initializer.kind === ts.SyntaxKind.FalseKeyword)
+          return { type: 'boolean' }
+        if (ts.isStringLiteralLike(initializer))
+          return { type: 'string' }
+      }
       ctx.logger.warn(`No type found for slash command option in ${file}, defaulting to string`)
       return { type: 'string' }
     }
@@ -309,8 +319,7 @@ export function processCommandFile(ctx: CommandSourceContext, file: string, sour
 
   for (const param of commandDefinition.parameters) {
     const name = param.name.getText(sourceFile)
-    // let type = param.type?.getText(sourceFile)
-    let { type, choices } = getType(param.type)
+    let { type, choices } = getType(param.type, param.initializer)
 
     const jsDocTagIdx = jsDocTags
       .findIndex(tag => ts.isJSDocParameterTag(tag) && tag.name.getText() === name)
@@ -343,7 +352,7 @@ export function processCommandFile(ctx: CommandSourceContext, file: string, sour
       name,
       type: typeIdentifierToEnum[type],
       description: jsdocDescription,
-      required: !param.questionToken,
+      required: !param.questionToken && !param.initializer,
       varname: name,
       hasAutocomplete: false,
       ...modifiers,

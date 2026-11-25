@@ -63,6 +63,62 @@ describe('command registration', () => {
     expect(put).toHaveBeenCalledTimes(2)
   })
 
+  it('registers channel options and required-first wire order while preserving function order', () => {
+    const cmd = command('search', true)
+    cmd.contexts = [0]
+    cmd.options = [
+      { name: 'limit', varname: 'limit', description: 'Count', required: false, type: ApplicationCommandOptionType.Number, hasAutocomplete: false },
+      { name: 'channel', varname: 'channel', description: 'Channel', required: true, type: ApplicationCommandOptionType.Channel, hasAutocomplete: false },
+      { name: 'query', varname: 'query', description: 'Text', required: false, type: ApplicationCommandOptionType.String, hasAutocomplete: true },
+    ]
+    const plan = planRegistrations([cmd], [], [guildId])
+    const body = plan.scopes.get(guildId)![0]!.body
+    expect('contexts' in body && body.contexts !== undefined).toBe(false)
+    expect(body).toMatchObject({ options: [
+      { name: 'channel', type: 7, required: true },
+      { name: 'limit', type: 10, required: false },
+      { name: 'query', autocomplete: true },
+    ] })
+    expect(cmd.options.map(option => option.name)).toEqual(['limit', 'channel', 'query'])
+  })
+
+  it('registers user and message menus in their own scopes and preserves guilds when configuration is missing', async () => {
+    const { registry, connect, routes, put } = setup()
+    const menu = { type: 'user', name: 'Inspect', guilds: true, execute: () => {} } as const
+    const other = { type: 'message' as const, name: 'Inspect', guilds: [guildId], execute: () => {} }
+    await registry.sync(planRegistrations([command('a', true)], [menu, other], [guildId]))
+    expect(routes.get(guildRoute)?.map(cmd => cmd.type)).toEqual([1, 2, 3])
+    expect(routes.has(globalRoute)).toBe(false)
+    put.mockClear()
+    const missing = planRegistrations([command('global')], [menu, other], [])
+    const report = await connect().sync(missing)
+    expect(report.find(r => r.error)?.error).toContain('Inspect')
+    expect(put.mock.calls.map(([route]) => route)).toEqual([globalRoute])
+    expect(routes.get(guildRoute)).toHaveLength(3)
+    expect((await connect().diff(missing)).removed).toEqual([])
+  })
+
+  it('checks Discord limits per scope and rejects duplicate option names before a request', async () => {
+    const { registry, put } = setup()
+    const menus = Array.from({ length: 16 }, (_, n) => ({ name: `Action ${n}`, type: 'message' as const, execute() {} }))
+    const [over] = await registry.sync(planRegistrations([], menus, []))
+    expect(over?.error).toMatch(/15 Message/)
+    expect(put).not.toHaveBeenCalled()
+    menus.pop()
+    expect((await registry.sync(planRegistrations([], menus, [])))[0]?.error).toBeUndefined()
+
+    const cmd = command('too-many')
+    const option = { name: 'choice', varname: 'choice', description: 'Choose', required: true, type: ApplicationCommandOptionType.String as const, hasAutocomplete: false }
+    cmd.options = Array.from({ length: 25 }, (_, n) => ({ ...option, name: `p${n}` }))
+    expect(() => planRegistrations([cmd], [], [])).not.toThrow()
+    cmd.options.push({ ...option, name: 'extra' })
+    expect(() => planRegistrations([cmd], [], [])).toThrow()
+    cmd.options = [option, { ...option }]
+    expect(() => planRegistrations([cmd], [], [])).toThrow(/Duplicate option/)
+    cmd.options = [{ ...option, hasAutocomplete: true, choices: [{ name: 'A', value: 'a' }] }]
+    expect(() => planRegistrations([cmd], [], [])).toThrow(/mutually exclusive/)
+  })
+
   it('removes the final command only in previously owned scopes, including after restart', async () => {
     const { registry, connect, put } = setup()
     const empty = planRegistrations([], [], [])

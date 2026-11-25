@@ -3,6 +3,7 @@ import type { CommandSourceContext } from './collect'
 import { globSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import ts from 'typescript'
+import { readGuildTags } from './collect'
 import { readMiddlewareTags } from './middlewareTags'
 
 export default function collectContextMenus(ctx: CommandSourceContext) {
@@ -74,7 +75,9 @@ export function processContextMenuFile(ctx: CommandSourceContext, file: string):
   // Parse @middleware JSDoc tags
   const middleware = readMiddlewareTags(sourceFile)
 
-  return { name, type, path: file, ...(middleware.length > 0 ? { middleware } : {}) }
+  const definition = sourceFile.statements.find(ts.isExportAssignment)!
+  const guilds = readGuildTags(ts.getJSDocTags(definition))
+  return { name, type, path: file, ...(guilds && { guilds }), ...(middleware.length > 0 ? { middleware } : {}) }
 }
 
 function getJSDocTag(sourceFile: ts.SourceFile, tagName: string): string | undefined {
