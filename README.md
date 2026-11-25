@@ -53,9 +53,7 @@ DISCORD_TOKEN=your_bot_token
 DISCORD_CLIENT_ID=your_application_id
 ```
 
-Deploy the app on one always-on Node process that owns the Discord Gateway connection.
-
-For production, deploy the whole `.output` directory to a long-running Node service. Set `DISCORD_TOKEN` and `DISCORD_CLIENT_ID` in the service environment and run `node .output/server/index.mjs`. For a local production run, use `node --env-file=.env .output/server/index.mjs`. [Deployment guide](https://zojize.github.io/nuxt-discord/installation/#deployment)
+For production, deploy the whole `.output` directory to one always-on Node process. Set `DISCORD_TOKEN` and `DISCORD_CLIENT_ID` in the service environment and run `node .output/server/index.mjs`. For a local production run, use `node --env-file=.env .output/server/index.mjs`. [Deployment guide](https://zojize.github.io/nuxt-discord/installation/#deployment)
 
 ## Creating Commands
 

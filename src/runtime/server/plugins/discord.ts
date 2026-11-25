@@ -105,8 +105,9 @@ export default defineNitroPlugin(async (nitro) => {
   if (runtimeConfig.discord.autoStart) {
     try {
       await client.start(runtimeConfig.discord.client)
-      client.internalClient?.on(Events.ShardDisconnect, (event, shard) => {
-        if (client.internalClient && !closed)
+      const gateway = client.internalClient
+      gateway?.on(Events.ShardDisconnect, (event, shard) => {
+        if (client.internalClient === gateway && !closed)
           fail(`Discord shard ${shard} disconnected and cannot reconnect. Close code:`, event.code)
       })
     }
