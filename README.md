@@ -20,7 +20,7 @@ Turn TypeScript functions in your Nuxt app into Discord slash commands. Share se
 - **Modals** - Interactive forms via `reply.modal(title, fields, onSubmit)`
 - **Channel Composable** - `useTextChannel` exposes a Discord text channel as a reactive proxy with event-driven refs and a `send()` method
 - **File-based Routing** - Directory structure maps to subcommand hierarchy
-- **All Option Types** - String, Number, Integer, Boolean, User, Role, Mentionable, Attachment
+- **All Option Types** - String, Number, Integer, Boolean, User, Channel, Role, Mentionable, Attachment
 - **JSDoc Metadata** - `@nsfw`, `@guild`, `@dm`, `@defaultMemberPermissions`, `@middleware` tags
 - **Localization** - i18n via inline JSDoc or `discord/locales/*.json` files
 - **Guild Commands** - Register commands per-guild for instant updates
@@ -94,12 +94,16 @@ export default (a: number, b: number) => {
 All Discord option types are supported:
 
 ```ts
+import type { Attachment, Channel, Role, User } from 'discord.js'
+import type { integer, Mentionable } from 'nuxt-discord/types'
+
 export default (
   name: string, // String option
   count: number, // Number option
   sides: integer, // Integer option (phantom type)
   verbose: boolean, // Boolean option
   user: User, // User option
+  channel: Channel, // Channel option
   role: Role, // Role option
   target: Mentionable, // Mentionable option
   file: Attachment, // Attachment option

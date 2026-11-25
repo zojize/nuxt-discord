@@ -81,6 +81,8 @@ export default defineUserContextMenu('User Info', (interaction) => {
 
 ## Registration
 
+Context menus default to global registration. Put a bare `@guild` or one or more `@guild <id>` tags on the default export to register the menu in particular servers. User and message menus may share a display name.
+
 Context menu commands are registered alongside slash commands when you sync:
 
 ```bash

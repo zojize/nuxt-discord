@@ -69,9 +69,10 @@ export const macros = {
 
     // this might be undefined due to the limitations of parseLiteral, just remove it and set hasAutocomplete directly
     Reflect.deleteProperty(macroOptions, 'autocomplete')
-    option.hasAutocomplete = node.arguments[1].properties
-      .find(prop => (ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name) && prop.name.escapedText === 'autocomplete')
-        || (ts.isMethodDeclaration(prop) && ts.isIdentifier(prop.name) && prop.name.escapedText === 'autocomplete')) != null
+    option.hasAutocomplete = node.arguments[1].properties.some(prop =>
+      (ts.isPropertyAssignment(prop) || ts.isShorthandPropertyAssignment(prop) || ts.isMethodDeclaration(prop))
+      && (ts.isIdentifier(prop.name) || ts.isStringLiteral(prop.name)) && prop.name.text === 'autocomplete',
+    )
 
     for (const key in macroOptions) {
       if (!isValidOptionKey(key)) {

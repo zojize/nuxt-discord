@@ -24,7 +24,7 @@ export function prepareTemplates(ctx: NuxtDiscordContext) {
         const varName = `cm_${i}`
         return {
           importLine: `import ${varName} from '${cm.path}'`,
-          entry: `{ ...${varName}, name: ${JSON.stringify(cm.name)}, middleware: ${JSON.stringify(cm.middleware ?? [])}, path: ${JSON.stringify(cm.path)} }`,
+          entry: `{ ...${varName}, name: ${JSON.stringify(cm.name)}, middleware: ${JSON.stringify(cm.middleware ?? [])}, guilds: ${JSON.stringify(cm.guilds)}, path: ${JSON.stringify(cm.path)} }`,
         }
       })
       return [
@@ -41,6 +41,7 @@ export function prepareTemplates(ctx: NuxtDiscordContext) {
       return `export default ${JSON.stringify(ctx.contextMenus.map(cm => ({
         name: cm.name,
         type: cm.type,
+        guilds: cm.guilds,
         path: cm.path,
       })))}`
     },

@@ -47,6 +47,18 @@ describe('context menus', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true })
   })
 
+  it('reads configured and explicit guild scopes from the exported menu', () => {
+    const make = (tags: string) => processContextMenuFile(ctx, writeFile(contextMenuDir, 'scoped.ts', `
+/**
+ * ${tags}
+ */
+export default defineUserContextMenu('Inspect', () => {})
+`))
+    expect(make('@guild')?.guilds).toBe(true)
+    expect(make('@guild 111\n * @guild 222')?.guilds).toEqual(['111', '222'])
+    expect(make('Inspect a user')?.guilds).toBeUndefined()
+  })
+
   describe('name from define function', () => {
     it('should get name from defineUserContextMenu first arg', () => {
       const file = writeFile(contextMenuDir, 'info.ts', `

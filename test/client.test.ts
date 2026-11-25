@@ -5,6 +5,7 @@ import { ApplicationCommandOptionType, Client, Events, MessageFlags, REST } from
 import { useNitroApp } from 'nitropack/runtime'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
+import { CommandRegistration } from '../src/runtime/registration'
 import { DiscordClient, getCurrentChannel, useInteraction } from '../src/runtime/server/utils/client'
 
 import { MiddlewareError, useMiddlewareContext } from '../src/runtime/server/utils/defineMiddleware'
@@ -618,6 +619,81 @@ describe('client', () => {
 
     await expect.poll(() => lazyCommand.load).toHaveBeenCalled()
     await expect.poll(() => interaction.reply).toHaveBeenCalledWith({ content: 'loaded!' })
+  })
+
+  it('routes same-named global and guild commands by their registration scope, including autocomplete', async () => {
+    const client = new DiscordClient()
+    const choice = { name: 'query', varname: 'query', type: ApplicationCommandOptionType.String as const, description: 'Text', required: false, hasAutocomplete: true }
+    for (const [scope, guilds] of [['global', undefined], ['guild-a', ['guild-a']], ['guild-b', ['guild-b']]] as const) {
+      client.addSlashCommand({
+        ...ping,
+        path: `${scope}.ts`,
+        guilds: guilds ? [...guilds] : undefined,
+        options: [choice],
+        execute: () => scope,
+        optionMacros: { query: { autocomplete: () => [{ name: scope, value: scope }] } },
+      })
+    }
+    for (const scope of ['guild-b', null, 'guild-a']) {
+      const { interaction } = mockChatInputCommandInteraction('ping')
+      Object.assign(interaction, { commandGuildId: scope, guildId: 'guild-a' })
+      const execution = await client.dispatchInteraction(interaction, { simulation: true })
+      expect(interaction.reply).toHaveBeenCalledWith({ content: scope ?? 'global' })
+      execution.dispose()
+      const respond = vi.fn()
+      Object.assign(interaction, { isChatInputCommand: () => false, isAutocomplete: () => true, respond })
+      Object.assign(interaction.options, { getFocused: () => ({ name: 'query', value: '' }) })
+      const completion = await client.dispatchInteraction(interaction, { simulation: true })
+      expect(respond).toHaveBeenCalledWith([{ name: scope ?? 'global', value: scope ?? 'global' }])
+      completion.dispose()
+    }
+    expect(client.resolveSlashCommand('ping', null, null, 'another-guild')).toBeUndefined()
+  })
+
+  it('routes menu type and registration scope separately, including explicit registration overrides', async () => {
+    const client = new DiscordClient()
+    const globalHandler = vi.fn()
+    const guildUser = vi.fn()
+    const guildMessage = vi.fn()
+    client.addContextMenus([
+      { name: 'Inspect', type: 'user', execute: globalHandler },
+      { name: 'Inspect', type: 'user', guilds: true, execute: guildUser },
+      { name: 'Inspect', type: 'message', guilds: ['guild-b'], execute: guildMessage },
+    ])
+    const sync = vi.spyOn(CommandRegistration.prototype, 'sync').mockResolvedValue([{ scope: 'guild-b', commands: [] }])
+    try {
+      await client.registerSlashCommands(['guild-b'])
+      for (const [scope, user, expected] of [[null, true, globalHandler], ['guild-b', false, guildMessage], ['guild-b', true, guildUser]] as const) {
+        const { interaction } = mockChatInputCommandInteraction('Inspect')
+        Object.assign(interaction, {
+          guildId: 'guild-b',
+          commandGuildId: scope,
+          isChatInputCommand: () => false,
+          isUserContextMenuCommand: () => user,
+          isMessageContextMenuCommand: () => !user,
+        })
+        const result = await client.dispatchInteraction(interaction, { simulation: true })
+        expect(result.status).toBe('ok')
+        expect(expected).toHaveBeenCalledExactlyOnceWith(interaction)
+        result.dispose()
+      }
+    }
+    finally { sync.mockRestore() }
+  })
+
+  it('passes the resolved channel and leaves a missing defaulted argument undefined', async () => {
+    const client = new DiscordClient()
+    const execute = vi.fn(() => 'ok')
+    client.addSlashCommand({ ...ping, options: [
+      { name: 'limit', varname: 'limit', type: ApplicationCommandOptionType.Number, description: 'Count', required: false, hasAutocomplete: false },
+      { name: 'destination', varname: 'destination', type: ApplicationCommandOptionType.Channel, description: 'Channel', required: true, hasAutocomplete: false },
+    ], execute })
+    const { interaction } = mockChatInputCommandInteraction('ping')
+    const channel = { id: 'channel' }
+    Object.assign(interaction.options, { get: (name: string) => name === 'destination' ? { value: channel.id, channel } : null })
+    const result = await client.dispatchInteraction(interaction, { simulation: true })
+    expect(execute).toHaveBeenCalledWith(undefined, channel)
+    result.dispose()
   })
 
   it('should manage command lifecycle (add, replace, remove, clear)', () => {
