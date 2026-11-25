@@ -4,6 +4,7 @@ import type {
   ButtonInteraction,
   InteractionCallbackResponse,
   InteractionCollector,
+  InteractionReplyOptions,
   InteractionResponse,
   Message,
   MessageCollectorOptionsParams,
@@ -11,7 +12,7 @@ import type {
 } from 'discord.js'
 import type { MaybeRef } from 'vue'
 import { randomUUID } from 'node:crypto'
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } from 'discord.js'
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType, MessageFlags } from 'discord.js'
 import { computed, isRef, reactive, toRaw, toValue, watch } from 'vue'
 import { bindInvocation, onInvocationDispose } from '../../discordInvocation'
 import { logger } from '../../logger'
@@ -46,12 +47,11 @@ export type ButtonHandlerArgs = [
     },
 ]
 
-export interface SendOptions {
+export interface SendOptions extends Omit<InteractionReplyOptions, 'content' | 'files' | 'flags'> {
   flags?: MessageCreateOptions['flags']
   files?: MaybeRef<readonly MaybeRef<File>[]>
   buttons?: ButtonHandlerArgs[]
 
-  components?: any
 }
 
 export function getButtonComponent(buttons: ButtonHandlerArgs[]): NonNullable<BaseMessageOptions['components']> {
@@ -110,19 +110,41 @@ function registerButtonCollectors(
     if (!options || !('customId' in options))
       continue
     const { filter, ...collectorOptions } = options.collector ?? {}
-    const target = 'resource' in msg ? msg.resource!.message! : msg
+    const target = 'resource' in msg ? msg.resource?.message : msg
+    if (!target)
+      throw new Error('Discord returned no message for the component collector')
     const collector = target.createMessageComponentCollector({
       ...collectorOptions,
       componentType: ComponentType.Button,
-      filter: (click, ...args) => click.customId === toValue(options.customId)
-        && !toValue(options.hide) && (filter?.(click, ...args) ?? true),
+      filter: async (click, ...args) => {
+        if (click.customId !== toValue(options.customId) || toValue(options.hide))
+          return false
+        try {
+          return await filter?.(click, ...args) ?? true
+        }
+        catch (error) {
+          logger.error('Discord button filter failed:', error)
+          return false
+        }
+      },
     })
     newCollectors.push(collector)
-    collector.on('collect', bindInvocation(async (buttonInteraction: ButtonInteraction) => {
-      if (options.defer ?? true)
-        await buttonInteraction.deferUpdate()
-      await buttonHandler(buttonInteraction)
-    }))
+    const invoke = bindInvocation(buttonHandler)
+    collector.on('collect', async (buttonInteraction: ButtonInteraction) => {
+      try {
+        if (options.defer ?? true)
+          await buttonInteraction.deferUpdate()
+        await invoke(buttonInteraction)
+      }
+      catch (error) {
+        logger.error('Discord button handler failed:', error)
+        const payload = { content: 'An error occurred.', flags: MessageFlags.Ephemeral } as const
+        const report = buttonInteraction.deferred || buttonInteraction.replied
+          ? buttonInteraction.followUp(payload)
+          : buttonInteraction.reply(payload)
+        await report.catch(error => logger.error('Could not acknowledge failed button:', error))
+      }
+    })
   }
   return newCollectors
 }
@@ -136,19 +158,21 @@ export function sendReactiveMessage(
   content: MaybeRef<string> | undefined,
   opts: SendOptions = {},
 ): Promise<SentMessage> {
-  const buttons: ButtonHandlerArgs[] = (opts.buttons ?? []).map(([label, handler, options]) => [
+  const { buttons: definitions = [], files, flags, ...options } = opts
+  const buttons: ButtonHandlerArgs[] = definitions.map(([label, handler, options]) => [
     label,
     handler,
     { customId: randomUUID(), ...options },
   ])
-  const buttonComponents = computed(() => getButtonComponent(buttons))
+  const buttonComponents = computed(() => [...options.components ?? [], ...getButtonComponent(buttons)])
   let collectors: InteractionCollector<ButtonInteraction>[] = []
 
   const messageOptions = reactive({
-    content,
+    ...options,
+    ...(content !== undefined ? { content } : {}),
     ...(buttons.length ? { components: buttonComponents } : {}),
-    ...(opts.flags != null ? { flags: opts.flags } : {}),
-    ...(opts.files != null ? { files: opts.files } : {}),
+    ...(flags != null ? { flags } : {}),
+    ...(files != null ? { files } : {}),
   }) as MessageCreateOptions
 
   let active = true

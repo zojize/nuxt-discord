@@ -1,4 +1,3 @@
-import type { GuildMemberRoleManager } from 'discord.js'
 import { defineMiddleware, MiddlewareError } from '../defineMiddleware'
 
 export const requireRole = defineMiddleware('requireRole', ({ interaction, next }, options) => {
@@ -11,8 +10,8 @@ export const requireRole = defineMiddleware('requireRole', ({ interaction, next 
     throw new MiddlewareError('This command can only be used in a server.', 'requireRole')
 
   const roleIds = Array.isArray(roleId) ? roleId : [roleId]
-  const memberRoles = (member as { roles: GuildMemberRoleManager }).roles
-  const hasRole = roleIds.some(id => memberRoles.cache.has(id))
+  const roles = member.roles
+  const hasRole = roleIds.some(id => Array.isArray(roles) ? roles.includes(id) : roles.cache.has(id))
 
   if (!hasRole)
     throw new MiddlewareError('You do not have the required role.', 'requireRole')

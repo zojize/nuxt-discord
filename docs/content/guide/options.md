@@ -128,3 +128,5 @@ export default (query: string) => {
   return `Searching for ${query}`
 }
 ```
+
+Discord accepts up to 25 autocomplete choices. Nuxt Discord sends the first 25. If a lookup takes more than about two seconds, the bot acknowledges that interaction with an empty list.

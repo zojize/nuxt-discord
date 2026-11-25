@@ -171,3 +171,5 @@ export default () => {
 ```
 
 Each field can be a shorthand string (`'short'` or `'paragraph'`) or an options object with `style`, `label`, `placeholder`, `required`, `value`, `minLength`, and `maxLength`. The timeout defaults to 5 minutes.
+
+Each open modal accepts one submission from the person who opened it. Its collector stops on submission, timeout, or application shutdown. A slow submission gets a private acknowledgement while its callback runs. A callback that returns nothing from a slash-command modal receives a private “Submitted.” confirmation.
