@@ -80,7 +80,14 @@ describe('discord gateway interaction contracts', () => {
     })
   }
 
-  it('inspects a resolved example attachment privately without sharing its URL', async () => {
+  it.each([
+    [0, '0 bytes'],
+    [1, '1 byte'],
+    [47, '47 bytes'],
+    [1023, '1023 bytes'],
+    [1024, '1.0 KB'],
+    [2048, '2.0 KB'],
+  ] as const)('reports a %i-byte attachment as %s privately without sharing its URL', async (size, expectedSize) => {
     const fileId = '100000000000000012'
     vi.stubGlobal('reply', reply)
     try {
@@ -99,13 +106,13 @@ describe('discord gateway interaction contracts', () => {
       const interaction = incoming(ChatInputCommandInteraction, InteractionType.ApplicationCommand, {
         name: 'upload',
         options: [{ type: ApplicationCommandOptionType.Attachment, name: 'file', value: fileId }],
-        resolved: { attachments: { [fileId]: { id: fileId, filename: 'fixture.txt', size: 2048, content_type: 'text/plain', url: 'https://example.invalid/private-attachment' } } },
+        resolved: { attachments: { [fileId]: { id: fileId, filename: 'fixture.txt', size, content_type: 'text/plain', url: 'https://example.invalid/private-attachment' } } },
       })
       const result = await bot.dispatchInteraction(interaction)
       expect(result.status).toBe('ok')
       expect(sdk.rest.post).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ body: {
         type: InteractionResponseType.ChannelMessageWithSource,
-        data: expect.objectContaining({ content: '**fixture.txt**\nSize: 2.0 KB\nType: text/plain', flags: MessageFlags.Ephemeral, allowed_mentions: { parse: [] } }),
+        data: expect.objectContaining({ content: `**fixture.txt**\nSize: ${expectedSize}\nType: text/plain`, flags: MessageFlags.Ephemeral, allowed_mentions: { parse: [] } }),
       } }))
       result.dispose()
     }
