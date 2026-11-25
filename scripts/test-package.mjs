@@ -21,6 +21,8 @@ function run(command, args, cwd) {
 }
 try {
   run('bun', ['run', 'prepack'], root)
+  // Packing replaces the dev stubs. Source and generated command types must still agree.
+  run(process.execPath, [join(root, 'node_modules/@typescript/native/bin/tsc'), '--noEmit', '-p', 'tsconfig.json'], root)
   run('bun', ['pm', 'pack', '--ignore-scripts', '--destination', app], root)
   writeFileSync(join(app, 'package.json'), JSON.stringify({
     name: 'release-consumer',
