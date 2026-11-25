@@ -274,8 +274,10 @@ export class DiscordClient {
     try {
       if (interaction.isChatInputCommand() || interaction.isAutocomplete())
         command = this.resolveSlashCommand(interaction.commandName, interaction.options.getSubcommandGroup?.(false), interaction.options.getSubcommand?.(false))
-      if (interaction.isChatInputCommand() && (command?.defer || (!options.simulation && this.#clientOptions?.deferOnPromise)))
+      if (!interaction.isAutocomplete() && (command?.defer || (!options.simulation && this.#clientOptions?.deferOnPromise))) {
         cancelAcknowledgement = scheduleAcknowledgement(interaction, command?.defer, !options.simulation)
+        scope.run(() => onScopeDispose(cancelAcknowledgement!))
+      }
       await runInvocation(scope, { channel: interaction.channel as TextBasedChannel | null, interaction: interaction.isChatInputCommand() ? interaction : undefined, middleware }, async () => {
         if (!options.simulation && type !== 'autocomplete')
           await this.#nitro.hooks.callHook('discord:interaction:before', ctx)
@@ -299,12 +301,12 @@ export class DiscordClient {
 
         if (!command)
           throw new UnknownCommandError(`Unknown slash command "${interaction.commandName}"`)
-        if (!command.execute && command.load)
-          Object.assign(command, await command.load())
         if (interaction.isAutocomplete()) {
-          await this.#handleAutocomplete(interaction, command)
+          await this.#handleAutocomplete(interaction, command, scope)
           return
         }
+        if (!command.execute && command.load)
+          Object.assign(command, await command.load())
         const resolved = command
         const entries = [...resolveMiddlewareTags(resolved.middleware, resolved.path), ...resolved.middlewareEntries ?? []]
         await this.#runMiddleware(entries, interaction, resolved, 'command', middleware, async () => {
@@ -318,12 +320,20 @@ export class DiscordClient {
     catch (error) {
       result.status = error instanceof MiddlewareError ? 'denied' : 'error'
       result.detail = error instanceof Error ? error.message : String(error)
+      if (interaction.isAutocomplete()) {
+        if (scope.active && !interaction.responded)
+          await interaction.respond([]).catch(() => {})
+      }
+      else if (scope.active && !interaction.replied) {
+        const sender = interactionSender(interaction)
+        await sender.send({ content: result.status === 'denied' ? result.detail : 'An error occurred.', flags: MessageFlags.Ephemeral }).catch(() => {})
+      }
       if (!options.simulation) {
         let hookError
         if (error instanceof MiddlewareError) {
           const denied = { ...ctx, middleware: error.identifier ?? 'unknown', reason: error.reason }
           hookError = { ...denied, type: 'MiddlewareDeniedError', identifier: error.identifier, client: this }
-          await this.#nitro.hooks.callHook('discord:interaction:denied', denied)
+          await this.#notify('discord:interaction:denied', denied)
         }
         else if (error instanceof UnknownCommandError) {
           hookError = { type: 'UnknownSlashCommandError', interaction, client: this }
@@ -334,15 +344,7 @@ export class DiscordClient {
         else {
           hookError = { type: 'SlashCommandExecutionError', interaction, client: this, command, error }
         }
-        await this.#nitro.hooks.callHook('discord:client:error', hookError)
-      }
-      if (interaction.isAutocomplete()) {
-        if (!interaction.responded)
-          await interaction.respond([]).catch(() => {})
-      }
-      else if (!interaction.replied) {
-        const sender = interactionSender(interaction)
-        await sender.send({ content: result.status === 'denied' ? result.detail : 'An error occurred.', flags: MessageFlags.Ephemeral }).catch(() => {})
+        await this.#notify('discord:client:error', hookError)
       }
     }
     finally {
@@ -360,7 +362,7 @@ export class DiscordClient {
           guildName: interaction.guild?.name,
           channelId: interaction.channelId ?? undefined,
         })
-        await this.#nitro.hooks.callHook('discord:interaction:after', { ...ctx, status: result.status, detail: result.detail })
+        await this.#notify('discord:interaction:after', { ...ctx, status: result.status, detail: result.detail })
       }
       if (result.status !== 'ok' || type === 'autocomplete')
         dispose()
@@ -379,12 +381,26 @@ export class DiscordClient {
     return root.subcommands.find(cmd => cmd.name === leaf && !cmd.subcommands?.length) as SlashCommandSubcommandRuntime | undefined
   }
 
+  async #notify(name: string, event: unknown) {
+    try {
+      await this.#nitro.hooks.callHook(name, event)
+    }
+    catch (error) {
+      logger.error(`Discord observer failed [${name}]`, error)
+    }
+  }
+
   #logActivity(entry: Omit<ActivityLogEntry, 'id' | 'timestamp'>): ActivityLogEntry {
     const full: ActivityLogEntry = { ...entry, id: ++this.#activityId, timestamp: Date.now() }
     this.#activityLog.push(full)
     if (this.#activityLog.length > 200)
       this.#activityLog.shift()
-    this.#onActivity?.(full)
+    try {
+      this.#onActivity?.(full)
+    }
+    catch (error) {
+      logger.error('Discord activity observer failed:', error)
+    }
     return full
   }
 
@@ -564,13 +580,32 @@ export class DiscordClient {
       return this.#respond(step.value, interaction, scope)
   }
 
-  async #handleAutocomplete(interaction: AutocompleteInteraction, command: SlashCommandRuntime | SlashCommandSubcommandRuntime): Promise<void> {
-    const focused = interaction.options.getFocused(true)
-    const varname = command.options.find(opt => opt.name === focused.name)?.varname
-    const complete = varname && command.optionMacros?.[varname]?.autocomplete
-    if (!complete)
-      throw new Error(`No autocomplete handler for "${focused.name}"`)
-    await interaction.respond(await complete(String(focused.value), interaction))
+  async #handleAutocomplete(interaction: AutocompleteInteraction, command: SlashCommandRuntime | SlashCommandSubcommandRuntime, scope: EffectScope): Promise<void> {
+    const choices = async () => {
+      if (!command.execute && command.load)
+        Object.assign(command, await command.load())
+      const focused = interaction.options.getFocused(true)
+      const varname = command.options.find(opt => opt.name === focused.name)?.varname
+      const complete = varname && command.optionMacros?.[varname]?.autocomplete
+      if (!complete)
+        throw new Error(`No autocomplete handler for "${focused.name}"`)
+      return complete(String(focused.value), interaction)
+    }
+    // Autocomplete has no deferred response. Send an empty list before the
+    // gateway deadline if command loading or the user's lookup runs long.
+    const fallback = Promise.withResolvers<[]>()
+    const elapsed = Date.now() - (interaction.createdTimestamp ?? Date.now())
+    const timer = setTimeout(() => fallback.resolve([]), Math.max(0, 2000 - elapsed))
+    timer.unref()
+    scope.run(() => onScopeDispose(() => fallback.resolve([])))
+    try {
+      const result = await Promise.race([choices(), fallback.promise])
+      if (scope.active && !interaction.responded)
+        await interaction.respond(result.slice(0, 25))
+    }
+    finally {
+      clearTimeout(timer)
+    }
   }
 
   public getRemoteSlashCommands() {

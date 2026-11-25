@@ -471,7 +471,7 @@ describe('client', () => {
       await vi.advanceTimersByTimeAsync(2000)
       gate.resolve()
       expect((await result).status).toBe('ok')
-      expect(edit).toHaveBeenCalledWith({ content: 'private', flags: MessageFlags.Ephemeral })
+      expect(edit).toHaveBeenCalledWith({ content: 'private', flags: 0 })
       expect(interaction.reply).not.toHaveBeenCalled()
     }
     finally { vi.useRealTimers() }

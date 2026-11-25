@@ -5,20 +5,21 @@ import type {
   CommandInteraction,
   ComponentType,
   InteractionCallbackResponse,
-  InteractionEditReplyOptions,
   InteractionReplyOptions,
   InteractionResponse,
   Message,
   MessageCollectorOptionsParams,
   MessageCreateOptions,
+  MessageFlagsResolvable,
   ModalSubmitInteraction,
 } from 'discord.js'
 import type { MaybeRef } from 'vue'
 import type { SlashCommandCustomReturnHandler } from '../../../types'
-import { ActionRowBuilder, MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js'
+import { randomUUID } from 'node:crypto'
+import { ActionRowBuilder, InteractionCollector, InteractionType, MessageFlags, MessageFlagsBitField, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js'
 import { computed, isRef, toValue } from 'vue'
-import { interactionSender } from '../../acknowledgement'
-import { logger } from '../../logger'
+import { interactionSender, scheduleAcknowledgement, wasAutomaticallyDeferred } from '../../acknowledgement'
+import { onInvocationDispose } from '../../discordInvocation'
 import { sendReactiveMessage } from './messageSender'
 
 type OmitPreservingCallSignature<T, K extends keyof T = keyof T>
@@ -88,7 +89,8 @@ export interface ModalFieldOptions {
 }
 
 function createReplyFunction(
-  defaultOptions: (Omit<InteractionReplyOptions, 'files'> & {
+  defaultOptions: (Omit<InteractionReplyOptions, 'files' | 'flags'> & {
+    flags?: MaybeRef<InteractionReplyOptions['flags']>
     files?: MaybeRef<MaybeRef<File>[]>
     buttons?: Parameters<ReplyFunction['button']>[]
   }) = {},
@@ -161,21 +163,15 @@ function createReplyFunction(
       get() {
         return createReplyFunction({
           ...defaultOptions,
-          flags: defaultOptions.flags == null
-            ? MessageFlags.Ephemeral
-            : typeof defaultOptions.flags === 'string'
-              ? [defaultOptions.flags, 'Ephemeral']
-              : Array.isArray(defaultOptions.flags)
-                ? [...defaultOptions.flags, 'Ephemeral']
-                : typeof defaultOptions.flags === 'number' || typeof defaultOptions.flags === 'bigint'
-                  ? defaultOptions.flags | MessageFlags.Ephemeral
-                  // I give up refining this type...
-                  : MessageFlags.Ephemeral,
+          flags: computed(() => {
+            const flags = new MessageFlagsBitField(toValue(defaultOptions.flags) as MessageFlagsResolvable)
+            return flags.add(MessageFlags.Ephemeral).bitfield as InteractionReplyOptions['flags']
+          }),
         })
       },
     },
     flags: {
-      value: (flags: InteractionReplyOptions['flags'] & InteractionEditReplyOptions['flags']) => createReplyFunction({
+      value: (flags: MaybeRef<InteractionReplyOptions['flags']>) => createReplyFunction({
         ...defaultOptions,
         flags,
       }),
@@ -212,7 +208,6 @@ function createModalHandler(
   onSubmit: (values: Record<string, string>, interaction: ModalSubmitInteraction) => unknown,
   options?: { timeout?: number },
 ): SlashCommandCustomReturnHandler {
-  const customId = `modal-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
   const timeout = options?.timeout ?? 300_000 // 5 minutes default
 
   const rows = Object.entries(fields).map(([key, field]) => {
@@ -231,44 +226,62 @@ function createModalHandler(
     return new ActionRowBuilder<TextInputBuilder>({ components: [input] })
   })
 
-  const modal = new ModalBuilder({
-    custom_id: customId,
-    title,
-    components: rows.map(r => r.toJSON()),
-  })
-
   return async function (interaction) {
-    await interaction.showModal(modal)
+    const customId = randomUUID()
+    let active = true
+    let collector: InteractionCollector<ModalSubmitInteraction> | undefined
+    let cancelAcknowledgement: (() => void) | undefined
+    onInvocationDispose(() => {
+      active = false
+      collector?.stop('disposed')
+      cancelAcknowledgement?.()
+    })
+    await interaction.showModal(new ModalBuilder({
+      custom_id: customId,
+      title,
+      components: rows.map(row => row.toJSON()),
+    }))
+    if (!active)
+      return
 
+    collector = new InteractionCollector(interaction.client, {
+      interactionType: InteractionType.ModalSubmit,
+      max: 1,
+      time: timeout,
+      filter: submission => submission.customId === customId && submission.user.id === interaction.user.id,
+    })
+    const submission = await new Promise<ModalSubmitInteraction | undefined>((resolve) => {
+      collector!.once('end', collected => resolve(collected.first()))
+    })
+    if (!submission || !active)
+      return
+
+    cancelAcknowledgement = scheduleAcknowledgement(submission)
     try {
-      const submission = await interaction.awaitModalSubmit({
-        filter: i => i.customId === customId,
-        time: timeout,
-      })
-
-      const values: Record<string, string> = {}
-      for (const key of Object.keys(fields)) {
-        values[key] = submission.fields.getTextInputValue(key)
-      }
-
+      const values = Object.fromEntries(Object.keys(fields).map(key => [key, submission.fields.getTextInputValue(key)]))
       const result = await onSubmit(values, submission)
-
-      // Handle the callback return — string or reply handler
+      if (!active)
+        return
       if (typeof result === 'function') {
-        await (result as any)(submission, this)
+        await result.call(this, submission, this)
       }
-      else if (typeof result === 'string') {
-        if (!submission.replied && !submission.deferred) {
-          await submission.reply({ content: result })
-        }
+      else if (typeof result === 'string' && !submission.replied) {
+        await interactionSender(submission).send({ content: result })
       }
-      else if (!submission.replied && !submission.deferred) {
-        await submission.deferUpdate().catch(() => {})
+      else if (!submission.replied && (!submission.deferred || wasAutomaticallyDeferred(submission))) {
+        if (!submission.deferred && submission.isFromMessage())
+          await submission.deferUpdate()
+        else
+          await interactionSender(submission).send({ content: 'Submitted.', flags: MessageFlags.Ephemeral })
       }
     }
     catch (error) {
-      // Timeout or other error — user didn't submit
-      logger.error('Modal submission error:', error)
+      if (active && !submission.replied)
+        await interactionSender(submission).send({ content: 'An error occurred.', flags: MessageFlags.Ephemeral }).catch(() => {})
+      throw error
+    }
+    finally {
+      cancelAcknowledgement()
     }
   }
 }

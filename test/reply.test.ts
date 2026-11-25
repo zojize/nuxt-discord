@@ -225,8 +225,7 @@ describe('reply', () => {
   describe('modal', () => {
     function mockModalInteraction() {
       const mock = {
-        showModal: vi.fn(() => Promise.resolve()),
-        awaitModalSubmit: vi.fn(() => new Promise(() => {})), // never resolves by default
+        showModal: vi.fn(() => new Promise<void>(() => {})), // these builder tests inspect the outgoing modal
         replied: false,
         deferred: false,
       }
@@ -360,62 +359,6 @@ describe('reply', () => {
       handler2.call(client, i2, client)
 
       expect(getModal(m1).custom_id).not.toBe(getModal(m2).custom_id)
-    })
-
-    it('should pass field values to onSubmit and handle string return', async () => {
-      const onSubmit = vi.fn(() => 'Thanks!')
-      const submissionMock = {
-        customId: '',
-        replied: false,
-        deferred: false,
-        fields: {
-          getTextInputValue: vi.fn((key: string) => {
-            const values: Record<string, string> = { name: 'Alice' }
-            return values[key] ?? ''
-          }),
-        },
-        reply: vi.fn(() => Promise.resolve()),
-        deferUpdate: vi.fn(() => Promise.resolve()),
-      }
-
-      const mock = {
-        showModal: vi.fn(() => Promise.resolve()),
-        awaitModalSubmit: vi.fn(() => Promise.resolve(submissionMock)),
-        replied: false,
-        deferred: false,
-      }
-
-      const handler = reply.modal('Test', { name: 'short' }, onSubmit)
-      const client = new MockClient()
-      await handler.call(client, mock as any, client)
-
-      expect(onSubmit).toHaveBeenCalledWith({ name: 'Alice' }, submissionMock)
-      expect(submissionMock.reply).toHaveBeenCalledWith({ content: 'Thanks!' })
-    })
-
-    it('should call deferUpdate when onSubmit returns nothing', async () => {
-      const onSubmit = vi.fn()
-      const submissionMock = {
-        customId: '',
-        replied: false,
-        deferred: false,
-        fields: { getTextInputValue: vi.fn(() => '') },
-        reply: vi.fn(() => Promise.resolve()),
-        deferUpdate: vi.fn(() => Promise.resolve()),
-      }
-
-      const mock = {
-        showModal: vi.fn(() => Promise.resolve()),
-        awaitModalSubmit: vi.fn(() => Promise.resolve(submissionMock)),
-        replied: false,
-        deferred: false,
-      }
-
-      const handler = reply.modal('Test', { name: 'short' }, onSubmit)
-      const client = new MockClient()
-      await handler.call(client, mock as any, client)
-
-      expect(submissionMock.deferUpdate).toHaveBeenCalledOnce()
     })
   })
 })

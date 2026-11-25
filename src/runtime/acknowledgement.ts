@@ -1,19 +1,21 @@
-import type { CommandInteraction, InteractionDeferReplyOptions, InteractionEditReplyOptions, InteractionReplyOptions, MessageCreateOptions, MessageFlagsResolvable } from 'discord.js'
+import type { CommandInteraction, InteractionDeferReplyOptions, InteractionEditReplyOptions, InteractionReplyOptions, MessageCreateOptions, MessageFlagsResolvable, ModalSubmitInteraction } from 'discord.js'
 import type { MessageSenderConfig, SentMessage } from './server/utils/messageSender'
 import { MessageFlags, MessageFlagsBitField, MessagePayload } from 'discord.js'
 import { logger } from './logger'
+
+type ReplyInteraction = CommandInteraction | ModalSubmitInteraction
 
 export type DeferPolicy = 'public' | 'private' | 'manual'
 interface AutomaticDefer {
   policy?: DeferPolicy
   pending: Promise<unknown>
 }
-const privateByDefault = new WeakSet<CommandInteraction>()
-const automatic = new WeakMap<CommandInteraction, AutomaticDefer>()
+const privateByDefault = new WeakSet<ReplyInteraction>()
+const automatic = new WeakMap<ReplyInteraction, AutomaticDefer>()
 
 // The gateway requires acknowledgement within three seconds. Leave headroom
 // for the HTTP request while letting fast handlers choose their own response.
-export function scheduleAcknowledgement(interaction: CommandInteraction, policy?: DeferPolicy, allowTimer = true) {
+export function scheduleAcknowledgement(interaction: ReplyInteraction, policy?: DeferPolicy, allowTimer = true) {
   if (policy === 'manual')
     return () => {}
   if (policy === 'private')
@@ -40,14 +42,14 @@ export function scheduleAcknowledgement(interaction: CommandInteraction, policy?
   // discord.js marks an interaction acknowledged only after its HTTP call
   // returns. Cancel before a direct reply/defer/modal starts, even on slow HTTP.
   for (const method of ['reply', 'deferReply', 'showModal'] as const) {
-    const original = interaction[method]
+    const original = Reflect.get(interaction, method)
     if (typeof original !== 'function')
       continue
     const descriptor = Object.getOwnPropertyDescriptor(interaction, method)
     Object.defineProperty(interaction, method, {
       configurable: true,
       writable: true,
-      value(this: CommandInteraction, ...args: unknown[]) {
+      value(this: ReplyInteraction, ...args: unknown[]) {
         cancel()
         const ack = automatic.get(this)
         if (method === 'reply' && (ack || policy === 'private')) {
@@ -94,7 +96,22 @@ function withPrivateFlag(opts: InteractionReplyOptions) {
   return { ...opts, flags: flags.bitfield as InteractionReplyOptions['flags'] }
 }
 
-export function interactionSender(interaction: CommandInteraction): Omit<MessageSenderConfig, 'send'> & { send: (opts: InteractionReplyOptions | MessageCreateOptions) => Promise<SentMessage> } {
+// Discord only accepts SUPPRESS_EMBEDS and IS_COMPONENTS_V2 on a webhook
+// message edit. Initial response visibility is already fixed by this point.
+function editOptions(options: InteractionReplyOptions): InteractionEditReplyOptions {
+  const { flags, ephemeral: _ephemeral, withResponse: _withResponse, fetchReply: _fetchReply, tts: _tts, ...editable } = options
+  if (flags == null)
+    return editable
+  const bits = new MessageFlagsBitField(flags as MessageFlagsResolvable).bitfield
+  const writable = bits & (MessageFlags.SuppressEmbeds | MessageFlags.IsComponentsV2)
+  return { ...editable, flags: writable as InteractionEditReplyOptions['flags'] }
+}
+
+export function wasAutomaticallyDeferred(interaction: ReplyInteraction) {
+  return automatic.has(interaction)
+}
+
+export function interactionSender(interaction: ReplyInteraction): Omit<MessageSenderConfig, 'send'> & { send: (opts: InteractionReplyOptions | MessageCreateOptions) => Promise<SentMessage> } {
   let method: 'followUp' | 'editReply' | 'reply'
   return {
     async send(options) {
@@ -118,12 +135,12 @@ export function interactionSender(interaction: CommandInteraction): Omit<Message
           await interaction.deleteReply().catch(error => logger.error('Could not remove acknowledgement:', error))
           return message
         }
-        return interaction.editReply(opts as InteractionEditReplyOptions)
+        return interaction.editReply(editOptions(opts))
       }
       return interaction[method](opts) as Promise<SentMessage>
     },
     edit(msg, options: MessageCreateOptions) {
-      const opts = options as InteractionEditReplyOptions
+      const opts = editOptions(options as InteractionReplyOptions)
       if (method === 'editReply' || 'resource' in msg)
         return interaction.editReply(opts)
       if (method === 'followUp' && 'id' in msg && interaction.webhook)
