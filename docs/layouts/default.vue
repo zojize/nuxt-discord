@@ -7,14 +7,15 @@ import ProjectLogo from '../../src/runtime/client/components/ProjectLogo.vue'
   <div class="min-h-screen bg-default">
     <!-- Header -->
     <header class="sticky top-0 z-50 w-full border-b border-default bg-default/80 backdrop-blur-xl">
-      <div class="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
+      <div class="mx-auto flex min-h-14 max-w-7xl flex-wrap items-center justify-between gap-x-2 px-3 sm:px-6">
         <NuxtLink to="/" class="flex items-center gap-2.5">
           <ProjectLogo width="32" height="32" aria-hidden="true" class="shrink-0" />
           <span class="text-sm font-semibold tracking-tight">nuxt-discord</span>
-          <UBadge label="docs" variant="subtle" color="neutral" size="xs" />
+          <UBadge label="docs" variant="subtle" color="neutral" size="xs" class="max-[24rem]:hidden" />
         </NuxtLink>
 
-        <div class="flex items-center gap-1">
+        <div class="ms-auto flex items-center gap-1">
+          <VersionMenu />
           <UColorModeSelect v-bind="appearanceSelect" />
           <UButton
             to="https://github.com/zojize/nuxt-discord"
