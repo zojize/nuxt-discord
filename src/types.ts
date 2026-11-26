@@ -38,6 +38,9 @@ export interface NuxtDiscordOptions {
    */
   autoStart: boolean
 
+  /** Build the authenticated dashboard into the production Node server. */
+  dashboard?: boolean
+
   /**
    * Timeout in milliseconds before an interaction's reactive scope is disposed.
    * This cleans up watchers (reactive replies) and component collectors (buttons).
@@ -295,6 +298,12 @@ export interface ContextMenu {
   /** Middleware names from @middleware JSDoc tags */
   middleware?: string[]
   nameLocalizations?: LocalizationMap
+}
+
+export interface DashboardCatalog {
+  commands: SlashCommand[]
+  menus: ContextMenu[]
+  listeners: Listener[]
 }
 
 export interface NuxtDiscordContext {

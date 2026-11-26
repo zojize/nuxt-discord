@@ -1,6 +1,6 @@
 import type { ModuleDependencies } from 'nuxt/schema'
 import type { NuxtDiscordOptions } from './types'
-import { addImports, addServerImportsDir, addServerPlugin, addServerScanDir, defineNuxtModule } from '@nuxt/kit'
+import { addImports, addServerHandler, addServerImportsDir, addServerPlugin, addServerScanDir, defineNuxtModule, extendRouteRules, loadNuxtModuleInstance } from '@nuxt/kit'
 import { GatewayIntentBits } from 'discord.js'
 import { createContext } from './context'
 import { prepareClient } from './utils/client'
@@ -18,7 +18,22 @@ export default defineNuxtModule<NuxtDiscordOptions>({
     name: 'nuxt-discord',
     configKey: 'discord',
   },
-  moduleDependencies: (nuxt): ModuleDependencies => nuxt.options.dev || nuxt.options._prepare ? { '@nuxt/ui': {} } : {},
+  async moduleDependencies(nuxt): Promise<ModuleDependencies> {
+    if (nuxt.options.dev || nuxt.options._prepare)
+      return { '@nuxt/ui': {} }
+    // Nuxt resolves module dependencies before merging inline module options.
+    let hosted = nuxt.options.discord && nuxt.options.discord.dashboard
+    for (const entry of nuxt.options.modules) {
+      if (!Array.isArray(entry) || typeof entry[1]?.dashboard !== 'boolean')
+        continue
+      const { nuxtModule } = await loadNuxtModuleInstance(entry[0], nuxt)
+      if ((await nuxtModule.getMeta?.())?.name === 'nuxt-discord') {
+        hosted = entry[1].dashboard
+        break
+      }
+    }
+    return hosted ? { '@nuxt/ui': {} } : {}
+  },
   defaults: {
     client: {
       intents: [GatewayIntentBits.Guilds],
@@ -37,12 +52,38 @@ export default defineNuxtModule<NuxtDiscordOptions>({
   },
   setup(discordOptions, nuxt) {
     const ctx = createContext(discordOptions, nuxt)
+    const development = nuxt.options.dev || nuxt.options._prepare
+    const hostedDashboard = !development && discordOptions.dashboard === true
 
-    if (nuxt.options.dev || nuxt.options._prepare) {
-      nuxt.options.routeRules ??= {}
-      nuxt.options.routeRules['/discord/**'] = { ssr: false }
-      addServerScanDir(ctx.resolve.module('runtime/server'))
+    if (hostedDashboard) {
+      addServerHandler({ middleware: true, handler: ctx.resolve.module('runtime/dashboard/auth') })
+      for (const route of ['/discord', '/discord/**', '/api/discord', '/api/discord/**'])
+        extendRouteRules(route, { prerender: false, cache: false }, { override: true })
+      for (const [path, method] of [
+        ['catalog', 'get'],
+        ['activity', 'get'],
+        ['slash-command/all', 'get'],
+        ['slash-command/remote-all', 'get'],
+        ['slash-command/remote-diff', 'post'],
+        ['slash-command/register', 'post'],
+        ['slash-command/test', 'post'],
+        ['slash-command/autocomplete', 'post'],
+      ] as const) {
+        addServerHandler({
+          route: `/api/discord/${path}`,
+          method,
+          handler: ctx.resolve.module(`runtime/server/api/discord/${path}.${method}`),
+        })
+      }
+    }
+
+    if (development || hostedDashboard) {
+      extendRouteRules('/discord', { ssr: false })
+      extendRouteRules('/discord/**', { ssr: false })
       prepareClient(ctx)
+    }
+    if (development) {
+      addServerScanDir(ctx.resolve.module('runtime/server'))
     }
     else {
       const plugin = ctx.resolve.module('runtime/server/plugins/discord')
