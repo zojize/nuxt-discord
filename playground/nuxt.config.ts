@@ -1,3 +1,5 @@
+import process from 'node:process'
+
 export default defineNuxtConfig({
   modules: ['../src/module'],
   devtools: { enabled: true },
@@ -8,6 +10,7 @@ export default defineNuxtConfig({
     },
   },
   discord: {
+    dashboard: process.env.DISCORD_BUILD_DASHBOARD === '1',
     autoStart: true,
     client: {
       intents: ['Guilds', 'GuildMessages'],
