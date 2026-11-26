@@ -57,6 +57,7 @@ describe('discord dashboard sign-in', () => {
     expect(authorize.origin + authorize.pathname).toBe('https://discord.com/oauth2/authorize')
     expect(Object.fromEntries(authorize.searchParams)).toMatchObject({
       scope: 'identify',
+      prompt: 'consent',
       client_id: clientId,
       redirect_uri: `${origin.origin}/__discord-auth/callback`,
       response_type: 'code',
