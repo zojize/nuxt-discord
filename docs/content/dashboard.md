@@ -10,22 +10,16 @@ Run the Nuxt dev server and open `/discord` to manage your development bot.
 
 Set `discord.dashboard: true` in `nuxt.config.ts` and build a Node server. The dashboard uses the bot running in that server process. Enabling it makes the Nuxt application a dedicated administrator site. Use a separate origin for any public website.
 
-Supply these environment variables when starting the server:
+Set `DISCORD_DASHBOARD_ORIGIN` to the exact browser origin, including its port, without a trailing slash. Use HTTPS or a loopback HTTP address reached through an SSH tunnel. Bind Nitro to loopback for an SSH tunnel or local reverse proxy. A proxy must preserve the original Host header.
 
-| Variable | Value |
+In the bot application's Discord Developer Portal, open **OAuth2 → Redirects**. Register the dashboard origin followed by `/__discord-auth/callback`. For example, a dashboard on `http://127.0.0.1:3434` uses `http://127.0.0.1:3434/__discord-auth/callback`. Start the server with the bot’s `DISCORD_CLIENT_ID` and `DISCORD_TOKEN`, then open `/discord` and choose **Sign in with Discord**.
+
+| Discord application access | Dashboard permissions |
 | --- | --- |
-| `DISCORD_DASHBOARD_ORIGIN` | Exact browser origin, including the port, without a trailing slash. Use HTTPS or an HTTP loopback address reached through an SSH tunnel. |
-| `DISCORD_DASHBOARD_PASSWORD_SHA256` | Hex SHA-256 digest of a randomly generated administrator password. |
+| Personal owner, team owner, accepted team admin or developer | View the dashboard, run commands in the tester, and sync commands to Discord |
+| Accepted read-only team member | View the dashboard, activity, and registry differences |
 
-Generate a password and its verifier in a private directory:
-
-```sh
-umask 077
-openssl rand -hex 32 > dashboard-password
-tr -d '\n' < dashboard-password | openssl dgst -sha256
-```
-
-Keep the password in your password manager. Set the verifier variable to the 64-character digest. Bind Nitro to loopback when using an SSH tunnel or local HTTPS reverse proxy. A proxy must preserve the original Host header. Open `/discord` and sign in as `admin` using the generated password. Set a new verifier and restart the service to rotate credentials.
+Manage collaborators in the application's developer team. The dashboard checks current permissions with Discord before executing a command or syncing. Sign out from the dashboard header to end your session.
 
 ## Pages
 
