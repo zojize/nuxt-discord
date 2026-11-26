@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { SlashCommandOption } from '../../../types'
-import { computed, ref, useToast } from '#imports'
+import { computed, ref } from '#imports'
 import CommandTestBar from '../components/CommandTestBar.vue'
 import TheHeader from '../components/TheHeader.vue'
 
@@ -75,27 +75,22 @@ const stats = computed(() => commandsWithStatus.value.reduce((acc, cmd) => {
   return acc
 }, { added: 0, removed: 0, changed: 0, synced: 0, conflict: 0, unknown: 0 }))
 
-const toast = useToast()
+const showEditorLinks = import.meta.dev
+const syncFeedback = ref<{ title: string, detail?: string, failed?: boolean }>()
 const pendingSync = ref(false)
 async function syncCommands() {
+  pendingSync.value = true
+  syncFeedback.value = undefined
   try {
-    pendingSync.value = true
     const results = await $fetch('/api/discord/slash-command/register', { method: 'POST' })
-    await refreshDiff()
     const failed = results.filter(result => result.error)
-    if (failed.length) {
-      toast.add({
-        title: 'Command sync incomplete',
-        description: failed.map(result => `${result.scope}: ${result.error}`).join(' · '),
-        color: 'error',
-      })
-    }
-    else {
-      toast.add({ title: 'Commands synced', color: 'success' })
-    }
+    syncFeedback.value = failed.length
+      ? { title: 'Command sync incomplete', detail: failed.map(result => `${result.scope}: ${result.error}`).join(' · '), failed: true }
+      : { title: 'Commands synced' }
+    await refreshDiff()
   }
   catch (error) {
-    toast.add({ title: 'Sync failed', description: String(error), color: 'error' })
+    syncFeedback.value = { title: 'Sync failed', detail: String(error), failed: true }
   }
   finally {
     pendingSync.value = false
@@ -153,6 +148,13 @@ function constraintBadges(option: SlashCommandOption) {
           :disabled="stats.conflict > 0"
           @click="syncCommands"
         />
+      </div>
+
+      <div role="status" aria-atomic="true">
+        <p v-if="syncFeedback" class="mb-3 border-s-2 ps-3 text-sm" :class="syncFeedback.failed ? 'border-error' : 'border-success'">
+          <strong class="text-highlighted">{{ syncFeedback.title }}</strong>
+          <span v-if="syncFeedback.detail" class="block wrap-anywhere text-toned">{{ syncFeedback.detail }}</span>
+        </p>
       </div>
 
       <!-- Status pills -->
@@ -246,9 +248,9 @@ function constraintBadges(option: SlashCommandOption) {
             </div>
           </div>
 
-          <template #footer>
+          <template v-if="(showEditorLinks && command.path) || getRemoteId(command)" #footer>
             <div class="text-dimmed text-xs flex items-center justify-between">
-              <a v-if="command.path" :href="`vscode://file${command.path}`" class="font-mono truncate hover:text-highlighted transition-colors">{{ command.path.split('/discord/commands/').pop() }}</a>
+              <a v-if="showEditorLinks && command.path" :href="`vscode://file${command.path}`" class="font-mono truncate hover:text-highlighted transition-colors">{{ command.path.split('/discord/commands/').pop() }}</a>
               <span v-if="getRemoteId(command)" class="font-mono shrink-0">{{ getRemoteId(command) }}</span>
             </div>
           </template>

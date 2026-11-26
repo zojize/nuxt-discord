@@ -1,40 +1,15 @@
 <script lang="ts" setup>
 import type { ActivityLogEntry } from '../../../types'
-import { useWebSocket } from '@vueuse/core'
-import { computed, onMounted, ref, useRuntimeConfig, watchEffect } from '#imports'
+import { computed, ref, useRuntimeConfig } from '#imports'
 import TheHeader from '../components/TheHeader.vue'
+import { useActivityLog } from '../useActivityLog'
 
-const entries = ref<ActivityLogEntry[]>([])
+const { public: config } = useRuntimeConfig()
+const { entries, paused, togglePause, clearLog } = useActivityLog(
+  signal => $fetch<ActivityLogEntry[]>('/api/discord/activity', { signal, timeout: 5000, retry: 0 }),
+  import.meta.dev ? config.discord?.wsUrl : undefined,
+)
 const filter = ref<'all' | 'command' | 'context-menu' | 'error'>('all')
-const paused = ref(false)
-
-onMounted(async () => {
-  try {
-    const data = await $fetch<ActivityLogEntry[]>('/api/discord/activity')
-    entries.value = data
-  }
-  catch { /* server may not be ready */ }
-})
-
-const runtimeConfig = useRuntimeConfig()
-if (import.meta.dev && runtimeConfig.public.discord?.wsUrl) {
-  if (typeof window !== 'undefined' && 'WebSocket' in window) {
-    const ws = useWebSocket(runtimeConfig.public.discord.wsUrl, {
-      autoReconnect: true,
-    })
-    watchEffect(() => {
-      const message = ws.data.value
-      if (!message || paused.value)
-        return
-      const data = JSON.parse(message as string)
-      if (data.event === 'activity' && data.entry) {
-        entries.value.push(data.entry)
-        if (entries.value.length > 500)
-          entries.value.splice(0, entries.value.length - 500)
-      }
-    })
-  }
-}
 
 const filtered = computed(() => {
   const list = filter.value === 'all'
@@ -76,10 +51,6 @@ function formatTime(ts: number): string {
   return new Date(ts).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
-function clearLog() {
-  entries.value = []
-}
-
 const filters = [
   { key: 'all' as const, label: 'All' },
   { key: 'command' as const, label: 'Commands' },
@@ -108,7 +79,7 @@ const filters = [
             class="cursor-pointer rounded-md border px-3 py-1.5 text-xs font-medium transition-colors"
             :class="paused ? 'border-amber-500/50 text-amber-500 bg-amber-500/5' : 'border-default text-muted hover:text-highlighted hover:bg-elevated'"
             :aria-pressed="paused"
-            @click="paused = !paused"
+            @click="togglePause"
           >
             {{ paused ? 'Resume' : 'Pause' }}
           </button>
@@ -200,7 +171,7 @@ const filters = [
         <div v-else class="divide-y divide-default max-h-[calc(100vh-24rem)] overflow-y-auto">
           <div
             v-for="entry in filtered"
-            :key="entry.id"
+            :key="`${entry.timestamp}/${entry.id}`"
             class="grid grid-cols-[auto_1fr_auto_auto_auto] gap-x-4 px-4 py-2 text-sm transition-colors hover:bg-elevated/50"
             :class="entry.status === 'error' ? 'bg-red-500/3' : ''"
           >

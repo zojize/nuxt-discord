@@ -1,21 +1,17 @@
 <script lang="ts" setup>
-import type { ContextMenu, Listener } from '../../../types'
-import contextMenus from '#build/discord/contextMenus'
-import listeners from '#build/discord/listeners'
-import { computed, ref } from '#imports'
+import { computed } from '#imports'
 import TheHeader from '../components/TheHeader.vue'
-
 import { useCommandRegistry } from '../useCommandRegistry'
+import { useDashboardCatalog } from '../useDashboardCatalog'
 
 const { commands, diff, status } = useCommandRegistry()
-const menus = ref<ContextMenu[]>(contextMenus)
-const eventListeners = ref<Listener[]>(listeners)
+const { menus, listeners: eventListeners } = useDashboardCatalog()
 
 const commandStats = computed(() => {
   if (!diff.value)
     return null
   return {
-    synced: diff.value.synced.length,
+    menuChanges: diff.value.menuChanges,
     added: diff.value.added.length,
     changed: diff.value.changed.length,
     removed: diff.value.removed.length,
@@ -30,6 +26,7 @@ const allSynced = computed(() => {
     && commandStats.value.changed === 0
     && commandStats.value.removed === 0
     && commandStats.value.conflict === 0
+    && commandStats.value.menuChanges === 0
 })
 
 const userMenus = computed(() => menus.value.filter(m => m.type === 'user'))
@@ -82,6 +79,9 @@ const uniqueEvents = computed(() => {
                 {{ status === 'pending' ? 'Checking Discord…' : 'Sync status unknown' }}
               </UBadge>
               <template v-else-if="!allSynced">
+                <UBadge v-if="commandStats.menuChanges" color="warning" variant="subtle" size="xs">
+                  Context menu changes are ready to sync.
+                </UBadge>
                 <UBadge v-if="commandStats.added" color="success" variant="subtle" size="xs">
                   {{ commandStats.added }} new
                 </UBadge>
@@ -235,7 +235,7 @@ const uniqueEvents = computed(() => {
               <div v-else class="divide-y divide-default">
                 <div
                   v-for="menu in menus"
-                  :key="menu.name"
+                  :key="JSON.stringify([menu.type, menu.name, menu.guilds])"
                   class="flex items-center justify-between px-4 py-2.5"
                 >
                   <span class="text-highlighted text-sm font-medium">{{ menu.name }}</span>
