@@ -268,7 +268,7 @@ export const withUser = defineMiddleware('withUser', async ({ interaction, next 
 
 ## Web Dashboard
 
-Start the Nuxt dev server and open `/discord`, or [host a private dashboard](https://zojize.github.io/nuxt-discord/dashboard/#hosting-a-private-dashboard) alongside your production bot.
+Start the Nuxt dev server and open `/discord`, or [host a private dashboard](docs/content/dashboard.md#hosting-a-private-dashboard) alongside your production bot.
 
 - **Overview** - Stat cards for commands, context menus, listeners
 - **Slash Commands** - Option types, sync status, one-click sync, command test bar with parameter autocomplete
@@ -328,7 +328,6 @@ export default defineNuxtConfig({
     dir: 'discord',
     autoStart: true,
     guilds: [], // Guild IDs for @guild commands
-    interactionTimeout: 15 * 60 * 1000, // scope cleanup (default: 15 min)
     watch: {
       enabled: true,
       port: 5720,

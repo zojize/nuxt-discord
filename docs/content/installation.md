@@ -66,7 +66,9 @@ node .output/server/index.mjs
 
 For a local production run with credentials in a file, use `node --env-file=.env .output/server/index.mjs`. Nuxt loads `.env` during development. The built Node process reads the environment it receives at launch.
 
-Wait for `Discord client is ready!` before sending a command. With `autoStart` enabled, a production process exits with an error if it cannot initialize or log in. Configure your process supervisor to restart failed runs with backoff. If the web app scales to multiple replicas or uses static hosting, run the gateway in a separate, always-on service with a single replica.
+Wait for `Discord client is ready!` before sending a command. With `autoStart` enabled, a production process exits with an error if it cannot initialize, log in, or recover from a fatal gateway disconnect. Configure your process supervisor to restart failed runs with backoff. If the web app scales to multiple replicas or uses static hosting, run the gateway in a separate, always-on service with a single replica.
+
+If you also want to manage the deployed bot from a browser, enable the dashboard before building and register its Discord callback. [Host a private dashboard](/dashboard#hosting-a-private-dashboard)
 
 ## Project Structure
 
