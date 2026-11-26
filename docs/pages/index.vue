@@ -19,17 +19,18 @@ const guides = [
 <template>
   <UContainer class="landing min-h-svh max-w-[74.5rem] overflow-x-clip bg-(--landing-canvas) px-5!">
     <a class="absolute -top-20 z-10 bg-(--landing-canvas) focus:top-4" href="#main">Skip to content</a>
-    <header class="flex items-center justify-between gap-6 border-b border-(--landing-rule) py-5">
+    <header class="flex flex-wrap items-center justify-between gap-6 border-b border-(--landing-rule) py-5">
       <ULink raw to="/" aria-label="Nuxt Discord home" class="wordmark">
         <ProjectLogo width="40" height="40" aria-hidden="true" class="size-10 shrink-0 max-[23rem]:size-8" /> nuxt-discord
       </ULink>
-      <nav aria-label="Main" class="flex items-center gap-[inherit]">
+      <nav aria-label="Main" class="ms-auto flex items-center gap-[inherit]">
         <ULink raw to="/getting-started">
           Docs
         </ULink>
+        <VersionMenu />
         <ULink raw to="https://github.com/zojize/nuxt-discord" aria-label="GitHub" class="inline-flex items-center justify-center">
-          <span class="max-[23rem]:hidden">GitHub ↗</span>
-          <UIcon name="i-simple-icons-github" class="hidden size-5 max-[23rem]:inline-block" />
+          <span class="max-[30rem]:hidden">GitHub ↗</span>
+          <UIcon name="i-simple-icons-github" class="hidden size-5 max-[30rem]:inline-block" />
         </ULink>
         <UColorModeSelect v-bind="appearanceSelect" />
       </nav>
