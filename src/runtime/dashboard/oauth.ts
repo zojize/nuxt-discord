@@ -137,6 +137,7 @@ export async function handleDashboardOAuth(event: H3Event, origin: URL, clientId
       response_type: 'code',
       client_id: clientId,
       scope: 'identify',
+      prompt: 'consent',
       redirect_uri: redirectUri,
       state,
       code_challenge_method: 'S256',
