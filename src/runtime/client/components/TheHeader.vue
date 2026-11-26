@@ -1,5 +1,4 @@
 <script lang="ts" setup>
-import { Icon } from '@iconify/vue'
 import { useRoute } from '#imports'
 import { appearanceSelect } from './appearance-select'
 import ProjectLogo from './ProjectLogo.vue'
@@ -48,7 +47,7 @@ const nav = [
           title="View on GitHub"
           class="flex size-8 cursor-pointer items-center justify-center rounded-md text-muted transition-colors hover:bg-elevated hover:text-highlighted"
         >
-          <Icon icon="simple-icons:github" class="size-4" />
+          <UIcon name="i-simple-icons-github" class="size-4" />
         </a>
       </div>
     </div>

@@ -1,7 +1,31 @@
 import type { NuxtDiscordContext } from '../types'
 import { extendPages } from '@nuxt/kit'
 
+declare module '@nuxt/schema' {
+  interface NuxtHooks {
+    // eslint-disable-next-line ts/method-signature-style -- Match the overload when @nuxt/icon's declarations are also loaded.
+    'icon:clientBundleIcons'(icons: Set<string>): void
+  }
+}
+
 export function prepareClient(ctx: NuxtDiscordContext) {
+  // The application's icon scanner does not see components shipped in this package.
+  ctx.nuxt.hook('icon:clientBundleIcons', (icons) => {
+    for (const name of [
+      'lucide:blocks',
+      'lucide:circle-x',
+      'lucide:eye',
+      'lucide:gift',
+      'lucide:pin',
+      'lucide:plus',
+      'lucide:send-horizontal',
+      'lucide:shapes',
+      'lucide:smile',
+      'lucide:sticker',
+      'simple-icons:discord',
+      'simple-icons:github',
+    ]) icons.add(name)
+  })
   ctx.nuxt.options.css.push(ctx.resolve.module('runtime/client/style.css'))
 
   extendPages((pages) => {
