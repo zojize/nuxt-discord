@@ -18,7 +18,7 @@ const items = [{
       color="neutral"
       variant="ghost"
       size="sm"
-      class="min-h-11 gap-0.5 px-1 sm:gap-1 sm:px-2"
+      class="version-trigger min-h-11 cursor-pointer gap-0.5 px-1 sm:gap-1 sm:px-2"
       :ui="{ trailingIcon: 'size-3.5' }"
     />
   </UDropdownMenu>
