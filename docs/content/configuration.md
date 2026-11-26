@@ -56,6 +56,10 @@ Directory containing command files and locales, relative to project root.
 
 Whether to automatically connect the bot on server startup. Set to `false` if you want to start the bot manually via hooks.
 
+### `dashboard`
+
+Set this boolean to `true` before building to include the Discord-authenticated dashboard in the production Node server. It defaults to `false`. The development dashboard is available at `/discord`. [Dashboard hosting and OAuth setup](/dashboard#hosting-a-private-dashboard)
+
 ### `guilds`
 
 - **Type:** `string[]`
@@ -78,7 +82,7 @@ discord: {
 
 ### `watch`
 
-HMR and sync options for development.
+Command hot reload runs in development. Automatic registration also runs at bot startup, including in production.
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
@@ -87,7 +91,7 @@ HMR and sync options for development.
 | `showURL` | `boolean` | `false` | Show HMR server URL in console |
 | `sync.debounce` | `number` | `1000` | Milliseconds to debounce before syncing after HMR |
 
-Set `sync` to `false` to disable auto-sync entirely.
+Set `watch.sync` to `false` for manual registration. Sync replaces the command list in each managed scope. [Registering an existing bot](/guide/guild-commands#existing-bots)
 
 ## Environment Variables
 
@@ -96,4 +100,5 @@ Set `sync` to `false` to disable auto-sync entirely.
 | `DISCORD_TOKEN` | Yes | Bot token from Discord Developer Portal |
 | `DISCORD_CLIENT_ID` | Yes | Application ID from Discord Developer Portal |
 | `DISCORD_GUILD_ID` | No | Comma-separated guild IDs for guild commands |
-| `DISCORD_OWNER_ID` | No | User ID for the `ownerOnly` middleware |
+| `DISCORD_DASHBOARD_ORIGIN` | Hosted dashboard only | Browser-facing origin, for example `https://bot.example.com` |
+| `DISCORD_OWNER_ID` | No | User ID checked by the `ownerOnly` command middleware. Dashboard access follows Discord application ownership and team membership. |

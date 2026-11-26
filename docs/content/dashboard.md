@@ -8,11 +8,25 @@ Run the Nuxt dev server and open `/discord` to manage your development bot.
 
 ## Hosting a private dashboard
 
-Set `discord.dashboard: true` in `nuxt.config.ts` and build a Node server. The dashboard uses the bot running in that server process. Enabling it makes the Nuxt application a dedicated administrator site. Use a separate origin for any public website.
+Enable the dashboard before building your Node server. The dashboard and the bot share one process. Use a dedicated origin such as `https://bot.example.com` because sign-in protects the entire Nuxt application.
 
-Set `DISCORD_DASHBOARD_ORIGIN` to the exact browser origin, including its port, without a trailing slash. Use HTTPS or a loopback HTTP address reached through an SSH tunnel. Bind Nitro to loopback for an SSH tunnel or local reverse proxy. A proxy must preserve the original Host header.
+```ts
+export default defineNuxtConfig({
+  modules: ['nuxt-discord'],
+  discord: { dashboard: true },
+})
+```
 
-In the bot application's Discord Developer Portal, open **OAuth2 → Redirects**. Register the dashboard origin followed by `/__discord-auth/callback`. For example, a dashboard on `http://127.0.0.1:3434` uses `http://127.0.0.1:3434/__discord-auth/callback`. Start the server with the bot’s `DISCORD_CLIENT_ID` and `DISCORD_TOKEN`, then open `/discord` and choose **Sign in with Discord**.
+1. Set `DISCORD_DASHBOARD_ORIGIN` in the running service’s environment to the origin people use in their browser. Include any non-default port. Omit paths and the trailing slash.
+2. Open your bot application in the [Discord Developer Portal](https://discord.com/developers/applications). Under **OAuth2 → Redirects**, choose **Add Redirect**, enter the exact callback URL and select **Save Changes**. Register each distinct dashboard callback once. Redeployments at the same address reuse it.
+3. Start the built server with its `DISCORD_TOKEN` and `DISCORD_CLIENT_ID`. Open `/discord` on the dashboard origin and choose **Sign in with Discord**. This flow uses the `identify` scope and PKCE. The bot’s existing credentials are sufficient.
+
+| Deployment | `DISCORD_DASHBOARD_ORIGIN` | Redirect to register in Discord |
+| --- | --- | --- |
+| Production HTTPS | `https://bot.example.com` | `https://bot.example.com/__discord-auth/callback` |
+| Private SSH tunnel | `http://127.0.0.1:3434` | `http://127.0.0.1:3434/__discord-auth/callback` |
+
+The callback path starts at the root of the dashboard origin. Behind a local HTTPS reverse proxy, bind Nitro to loopback and preserve the browser-facing `Host` header. With an SSH tunnel, use the browser’s local hostname and forwarded port.
 
 | Discord application access | Dashboard permissions |
 | --- | --- |

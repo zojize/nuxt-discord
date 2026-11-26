@@ -17,6 +17,12 @@ export default () => 'pong!'
 
 The command name is inferred from the file name. The description comes from the JSDoc body text.
 
+## Hot reload and shared state
+
+Saving an edit to a command updates its handler in the running development bot. If the edit fails to compile, the previous handler keeps serving requests until you fix it. Deleting the command file removes its handler from the running bot.
+
+Keep state shared between commands in a server helper. Command edits reuse that helper’s in-memory state, including through project aliases and Nitro auto-imports. For counters or other data that must survive a server restart, use a database or a persistent Nitro storage mount.
+
 ## Name Resolution
 
 The command name is resolved in this order:
