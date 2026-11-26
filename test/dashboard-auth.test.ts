@@ -1,7 +1,7 @@
 import type { AddressInfo } from 'node:net'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
-import { createServer } from 'node:http'
+import { createServer, get } from 'node:http'
 import { createApp, defineEventHandler, toNodeListener } from 'h3'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import dashboardAuth from '../src/runtime/dashboard/auth'
@@ -43,8 +43,15 @@ describe('private dashboard origin', () => {
 
   it('allows signing in from a direct browser link', async () => {
     const headers = { 'sec-fetch-site': 'cross-site', 'sec-fetch-mode': 'navigate', 'sec-fetch-dest': 'document' }
-    expect((await fetch(`${origin}/discord`, { headers })).status).toBe(401)
-    expect((await fetch(`${origin}/discord`, { headers: { ...headers, authorization } })).status).toBe(200)
+    // Fetch always sets its own fetch mode. Send the headers a browser uses
+    // when a person opens a link from a different site.
+    for (const [credentials, expected] of [['', 401], [authorization, 200]] as const) {
+      const status = await new Promise<number | undefined>((resolve, reject) => get(`${origin}/discord`, { headers: { ...headers, authorization: credentials } }, (response) => {
+        response.resume()
+        resolve(response.statusCode)
+      }).on('error', reject))
+      expect(status).toBe(expected)
+    }
   })
 
   it('requires the dashboard origin for changes', async () => {
