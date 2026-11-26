@@ -101,8 +101,9 @@ const guides = [
 .landing { color: var(--landing-text); font: 1rem/1.55 Inter, system-ui, sans-serif; }
 .start { --ui-primary: var(--landing-accent); --ui-text-inverted: var(--landing-on-accent); }
 .wordmark { display: flex; align-items: center; gap: .65rem; white-space: nowrap; font: bold 1.05rem ui-monospace, monospace; }
-.landing a:focus-visible { outline: 3px solid var(--landing-accent); outline-offset: 4px; }
-nav a:hover { text-decoration: underline; }
+.landing a:focus-visible, nav :deep(.version-trigger:focus-visible) { outline: 3px solid var(--landing-accent); outline-offset: 4px; }
+nav :deep(.version-trigger) { color: inherit; font: inherit; background-color: transparent; }
+nav a:hover, nav :deep(.version-trigger:hover) { text-decoration: underline; }
 @media (max-width: 30rem) {
   header { gap: .45rem; }
   nav a { display: inline-flex; align-items: center; min-height: 44px; white-space: nowrap; }
