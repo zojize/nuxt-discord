@@ -1,10 +1,9 @@
 <script lang="ts" setup>
-import type { Listener } from '../../../types'
-import listeners from '#build/discord/listeners'
-import { ref } from '#imports'
 import TheHeader from '../components/TheHeader.vue'
+import { useDashboardCatalog } from '../useDashboardCatalog'
 
-const eventListeners = ref<Listener[]>(listeners)
+const showEditorLinks = import.meta.dev
+const { listeners: eventListeners } = useDashboardCatalog()
 </script>
 
 <template>
@@ -42,7 +41,7 @@ const eventListeners = ref<Listener[]>(listeners)
               </div>
             </div>
           </template>
-          <template #footer>
+          <template v-if="showEditorLinks" #footer>
             <a
               :href="`vscode://file${listener.path}`"
               class="text-dimmed text-xs font-mono truncate hover:text-highlighted transition-colors"

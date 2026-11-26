@@ -1,10 +1,10 @@
 <script lang="ts" setup>
-import type { ContextMenu } from '../../../types'
-import contextMenus from '#build/discord/contextMenus'
-import { computed, ref } from '#imports'
+import { computed } from '#imports'
 import TheHeader from '../components/TheHeader.vue'
+import { useDashboardCatalog } from '../useDashboardCatalog'
 
-const menus = ref<ContextMenu[]>(contextMenus)
+const showEditorLinks = import.meta.dev
+const { menus } = useDashboardCatalog()
 
 const userMenus = computed(() => menus.value.filter(m => m.type === 'user'))
 const messageMenus = computed(() => menus.value.filter(m => m.type === 'message'))
@@ -21,7 +21,7 @@ const messageMenus = computed(() => menus.value.filter(m => m.type === 'message'
           Context Menus
         </h1>
         <p class="text-muted text-sm mt-1">
-          {{ menus.length }} context menu{{ menus.length === 1 ? '' : 's' }} registered
+          {{ menus.length }} context menu{{ menus.length === 1 ? '' : 's' }}
         </p>
       </div>
 
@@ -51,7 +51,7 @@ const messageMenus = computed(() => menus.value.filter(m => m.type === 'message'
         <div class="space-y-3">
           <UCard
             v-for="menu in userMenus"
-            :key="menu.name"
+            :key="JSON.stringify([menu.name, menu.guilds])"
             variant="outline"
           >
             <template #header>
@@ -63,7 +63,7 @@ const messageMenus = computed(() => menus.value.filter(m => m.type === 'message'
                 </div>
               </div>
             </template>
-            <template #footer>
+            <template v-if="showEditorLinks" #footer>
               <a :href="`vscode://file${menu.path}`" class="text-dimmed text-xs font-mono truncate hover:text-highlighted transition-colors">{{ menu.path.split('/discord/context-menus/').pop() }}</a>
             </template>
           </UCard>
@@ -84,7 +84,7 @@ const messageMenus = computed(() => menus.value.filter(m => m.type === 'message'
         <div class="space-y-3">
           <UCard
             v-for="menu in messageMenus"
-            :key="menu.name"
+            :key="JSON.stringify([menu.name, menu.guilds])"
             variant="outline"
           >
             <template #header>
@@ -96,7 +96,7 @@ const messageMenus = computed(() => menus.value.filter(m => m.type === 'message'
                 </div>
               </div>
             </template>
-            <template #footer>
+            <template v-if="showEditorLinks" #footer>
               <a :href="`vscode://file${menu.path}`" class="text-dimmed text-xs font-mono truncate hover:text-highlighted transition-colors">{{ menu.path.split('/discord/context-menus/').pop() }}</a>
             </template>
           </UCard>
