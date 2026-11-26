@@ -156,7 +156,7 @@ const filters = [
       <!-- Log entries -->
       <div class="rounded-lg border border-default overflow-hidden">
         <!-- Header row -->
-        <div class="grid grid-cols-[auto_1fr_auto_auto_auto] gap-x-4 border-b border-default bg-elevated px-4 py-2 text-[10px] font-medium uppercase tracking-wider text-dimmed">
+        <div aria-hidden="true" class="hidden grid-cols-[4rem_minmax(0,1fr)_6rem_4rem_3rem] gap-x-4 border-b border-default bg-elevated px-4 py-2 text-[10px] font-medium uppercase tracking-wider text-dimmed md:grid">
           <span class="w-16">Time</span>
           <span>Event</span>
           <span class="w-24 text-right">User</span>
@@ -168,44 +168,50 @@ const filters = [
         <div v-if="filtered.length === 0" class="px-4 py-12 text-center text-dimmed text-sm">
           {{ entries.length === 0 ? 'No activity yet — interact with your bot to see events here' : 'No matching entries' }}
         </div>
-        <div v-else class="divide-y divide-default max-h-[calc(100vh-24rem)] overflow-y-auto">
-          <div
+        <ul v-else role="list" class="divide-y divide-default md:max-h-[calc(100vh-24rem)] md:overflow-y-auto">
+          <li
             v-for="entry in filtered"
             :key="`${entry.timestamp}/${entry.id}`"
-            class="grid grid-cols-[auto_1fr_auto_auto_auto] gap-x-4 px-4 py-2 text-sm transition-colors hover:bg-elevated/50"
+            class="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-1.5 px-4 py-3 text-sm transition-colors hover:bg-elevated/50 md:grid-cols-[4rem_minmax(0,1fr)_6rem_4rem_3rem] md:items-center md:gap-x-4 md:py-2"
             :class="entry.status === 'error' ? 'bg-red-500/3' : ''"
           >
-            <!-- Time -->
-            <span class="w-16 font-mono text-xs text-dimmed tabular-nums">{{ formatTime(entry.timestamp) }}</span>
-
-            <!-- Event -->
-            <div class="flex items-center gap-2 min-w-0">
+            <div class="flex min-w-0 items-start gap-2 md:col-start-2 md:row-start-1 md:items-center">
               <span
-                class="flex size-5 shrink-0 items-center justify-center rounded text-[10px] font-bold"
+                aria-hidden="true"
+                class="flex size-5 shrink-0 items-center justify-center rounded bg-elevated text-[10px] font-bold"
                 :class="typeColor[entry.type]"
-                style="background: var(--ui-bg-elevated);"
               >{{ typeIcon[entry.type] ?? '?' }}</span>
-              <span class="font-medium text-highlighted truncate">{{ entry.name }}</span>
-              <span v-if="entry.detail" class="truncate text-xs text-error">{{ entry.detail }}</span>
+              <div class="min-w-0 md:flex md:items-baseline md:gap-2">
+                <span class="block font-medium wrap-anywhere text-highlighted md:truncate">{{ entry.name }}</span>
+                <span v-if="entry.detail" class="block text-xs wrap-anywhere text-error md:truncate">{{ entry.detail }}</span>
+              </div>
             </div>
 
-            <!-- User -->
-            <span class="w-24 text-right text-xs text-muted truncate">{{ entry.userName ?? '—' }}</span>
-
-            <!-- Duration -->
-            <span class="w-16 text-right font-mono text-xs tabular-nums" :class="(entry.duration ?? 0) > 1000 ? 'text-amber-500' : 'text-dimmed'">
-              {{ entry.duration != null ? `${entry.duration}ms` : '—' }}
-            </span>
-
-            <!-- Status -->
-            <span class="w-12 text-right">
+            <span class="inline-flex items-center justify-end gap-1.5 text-xs text-muted md:col-start-5 md:row-start-1">
               <span
+                aria-hidden="true"
                 class="inline-block size-2 rounded-full"
                 :class="entry.status === 'ok' ? 'bg-emerald-500' : 'bg-red-500'"
               />
+              <span class="capitalize md:sr-only">{{ entry.status }}</span>
             </span>
-          </div>
-        </div>
+
+            <div class="col-span-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-muted md:contents">
+              <span class="font-mono text-dimmed tabular-nums md:col-start-1 md:row-start-1">
+                <span class="sr-only">Time </span>{{ formatTime(entry.timestamp) }}
+              </span>
+              <span class="min-w-0 wrap-anywhere md:col-start-3 md:row-start-1 md:truncate md:text-right">
+                <span class="sr-only">User </span><span>{{ entry.userName ?? '—' }}</span>
+              </span>
+              <span
+                class="font-mono tabular-nums md:col-start-4 md:row-start-1 md:text-right"
+                :class="(entry.duration ?? 0) > 1000 ? 'text-amber-500' : 'text-dimmed'"
+              >
+                <span class="sr-only">Duration </span><span>{{ entry.duration != null ? `${entry.duration}ms` : '—' }}</span>
+              </span>
+            </div>
+          </li>
+        </ul>
       </div>
     </main>
   </div>
