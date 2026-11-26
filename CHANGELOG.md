@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.1.0
+
+[Compare changes](https://github.com/zojize/nuxt-discord/compare/v0.0.17...v0.1.0)
+
+### 🚀 Enhancements
+
+- Define user and message context menus and file-based event listeners alongside slash commands. Share permission checks and cooldowns across handlers with middleware.
+- Register commands globally or in selected Discord servers. Localize command names, descriptions, and options with JSDoc or locale files. Command parameters now accept Discord users, channels, roles, mentionables, and attachments.
+- Open forms with `reply.modal()`. Read reactive channel properties and send messages outside an interaction with `useTextChannel()`.
+- Test commands, inspect registration changes, and follow live activity in the dashboard. The optional hosted dashboard uses Discord sign-in. Application owners and team admins and developers can manage the bot. Read-only team members can inspect it. [Dashboard setup](https://zojize.github.io/nuxt-discord/dashboard/#hosting-a-private-dashboard)
+- Try the example bot’s commands in a browser and browse the command reference generated from its source. [Playground](https://zojize.github.io/nuxt-discord/playground/) · [Example bot reference](https://zojize.github.io/nuxt-discord/example-bot/)
+
+### 🩹 Fixes
+
+- Editing a command preserves shared state in server helpers and resolves project aliases, npm packages, and Nitro imports. An incomplete save leaves the last working handler available.
+- Reactive replies apply edits in order and stop watching when the interaction expires. Slow commands receive an acknowledgement before Discord’s deadline, and private replies keep their visibility through follow-ups and edits.
+- Production builds can run without bot credentials. The built Node server starts the bot with its runtime credentials and reports startup and fatal gateway failures to the process supervisor.
+
+### Upgrading from v0.0.17
+
+- Use Nuxt 4 and `discord.js@^14.28.1`. For production, deploy the entire `.output` directory and set `DISCORD_TOKEN` and `DISCORD_CLIENT_ID` on the running Node process. [Deployment guide](https://zojize.github.io/nuxt-discord/installation/#deployment)
+- If the bot already has commands, set `discord.watch.sync` to `false` until all commands you want to keep have local definitions. Sync replaces the full command list in each managed global or guild scope, including context menus. [Existing bot setup](https://zojize.github.io/nuxt-discord/guide/guild-commands/#existing-bots)
 
 ## v0.0.17
 
