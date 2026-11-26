@@ -4,7 +4,28 @@ title: Web Dashboard
 
 # Web Dashboard
 
-Nuxt Discord includes a built-in web dashboard for managing your bot. Run the Nuxt dev server and open `/discord`. The dashboard and its management APIs are available only in development.
+Run the Nuxt dev server and open `/discord` to manage your development bot.
+
+## Hosting a private dashboard
+
+Set `discord.dashboard: true` in `nuxt.config.ts` and build a Node server. The dashboard uses the bot running in that server process. Enabling it makes the Nuxt application a dedicated administrator site. Use a separate origin for any public website.
+
+Supply these environment variables when starting the server:
+
+| Variable | Value |
+| --- | --- |
+| `DISCORD_DASHBOARD_ORIGIN` | Exact browser origin, including the port, without a trailing slash. Use HTTPS or an HTTP loopback address reached through an SSH tunnel. |
+| `DISCORD_DASHBOARD_PASSWORD_SHA256` | Hex SHA-256 digest of a randomly generated administrator password. |
+
+Generate a password and its verifier in a private directory:
+
+```sh
+umask 077
+openssl rand -hex 32 > dashboard-password
+tr -d '\n' < dashboard-password | openssl dgst -sha256
+```
+
+Keep the password in your password manager. Set the verifier variable to the 64-character digest. Bind Nitro to loopback when using an SSH tunnel or local HTTPS reverse proxy. A proxy must preserve the original Host header. Open `/discord` and sign in as `admin` using the generated password. Set a new verifier and restart the service to rotate credentials.
 
 ## Pages
 
@@ -24,7 +45,7 @@ Detailed command management with:
 - **Sync status** — Whether each command matches Discord's registry
 - **Command test bar** — A floating input to test commands directly from the browser
 
-The tester runs commands and middleware in your local development bot using a simulated direct message from a preview user. It records text, follow-ups, and private replies. Buttons, modal submissions, real Discord users and roles, file transfers, and changes that happen after a command finishes need a Discord interaction. Command code can still perform its own database writes or external calls.
+The tester runs commands and middleware in the running bot using a simulated direct message from a preview user. It records text, follow-ups, and private replies. Buttons, modal submissions, real Discord users and roles, file transfers, and changes that happen after a command finishes need a Discord interaction. Command code can still perform its own database writes or external calls.
 
 ### Context Menus (`/discord/context-menus`)
 
@@ -38,14 +59,14 @@ Lists all event listeners with their event names and `once` flags.
 
 Live interaction history with:
 
-- **Real-time streaming** — Events appear as they happen via WebSocket
+- **Real-time streaming** — Shows incoming interactions over a development WebSocket or by polling the hosted bot
 - **Stats** — Total interactions, commands, context menus, errors, average duration
 - **Filtering** — Filter by type (commands, context menus, errors)
 - **Pause/Resume** — Pause the stream to inspect entries
 
 ## File Links
 
-File paths on the slash commands, context menus, and listeners pages link directly to your editor via `vscode://file` URLs.
+In development, file paths on the slash commands, context menus, and listeners pages link directly to your editor via `vscode://file` URLs.
 
 ## Sync Status
 

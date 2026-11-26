@@ -268,7 +268,7 @@ export const withUser = defineMiddleware('withUser', async ({ interaction, next 
 
 ## Web Dashboard
 
-Start the Nuxt dev server and open `/discord`. The dashboard and its APIs are development-only. Available views include:
+Start the Nuxt dev server and open `/discord`, or [host a private dashboard](https://zojize.github.io/nuxt-discord/dashboard/#hosting-a-private-dashboard) alongside your production bot.
 
 - **Overview** - Stat cards for commands, context menus, listeners
 - **Slash Commands** - Option types, sync status, one-click sync, command test bar with parameter autocomplete
@@ -276,7 +276,7 @@ Start the Nuxt dev server and open `/discord`. The dashboard and its APIs are de
 - **Listeners** - Event names and once flags
 - **Activity Log** - Real-time interaction history with filtering and stats
 
-File paths link to your editor via `vscode://file` URLs.
+In development, file paths link to your editor.
 
 ### Hot reload and shared state
 
