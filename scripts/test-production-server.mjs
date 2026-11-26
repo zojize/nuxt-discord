@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
+import { Buffer } from 'node:buffer'
 import { spawn, spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { once } from 'node:events'
-import { cpSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
@@ -21,22 +24,14 @@ delete env.DISCORD_TOKEN
 delete env.DISCORD_CLIENT_ID
 delete env.FIXTURE_RUNTIME_REPLY
 delete env.FIXTURE_DISCORD_API
+delete env.FIXTURE_HOSTED_DASHBOARD
+delete env.DISCORD_DASHBOARD_PASSWORD_SHA256
+delete env.DISCORD_DASHBOARD_ORIGIN
 
 try {
   cpSync(source, app, { recursive: true })
   cpSync(join(consumer, 'app.vue'), join(app, 'app.vue'))
-  const build = spawnSync(process.execPath, [join(consumer, 'node_modules/nuxt/bin/nuxt.mjs'), 'build'], {
-    cwd: app,
-    env,
-    encoding: 'utf8',
-    maxBuffer: 4 * 1024 * 1024,
-  })
-  const output = build.stdout + build.stderr
-  assert.equal(build.status, 0, output)
-  assert.doesNotMatch(output, /Failed to initialize Discord client|DISCORD_TOKEN environment variable is not set/, 'prerender must not start a Discord client')
-  cpSync(join(app, '.output'), deployment, { recursive: true, verbatimSymlinks: true })
-  const manifest = JSON.parse(readFileSync(join(deployment, 'nitro.json'), 'utf8'))
-  assert.equal(manifest.preset, 'node-server')
+  buildServer(deployment, env)
   assert.deepEqual(JSON.parse(readFileSync(join(deployment, 'public/build-check'), 'utf8')), {
     prerender: true,
     discordInitialized: false,
@@ -45,18 +40,52 @@ try {
   await checkServer('missing')
   await checkServer('rejected')
   await testGatewayResume(deployment, env)
-  console.log('Standalone production server passed credential-free build, Discord dispatch, startup failures and graceful shutdown.')
+
+  writeFileSync(join(app, 'app.vue'), '<template><NuxtPage /></template>')
+  const hosted = join(deployment, 'hosted')
+  buildServer(hosted, { ...env, FIXTURE_HOSTED_DASHBOARD: '1' })
+  for (const path of ['discord', 'api/discord'])
+    assert.equal(existsSync(join(hosted, 'public', path)), false, `prerendered private route: ${path}`)
+  await checkServer('ready', hosted)
+  console.log('Standalone production server passed credentials, gateway, private dashboard and graceful shutdown checks.')
 }
 finally {
   rmSync(deployment, { recursive: true, force: true })
 }
 
-async function checkServer(mode) {
+function buildServer(target, buildEnv) {
+  const build = spawnSync(process.execPath, [join(consumer, 'node_modules/nuxt/bin/nuxt.mjs'), 'build'], {
+    cwd: app,
+    env: buildEnv,
+    encoding: 'utf8',
+    maxBuffer: 4 * 1024 * 1024,
+  })
+  const output = build.stdout + build.stderr
+  assert.equal(build.status, 0, output)
+  assert.doesNotMatch(output, /Failed to initialize Discord client|DISCORD_TOKEN environment variable is not set/, 'prerender must not start a Discord client')
+  cpSync(join(app, '.output'), target, { recursive: true, verbatimSymlinks: true })
+  const manifest = JSON.parse(readFileSync(join(target, 'nitro.json'), 'utf8'))
+  assert.equal(manifest.preset, 'node-server')
+  const assets = join(target, 'public/_nuxt')
+  const dashboardRouter = readdirSync(assets).filter(file => file.endsWith('.js')).some(file =>
+    readFileSync(join(assets, file), 'utf8').includes('discord-slash-commands'))
+  assert.equal(dashboardRouter, buildEnv.FIXTURE_HOSTED_DASHBOARD === '1', 'compiled Vue router contains dashboard pages only in opted-in builds')
+}
+
+async function checkServer(mode, hosted) {
   const runtimeEnv = { ...env, NODE_ENV: 'production', NITRO_PORT: '0', NITRO_HOST: '127.0.0.1', TEST_GATEWAY: mode, FIXTURE_RUNTIME_REPLY: 'pong' }
+  if (hosted) {
+    const port = createServer().listen(0, '127.0.0.1')
+    await once(port, 'listening')
+    runtimeEnv.NITRO_PORT = String(port.address().port)
+    await new Promise(resolve => port.close(resolve))
+    runtimeEnv.DISCORD_DASHBOARD_ORIGIN = `http://127.0.0.1:${runtimeEnv.NITRO_PORT}`
+    runtimeEnv.DISCORD_DASHBOARD_PASSWORD_SHA256 = createHash('sha256').update('fixture-only').digest('hex')
+  }
   if (mode !== 'missing')
     Object.assign(runtimeEnv, { DISCORD_TOKEN: 'fixture-only', DISCORD_CLIENT_ID: '100000000000000001' })
   const child = spawn(process.execPath, ['--import', join(source, 'transport.mjs'), 'server/index.mjs'], {
-    cwd: deployment,
+    cwd: hosted ?? deployment,
     env: runtimeEnv,
     stdio: ['ignore', 'pipe', 'pipe'],
   })
@@ -74,9 +103,16 @@ async function checkServer(mode) {
       }
       const url = log.match(/Listening on (http:\/\/\S+)/)?.[1]
       assert.ok(url, log)
-      const built = await fetch(new URL('/build-check', url))
-      assert.equal(built.status, 200)
-      assert.deepEqual(await built.json(), { prerender: true, discordInitialized: false })
+      if (hosted) {
+        await checkDashboard(url)
+      }
+      else {
+        const built = await fetch(new URL('/build-check', url))
+        assert.equal(built.status, 200)
+        assert.deepEqual(await built.json(), { prerender: true, discordInitialized: false })
+        const catalog = await fetch(new URL('/api/discord/catalog', url))
+        assert.ok(catalog.status === 404 || !catalog.headers.get('content-type')?.includes('json'))
+      }
       child.kill('SIGTERM')
       assert.deepEqual(await closed, [0, null], log)
       assert.match(log, /fixture gateway closed/)
@@ -95,4 +131,22 @@ async function checkServer(mode) {
       child.kill('SIGKILL')
     await closed
   }
+}
+
+async function checkDashboard(url) {
+  const headers = { authorization: `Basic ${Buffer.from('admin:fixture-only').toString('base64')}` }
+  const get = (path, options) => fetch(new URL(path, url), { headers, ...options })
+  assert.equal((await fetch(new URL('/discord/slash-commands', url))).status, 401)
+  assert.equal((await fetch(new URL('/api/discord/activity', url))).status, 401)
+  assert.equal((await get('/discord/slash-commands')).status, 200)
+  const catalog = await (await get('/api/discord/catalog')).json()
+  assert.equal(catalog.commands[0].path, 'discord/commands/ping.ts')
+  const activity = await (await get('/api/discord/activity')).json()
+  assert.ok(activity.some(entry => entry.name === '/ping' && entry.userId === 'fixture' && entry.status === 'ok'), 'dashboard sees the bot gateway dispatch')
+  const response = await get('/api/discord/slash-command/test', {
+    method: 'POST',
+    headers: { ...headers, 'content-type': 'application/json', 'origin': new URL(url).origin },
+    body: JSON.stringify({ name: 'ping' }),
+  })
+  assert.equal((await response.json()).response, 'pong')
 }
