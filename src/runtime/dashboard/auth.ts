@@ -1,11 +1,31 @@
-import { Buffer } from 'node:buffer'
-import { createHash, timingSafeEqual } from 'node:crypto'
+import type { H3Event } from 'h3'
 import process from 'node:process'
 import { defineEventHandler, getMethod, getRequestHeader, setResponseHeader, setResponseHeaders, setResponseStatus } from 'h3'
+import { getDashboardUserId, handleDashboardOAuth } from './oauth'
+import { dashboardAccessFor } from './permissions'
+import { renderAccessDeniedPage, renderSignInPage } from './signin'
 
-// A hosted dashboard is a dedicated, private Nuxt origin. Protect the whole
-// app so new routes and alternate render paths inherit the same boundary.
-export default defineEventHandler((event) => {
+function privateOrigin() {
+  const origin = process.env.DISCORD_DASHBOARD_ORIGIN
+  const url = origin && URL.canParse(origin) ? new URL(origin) : undefined
+  if (!url || url.origin !== origin)
+    return
+  if (url.protocol === 'https:' || (url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)))
+    return url
+}
+
+function rejectAccess(event: H3Event, status: 401 | 403, path: string) {
+  setResponseStatus(event, status)
+  if ((path === '/' || path === '/discord' || path.startsWith('/discord/'))
+    && getMethod(event) === 'GET' && getRequestHeader(event, 'accept')?.includes('text/html')) {
+    setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
+    setResponseHeader(event, 'content-security-policy', 'default-src \'none\'; style-src \'unsafe-inline\'; form-action \'self\'; base-uri \'none\'; frame-ancestors \'none\'')
+    return status === 401 ? renderSignInPage() : renderAccessDeniedPage()
+  }
+  return status === 401 ? 'Sign in to the dashboard.' : 'Forbidden'
+}
+
+export default defineEventHandler(async (event) => {
   setResponseHeaders(event, {
     'cache-control': 'private, no-store',
     'cross-origin-resource-policy': 'same-origin',
@@ -14,39 +34,44 @@ export default defineEventHandler((event) => {
     'x-content-type-options': 'nosniff',
   })
 
-  const verifier = process.env.DISCORD_DASHBOARD_PASSWORD_SHA256
-  const origin = process.env.DISCORD_DASHBOARD_ORIGIN
-  const url = origin && URL.canParse(origin) ? new URL(origin) : undefined
-  const secure = url?.protocol === 'https:'
-    || (url?.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))
-  if (!verifier || !/^[a-f0-9]{64}$/i.test(verifier) || !url || !secure || url.origin !== origin) {
+  const url = privateOrigin()
+  const clientId = process.env.DISCORD_CLIENT_ID
+  if (!url || !clientId || !/^\d+$/.test(clientId) || !process.env.DISCORD_TOKEN) {
     setResponseStatus(event, 503)
     return 'Dashboard access is not configured.'
   }
 
+  const method = getMethod(event)
+  const path = event.path.split('?')[0]!
   const requestOrigin = getRequestHeader(event, 'origin')
-  const write = !['GET', 'HEAD'].includes(getMethod(event))
+  const write = !['GET', 'HEAD'].includes(method)
   const navigation = getRequestHeader(event, 'sec-fetch-mode') === 'navigate'
     && getRequestHeader(event, 'sec-fetch-dest') === 'document'
   if (getRequestHeader(event, 'host')?.toLowerCase() !== url.host
     || (getRequestHeader(event, 'sec-fetch-site') === 'cross-site' && (write || !navigation))
-    || ((write || requestOrigin !== undefined) && requestOrigin !== origin)) {
+    || ((write || requestOrigin !== undefined) && requestOrigin !== url.origin)) {
     setResponseStatus(event, 403)
     return 'Forbidden'
   }
 
-  const authorization = getRequestHeader(event, 'authorization')
-  const encoded = authorization?.match(/^Basic ([A-Z0-9+/]+=*)$/i)?.[1]
-  if (encoded) {
-    const credentials = Buffer.from(encoded, 'base64').toString('utf8')
-    if (credentials.startsWith('admin:')) {
-      const digest = createHash('sha256').update(credentials.slice(6)).digest()
-      if (timingSafeEqual(digest, Buffer.from(verifier, 'hex')))
-        return
-    }
-  }
+  if (['/__discord-auth/login', '/__discord-auth/callback', '/__discord-auth/logout'].includes(path))
+    return handleDashboardOAuth(event, url, clientId)
 
-  setResponseStatus(event, 401)
-  setResponseHeader(event, 'www-authenticate', 'Basic realm="Nuxt Discord dashboard", charset="UTF-8"')
-  return 'Sign in to the dashboard.'
+  const userId = getDashboardUserId(event, url)
+  if (!userId)
+    return rejectAccess(event, 401, path)
+  const access = await dashboardAccessFor(userId, method, path)
+  if (access === 'unavailable') {
+    setResponseStatus(event, 503)
+    return 'Discord access verification is temporarily unavailable.'
+  }
+  if (access === 'forbidden')
+    return rejectAccess(event, 403, path)
+  if (path === '/__discord-auth/session') {
+    if (method === 'GET' || method === 'HEAD')
+      return { access }
+    setResponseHeader(event, 'allow', 'GET, HEAD')
+    setResponseStatus(event, 405)
+    return 'Method not allowed'
+  }
 })
