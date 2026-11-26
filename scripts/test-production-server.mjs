@@ -11,6 +11,7 @@ import process from 'node:process'
 import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 
+import { signInDashboard } from '../test/fixtures/production/dashboard-login.mjs'
 import { testGatewayResume } from './test-gateway-resume.mjs'
 
 const consumer = process.argv[2]
@@ -134,19 +135,43 @@ async function checkServer(mode, hosted) {
 }
 
 async function checkDashboard(url) {
-  const headers = { authorization: `Basic ${Buffer.from('admin:fixture-only').toString('base64')}` }
-  const get = (path, options) => fetch(new URL(path, url), { headers, ...options })
-  assert.equal((await fetch(new URL('/discord/slash-commands', url))).status, 401)
-  assert.equal((await fetch(new URL('/api/discord/activity', url))).status, 401)
-  assert.equal((await get('/discord/slash-commands')).status, 200)
-  const catalog = await (await get('/api/discord/catalog')).json()
-  assert.equal(catalog.commands[0].path, 'discord/commands/ping.ts')
-  const activity = await (await get('/api/discord/activity')).json()
-  assert.ok(activity.some(entry => entry.name === '/ping' && entry.userId === 'fixture' && entry.status === 'ok'), 'dashboard sees the bot gateway dispatch')
-  const response = await get('/api/discord/slash-command/test', {
+  const get = (path, headers = {}) => fetch(new URL(path, url), { headers })
+  const post = (path, cookie, origin = new URL(url).origin) => fetch(new URL(path, url), {
     method: 'POST',
-    headers: { ...headers, 'content-type': 'application/json', 'origin': new URL(url).origin },
+    redirect: 'manual',
+    headers: { 'content-type': 'application/json', cookie, origin },
     body: JSON.stringify({ name: 'ping' }),
   })
-  assert.equal((await response.json()).response, 'pong')
+  const guest = await get('/discord/slash-commands', { accept: 'text/html' })
+  assert.equal(guest.status, 401)
+  assert.match(await guest.text(), /href="\/__discord-auth\/login"/)
+  assert.equal((await get('/__discord-auth/session')).status, 401)
+  const obsolete = `Basic ${Buffer.from('admin:fixture-only').toString('base64')}`
+  assert.equal((await get('/api/discord/activity', { authorization: obsolete })).status, 401)
+
+  const owner = await signInDashboard(url, 'owner')
+  assert.deepEqual(await (await get('/__discord-auth/session', { cookie: owner })).json(), { access: 'manage' })
+  assert.equal((await get('/discord/slash-commands', { cookie: owner })).status, 200)
+  const catalog = await (await get('/api/discord/catalog', { cookie: owner })).json()
+  assert.equal(catalog.commands[0].path, 'discord/commands/ping.ts')
+  const activity = await (await get('/api/discord/activity', { cookie: owner })).json()
+  assert.ok(activity.some(entry => entry.name === '/ping' && entry.userId === 'fixture' && entry.status === 'ok'), 'dashboard sees the bot gateway dispatch')
+  const run = '/api/discord/slash-command/test'
+  assert.equal((await post(run, owner, 'https://other.example')).status, 403)
+  assert.equal((await (await post(run, owner)).json()).response, 'pong')
+
+  const reader = await signInDashboard(url, 'reader')
+  assert.deepEqual(await (await get('/__discord-auth/session', { cookie: reader })).json(), { access: 'read' })
+  assert.equal((await get('/api/discord/activity', { cookie: reader })).status, 200)
+  assert.equal((await post(run, reader)).status, 403)
+  assert.equal((await post('/api/discord/slash-command/register', reader)).status, 403)
+
+  const outsider = await signInDashboard(url, 'outsider')
+  const denied = await get('/discord', { cookie: outsider, accept: 'text/html' })
+  assert.equal(denied.status, 403)
+  assert.match(await denied.text(), /<form method="post" action="\/__discord-auth\/logout">/)
+  assert.equal((await get('/__discord-auth/session', { cookie: outsider })).status, 403)
+  const logout = await post('/__discord-auth/logout', owner)
+  assert.equal(logout.status, 303)
+  assert.equal((await get('/__discord-auth/session', { cookie: owner })).status, 401)
 }
