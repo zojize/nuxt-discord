@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { SlashCommandOption } from '../../../types'
-import { computed, ref } from '#imports'
+import { computed, ref, useFetch } from '#imports'
 import CommandTestBar from '../components/CommandTestBar.vue'
 import TheHeader from '../components/TheHeader.vue'
 
@@ -38,6 +38,12 @@ function getRemoteId(command: any): string | undefined {
 }
 
 const { commands, diff, status, refresh: refreshDiff } = useCommandRegistry()
+
+const { data: session, status: sessionStatus } = useFetch<{ access: 'read' | 'manage' }>('/__discord-auth/session', {
+  server: false,
+  immediate: !import.meta.dev,
+})
+const canManage = computed(() => import.meta.dev || (sessionStatus.value === 'success' && session.value?.access === 'manage'))
 
 const commandsWithStatus = computed(() => {
   if (!diff.value) {
@@ -79,6 +85,8 @@ const showEditorLinks = import.meta.dev
 const syncFeedback = ref<{ title: string, detail?: string, failed?: boolean }>()
 const pendingSync = ref(false)
 async function syncCommands() {
+  if (!canManage.value || pendingSync.value)
+    return
   pendingSync.value = true
   syncFeedback.value = undefined
   try {
@@ -138,7 +146,7 @@ function constraintBadges(option: SlashCommandOption) {
           </p>
         </div>
         <UButton
-          v-if="!allSynced"
+          v-if="canManage && !allSynced"
           label="Sync to Discord"
           color="primary"
           variant="solid"
@@ -271,6 +279,6 @@ function constraintBadges(option: SlashCommandOption) {
       </div>
     </main>
 
-    <CommandTestBar :commands="commands" />
+    <CommandTestBar v-if="canManage" :commands="commands" />
   </div>
 </template>

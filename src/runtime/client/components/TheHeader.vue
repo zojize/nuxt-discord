@@ -4,6 +4,7 @@ import { appearanceSelect } from './appearance-select'
 import ProjectLogo from './ProjectLogo.vue'
 
 const route = useRoute()
+const hosted = !import.meta.dev
 
 const nav = [
   { label: 'Overview', to: '/discord' },
@@ -24,7 +25,7 @@ const nav = [
           <span class="text-sm font-semibold tracking-tight">nuxt-discord</span>
         </NuxtLink>
 
-        <nav class="hidden sm:flex items-center gap-1">
+        <nav class="hidden items-center gap-1" :class="hosted ? 'md:flex' : 'sm:flex'">
           <NuxtLink
             v-for="item in nav"
             :key="item.to"
@@ -49,9 +50,14 @@ const nav = [
         >
           <UIcon name="i-simple-icons-github" class="size-4" />
         </a>
+        <form v-if="hosted" method="post" action="/__discord-auth/logout">
+          <button type="submit" class="min-h-11 cursor-pointer rounded-md px-2 text-sm font-medium text-muted hover:bg-elevated hover:text-highlighted focus-visible:outline-2 focus-visible:outline-primary">
+            Sign out
+          </button>
+        </form>
       </div>
     </div>
-    <nav aria-label="Dashboard" class="flex gap-3 overflow-x-auto border-t border-default px-4 py-2 text-sm sm:hidden">
+    <nav aria-label="Dashboard" class="flex gap-3 overflow-x-auto border-t border-default px-4 py-2 text-sm" :class="hosted ? 'md:hidden' : 'sm:hidden'">
       <NuxtLink v-for="item in nav" :key="item.to" :to="item.to" class="shrink-0" exact-active-class="font-bold">
         {{ item.label }}
       </NuxtLink>
