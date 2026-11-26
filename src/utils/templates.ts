@@ -1,8 +1,17 @@
-import type { NuxtDiscordContext, SlashCommand, SlashCommandSubcommand, SlashCommandSubcommandGroup } from '../types'
+import type { DashboardCatalog, NuxtDiscordContext, SlashCommand, SlashCommandSubcommand, SlashCommandSubcommandGroup } from '../types'
+import { relative, sep } from 'node:path'
 import { addServerTemplate, addTemplate, addTypeTemplate } from '@nuxt/kit'
 import { genArrayFromRaw, genImport, genSafeVariableName, genString } from 'knitwork'
 
 export function prepareTemplates(ctx: NuxtDiscordContext) {
+  addServerTemplate({
+    filename: 'discord/catalog',
+    getContents: () => {
+      const catalog: DashboardCatalog = { commands: ctx.slashCommands, menus: ctx.contextMenus, listeners: ctx.listeners }
+      return `export default ${JSON.stringify(catalog, (key, value) =>
+        key === 'path' && !ctx.nuxt.options.dev ? relative(ctx.nuxt.options.rootDir, value).split(sep).join('/') : value)}`
+    },
+  })
   addServerTemplate({
     filename: 'discord/slashCommands',
     getContents: () => getSlashCommandTemplateContent(ctx, /* commandRuntime */ true),
@@ -80,6 +89,11 @@ export function prepareTemplates(ctx: NuxtDiscordContext) {
   addTypeTemplate({
     filename: 'discord/types.d.ts',
     getContents: () => `
+declare module 'discord/catalog' {
+  const catalog: import('nuxt-discord').DashboardCatalog
+  export default catalog
+}
+
 declare module 'discord/slashCommands' {
   const slashCommands: import('nuxt-discord').SlashCommandRuntime[]
   export default slashCommands

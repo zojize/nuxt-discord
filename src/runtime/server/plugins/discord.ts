@@ -33,7 +33,7 @@ export default defineNitroPlugin(async (nitro) => {
   ;(globalThis as any)[Symbol.for('discord-client')] = client
 
   const publicDiscord = (runtimeConfig.public as any).discord as { wsUrl?: string } | undefined
-  if (publicDiscord?.wsUrl) {
+  if (import.meta.dev && publicDiscord?.wsUrl) {
     const socket = new WebSocket(publicDiscord.wsUrl)
 
     // Broadcast activity log entries to dashboard clients

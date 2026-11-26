@@ -4,6 +4,8 @@ import { useDiscordClient } from '../../../utils/useDiscordClient'
 
 export default defineEventHandler(async (event) => {
   const client = useDiscordClient()
+  if (!import.meta.dev)
+    return client.diffRemoteSlashCommands()
   const body: {
     commands?: SlashCommand[]
   } = await readBody(event) ?? {}
