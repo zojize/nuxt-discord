@@ -6,7 +6,7 @@ export const appearanceSelect = {
   'color': 'neutral',
   'content': { align: 'end' },
   'ui': {
-    base: 'size-11 shrink-0 justify-center p-0',
+    base: 'size-11 shrink-0 cursor-pointer justify-center p-0',
     leading: 'static p-0',
     leadingIcon: 'size-[1.125rem] text-current',
     value: 'sr-only',
